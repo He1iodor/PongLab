@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+:root {
+
+  --background: #090B18;
+
+  --surface: #111427;
+
+  --card: rgba(15,18,35,.72);
+
+  --accent: #6B30CE;
+
+  --accent-bright: #8F5BFF;
+
+  --accent-dark: #3E1D75;
+
+  --text: #FFFFFF;
+
+  --text-secondary: rgba(255,255,255,.72);
+
+  --text-muted: rgba(255,255,255,.45);
+
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+
+  background: #090B18;
+
+  color: white;
+
+  overflow-x: hidden;
+
+  font-family:
+    Montserrat,
+    system-ui,
+    sans-serif;
+}
