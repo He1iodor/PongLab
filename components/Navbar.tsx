@@ -98,32 +98,12 @@ export default function Navbar() {
               <Image
                 src="/logo.png"
                 alt="PongLab"
-                width={160}
-                height={60}
+                width={260}
+                height={80}
                 priority
               />
 
-              <div className="hidden sm:flex flex-col">
-                <span
-                  className="
-                  font-black
-                  tracking-wide
-                  text-white
-                  "
-                >
-                  PONGLAB
-                </span>
-
-                <span
-                  className="
-                  text-[10px]
-                  tracking-[4px]
-                  text-white/40
-                  "
-                >
-                  SMART TRAINING
-                </span>
-              </div>
+              
             </div>
           </Link>
 
