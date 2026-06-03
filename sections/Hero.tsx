@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Counter from "@/components/Counter";
+import FloatingParticles from "@/components/FloatingParticles";
 import { motion } from "framer-motion";
 import { useState } from "react";
 
@@ -157,7 +158,7 @@ export default function Hero() {
         shadow-[0_0_20px_#8F5BFF]
         "
       />
-
+<FloatingParticles />
       {/* Content */}
 
       <div className="relative z-10 mx-auto max-w-[1400px] px-6">
