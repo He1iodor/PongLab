@@ -162,7 +162,15 @@ export default function Hero() {
       {/* Content */}
 
       <div className="relative z-10 mx-auto max-w-[1400px] px-6">
-        <div className="flex min-h-screen items-center">
+        <div
+  className="
+  flex
+  min-h-screen
+  items-center
+  justify-between
+  gap-12
+  "
+>
 
           <motion.div
             animate={{
