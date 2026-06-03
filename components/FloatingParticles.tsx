@@ -5,11 +5,16 @@ import { useEffect, useRef, useState } from "react";
 
 export default function FloatingParticles({ ball }: any) {
   const particles = useRef(
-    Array.from({ length: 160 }).map(() => ({
+    Array.from({ length: 180 }).map(() => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
-      size: Math.random() * 2.6 + 0.8,
-      drift: Math.random() * Math.PI * 2,
+      size: Math.random() * 2.4 + 0.6,
+
+      driftX: (Math.random() - 0.5) * 0.6,
+      driftY: (Math.random() - 0.5) * 0.6,
+
+      phase: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.002 + Math.random() * 0.004,
     }))
   ).current;
 
@@ -19,7 +24,6 @@ export default function FloatingParticles({ ball }: any) {
   const [active, setActive] = useState(false);
   const [screen, setScreen] = useState({ width: 0, height: 0 });
 
-  // screen size
   useEffect(() => {
     const update = () => {
       setScreen({
@@ -33,7 +37,6 @@ export default function FloatingParticles({ ball }: any) {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  // mouse tracking (optimized with refs → no rerenders)
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       prevMouseRef.current = mouseRef.current;
@@ -68,13 +71,15 @@ export default function FloatingParticles({ ball }: any) {
         const px = (screen.width * p.x) / 100;
         const py = (screen.height * p.y) / 100;
 
-        // 🌟 base floating stars
-        const floatX =
-          Math.cos(Date.now() * 0.00025 + p.drift) * 6;
-        const floatY =
-          Math.sin(Date.now() * 0.00025 + p.drift) * 6;
+        // 🌟 natural slow movement (FIXED)
+        const time = Date.now() * p.twinkleSpeed;
 
-        // 🍃 STRONG WIND (cursor influence)
+        const floatX =
+          Math.cos(time + p.phase) * 10 + p.driftX * 20;
+        const floatY =
+          Math.sin(time + p.phase) * 10 + p.driftY * 20;
+
+        // 🍃 stronger wind
         const windStrength = active ? 0.012 : 0.002;
 
         const windX =
@@ -82,23 +87,24 @@ export default function FloatingParticles({ ball }: any) {
         const windY =
           (mouseRef.current.y - py) * windStrength;
 
-        // 🌬️ velocity (motion streak)
-        const velocityInfluence = active ? 0.18 : 0;
+        const velocityInfluence = active ? 0.2 : 0;
 
         const velX = velocityX * velocityInfluence;
         const velY = velocityY * velocityInfluence;
 
-        // 🟣 ball local field
-        const dxBall = (ball?.x ?? screen.width / 2) - px;
-        const dyBall = (ball?.y ?? screen.height / 2) - py;
+        // 🟣 ball influence
+        const dxBall =
+          (ball?.x ?? screen.width / 2) - px;
+        const dyBall =
+          (ball?.y ?? screen.height / 2) - py;
 
         const distBall = Math.sqrt(
           dxBall * dxBall + dyBall * dyBall
         );
 
         const ballForce =
-          distBall < 180
-            ? (180 - distBall) * 0.03
+          distBall < 200
+            ? (200 - distBall) * 0.03
             : 0;
 
         const ballX =
@@ -106,6 +112,17 @@ export default function FloatingParticles({ ball }: any) {
 
         const ballY =
           (dyBall / (distBall || 1)) * ballForce;
+
+        // ✨ star peak flicker
+        const flicker = Math.sin(time * 3);
+
+        const glow = active
+          ? 18 + flicker * 10
+          : 10 + flicker * 6;
+
+        const opacity = active
+          ? 0.4 + Math.abs(flicker) * 0.6
+          : 0.2 + Math.abs(flicker) * 0.4;
 
         return (
           <motion.div
@@ -118,23 +135,17 @@ export default function FloatingParticles({ ball }: any) {
               top: py,
 
               background: "rgba(167, 139, 250, 0.9)",
-              boxShadow:
-                "0 0 10px rgba(167, 139, 250, 0.9)",
+              boxShadow: `0 0 ${glow}px rgba(167, 139, 250, 1)`,
             }}
             animate={{
               x: floatX + windX + velX + ballX,
               y: floatY + windY + velY + ballY,
 
-              opacity: active
-                ? [0.4, 1, 0.6]
-                : [0.25, 0.6, 0.3],
-
-              scale: active
-                ? [1, 1.2, 1]
-                : [1, 1.05, 1],
+              opacity,
+              scale: active ? [1, 1.25, 1] : [1, 1.08, 1],
             }}
             transition={{
-              duration: active ? 3.2 : 7,
+              duration: active ? 3 : 6,
               repeat: Infinity,
               ease: "easeInOut",
             }}
