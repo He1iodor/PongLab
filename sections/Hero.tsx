@@ -9,7 +9,6 @@ import { useEffect, useRef, useState } from "react";
 export default function Hero() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-  // 🟣 BALL STATE
   const [ball, setBall] = useState({
     x: 300,
     y: 300,
@@ -17,21 +16,31 @@ export default function Hero() {
     vy: 0,
   });
 
+  const [trail, setTrail] = useState<
+    { x: number; y: number; vx: number; vy: number }[]
+  >([]);
+
   const rafRef = useRef<number | null>(null);
 
-  // 🧠 PHYSICS (faster follow + tighter control)
+  // 🧠 physics + trail
   useEffect(() => {
     const update = () => {
       setBall((prev) => {
-        let x = prev.x + (mousePosition.x - prev.x) * 0.18;
-        let y = prev.y + (mousePosition.y - prev.y) * 0.18;
+        const x = prev.x + (mousePosition.x - prev.x) * 0.22;
+        const y = prev.y + (mousePosition.y - prev.y) * 0.22;
 
-        return {
-          x,
-          y,
-          vx: 0,
-          vy: 0,
-        };
+        const vx = x - prev.x;
+        const vy = y - prev.y;
+
+        setTrail((t) => {
+          const next = [...t, { x, y, vx, vy }];
+
+          if (next.length > 35) next.shift();
+
+          return next;
+        });
+
+        return { x, y, vx, vy };
       });
 
       rafRef.current = requestAnimationFrame(update);
@@ -88,7 +97,7 @@ export default function Hero() {
         className="absolute right-[-200px] bottom-[-100px] w-[450px] h-[450px] rounded-full bg-[#8F5BFF] opacity-25 blur-[140px]"
       />
 
-      {/* 🟣 CURSOR GLOW (SMALLER + STRONGER) */}
+      {/* CURSOR GLOW */}
       <motion.div
         animate={{
           x: mousePosition.x - 140,
@@ -98,41 +107,54 @@ export default function Hero() {
         className="absolute w-[280px] h-[280px] rounded-full bg-[#8F5BFF] opacity-30 blur-[90px] pointer-events-none"
       />
 
-      {/* 🟣 BALL */}
+      {/* 🟣 YOUR PARTICLES (STATIC LAYER) */}
+      <div className="absolute inset-0 pointer-events-none">
+        <FloatingParticles />
+      </div>
+
+      {/* 🟣 TRAIL LEVEL 3 */}
+      {trail.map((p, i) => {
+        const t = i / trail.length;
+        const speed = Math.min(Math.sqrt(p.vx * p.vx + p.vy * p.vy), 30);
+        const size = 2 + speed * 0.4;
+
+        return (
+          <motion.div
+            key={i}
+            className="absolute rounded-full pointer-events-none"
+            style={{
+              left: p.x,
+              top: p.y,
+              width: size,
+              height: size,
+              transform: "translate(-50%, -50%)",
+              background: `radial-gradient(circle,
+                rgba(255,255,255,${t}) 0%,
+                rgba(143,91,255,${t * 0.7}) 40%,
+                rgba(143,91,255,0) 100%
+              )`,
+              filter: "blur(6px)",
+            }}
+            animate={{
+              opacity: t,
+              scale: 1 + speed * 0.02,
+            }}
+            transition={{ duration: 0.05 }}
+          />
+        );
+      })}
+
+      {/* BALL */}
       <motion.div
         className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_40px_white] z-30 pointer-events-none"
         animate={{
           x: ball.x,
           y: ball.y,
         }}
-        transition={{ type: "spring", stiffness: 160, damping: 18 }}
+        transition={{ type: "spring", stiffness: 180, damping: 20 }}
       />
 
-      {/* 🟣 COMET TRAIL (CHAIN EFFECT) */}
-      <motion.div
-        className="absolute w-6 h-6 rounded-full bg-[#8F5BFF] blur-[30px] opacity-40 z-20 pointer-events-none"
-        animate={{
-          x: ball.x - 10,
-          y: ball.y - 10,
-        }}
-        transition={{ type: "spring", stiffness: 120, damping: 25 }}
-      />
-
-      <motion.div
-        className="absolute w-10 h-10 rounded-full bg-[#8F5BFF] blur-[50px] opacity-20 z-10 pointer-events-none"
-        animate={{
-          x: ball.x - 20,
-          y: ball.y - 20,
-        }}
-        transition={{ type: "spring", stiffness: 90, damping: 30 }}
-      />
-
-      {/* PARTICLES (YOUR COMPONENT) */}
-      <div className="absolute inset-0 pointer-events-none">
-        <FloatingParticles mousePosition={mousePosition} />
-      </div>
-
-      {/* MAIN CONTENT */}
+      {/* CONTENT */}
       <div className="relative z-10 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
