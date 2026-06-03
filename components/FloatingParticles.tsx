@@ -53,7 +53,7 @@ export default function FloatingParticles({ mousePosition }: any) {
         const idleOpacity = 0.12;
 
         // 🌀 movement effect = depends on speed
-        const moveFactor = Math.min(speed * 0.2, 0.1);
+        const moveFactor = Math.min(speed * 0.002, 0.001);
 
         const dx =
           mousePosition && screen.w
