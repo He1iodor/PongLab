@@ -1,11 +1,28 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import { motion } from "framer-motion";
 
 export default function Hero() {
+  const [mousePosition, setMousePosition] = useState({
+  x: 0,
+  y: 0,
+});
+
+const handleMouseMove = (
+  e: React.MouseEvent<HTMLElement>
+) => {
+  setMousePosition({
+    x: e.clientX,
+    y: e.clientY,
+  });
+};
   return (
-    <section className="relative min-h-screen overflow-hidden">
+   <section
+  className="relative min-h-screen overflow-hidden"
+  onMouseMove={handleMouseMove}
+>
 
       {/* Фоновое изображение */}
 
@@ -64,7 +81,27 @@ export default function Hero() {
         blur-[150px]
         "
       />
-
+<motion.div
+  animate={{
+    x: mousePosition.x - 250,
+    y: mousePosition.y - 250,
+  }}
+  transition={{
+    type: "spring",
+    stiffness: 40,
+    damping: 20,
+  }}
+  className="
+  absolute
+  h-[500px]
+  w-[500px]
+  rounded-full
+  bg-[#6B30CE]
+  opacity-[0.12]
+  blur-[150px]
+  pointer-events-none
+  "
+/>
       <div className="relative z-10">
 
         <div className="mx-auto max-w-[1400px] px-6">
