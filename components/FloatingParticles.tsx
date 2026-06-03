@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function FloatingParticles() {
   const particles = useRef(
@@ -18,22 +18,40 @@ export default function FloatingParticles() {
     }))
   ).current;
 
+  const [screen, setScreen] = useState({
+    width: 0,
+    height: 0,
+  });
+
+  useEffect(() => {
+    const update = () => {
+      setScreen({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const timeRef = useRef(Date.now());
+
   return (
     <>
       {particles.map((p, i) => {
-        const px = (window.innerWidth * p.x) / 100;
-        const py = (window.innerHeight * p.y) / 100;
+        const px = (screen.width * p.x) / 100;
+        const py = (screen.height * p.y) / 100;
 
         const t = Date.now() * p.speed;
 
-        // 🌟 slow cosmic drift
         const floatX =
           Math.cos(t + p.phase) * 10 + p.driftX * 12;
 
         const floatY =
           Math.sin(t + p.phase) * 10 + p.driftY * 12;
 
-        // ✨ gentle twinkle
         const flicker = Math.sin(t * 3);
 
         const glow = 6 + Math.abs(flicker) * 6;
@@ -55,7 +73,6 @@ export default function FloatingParticles() {
             animate={{
               x: floatX,
               y: floatY,
-
               opacity,
               scale: [1, 1.08, 1],
             }}
