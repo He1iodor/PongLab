@@ -163,6 +163,7 @@ export default function Hero() {
                 md:text-8xl
                 "
               >
+                 <br />
                 Тренируйся
                 <br />
                 умнее.
@@ -237,7 +238,7 @@ export default function Hero() {
                   "
                 >
                   <div className="text-4xl font-black">
-                    <Counter end={10000} />+
+                    <Counter end={1000} />+
                   </div>
 
                   <div className="mt-2 text-white/60">
@@ -260,7 +261,7 @@ export default function Hero() {
                   "
                 >
                   <div className="text-4xl font-black">
-                    <Counter end={3500} />+
+                    <Counter end={1500} />+
                   </div>
 
                   <div className="mt-2 text-white/60">
