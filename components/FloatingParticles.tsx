@@ -5,12 +5,10 @@ import { useEffect, useRef, useState } from "react";
 
 export default function FloatingParticles() {
   const particles = useRef(
-    Array.from({ length: 70 }).map(() => ({
+    Array.from({ length: 110 }).map(() => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
-      size: Math.random() * 3 + 1,
-      baseX: 0,
-      baseY: 0,
+      size: Math.random() * 3 + 1.2,
     }))
   ).current;
 
@@ -45,11 +43,11 @@ export default function FloatingParticles() {
 
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // 🟣 cursor influence (gravity)
-        const cursorForce = active ? Math.max(80 - distance, 0) * 0.15 : 0;
+        // 🟣 stronger influence
+        const force = active ? Math.max(140 - distance, 0) * 0.22 : 0;
 
-        const moveX = dx / (distance || 1) * cursorForce;
-        const moveY = dy / (distance || 1) * cursorForce;
+        const moveX = (dx / (distance || 1)) * force;
+        const moveY = (dy / (distance || 1)) * force;
 
         return (
           <motion.div
@@ -60,19 +58,26 @@ export default function FloatingParticles() {
               height: p.size,
               left: `${p.x}%`,
               top: `${p.y}%`,
-              background: "rgba(143,91,255,0.6)",
-              boxShadow: "0 0 10px rgba(143,91,255,0.8)",
+
+              // ✨ brighter glow
+              background: "rgba(167, 139, 250, 0.85)",
+              boxShadow: "0 0 14px rgba(167, 139, 250, 1)",
             }}
             animate={{
               x: moveX,
               y: moveY,
-              opacity: active ? 0.7 : 0.4,
-              scale: active ? 1.2 : 1,
+
+              // ✨ stronger flicker
+              opacity: active
+                ? [0.5, 1, 0.6, 1]
+                : [0.3, 0.8, 0.4],
+
+              scale: active ? [1, 1.25, 1] : [1, 1.1, 1],
             }}
             transition={{
-              type: "spring",
-              stiffness: 30,
-              damping: 20,
+              duration: active ? 4 : 8, // faster motion
+              repeat: Infinity,
+              ease: "easeInOut",
             }}
           />
         );
