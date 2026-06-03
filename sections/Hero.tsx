@@ -146,7 +146,7 @@ export default function Hero() {
 
       {/* BALL */}
       <motion.div
-        className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_40px_white] z-30 pointer-events-none"
+        className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8),0_0_16px_rgba(143,91,255,0.4)] z-30 pointer-events-none"
         animate={{
           x: ball.x,
           y: ball.y,
