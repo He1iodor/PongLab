@@ -89,7 +89,7 @@ export default function Hero() {
         </motion.div>
       </div>
 
-      {/* DEPTH GLOWS */}
+      {/* GLOWS */}
       <motion.div
         animate={{
           x: mousePosition.x * 0.02,
@@ -110,7 +110,7 @@ export default function Hero() {
         className="absolute w-[500px] h-[500px] rounded-full bg-[#6B30CE] opacity-[0.12] blur-[150px] pointer-events-none"
       />
 
-      {/* 🟣 LEVEL 5 BALL */}
+      {/* 🟣 BALL */}
       <motion.div
         className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_35px_white] z-30 pointer-events-none"
         animate={{
@@ -143,7 +143,7 @@ export default function Hero() {
         className="absolute top-[40%] left-[80%] w-3 h-3 rounded-full bg-[#8F5BFF] shadow-[0_0_20px_#8F5BFF]"
       />
 
-      {/* CONTENT GRID */}
+      {/* CONTENT */}
       <div className="relative z-10 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
@@ -205,17 +205,9 @@ export default function Hero() {
             </div>
           </motion.div>
 
-          {/* RIGHT — ROBOT (LOOKS AT BALL) */}
+          {/* RIGHT (STATIC ROBOT ONLY) */}
           <div className="hidden lg:flex justify-center items-center relative">
-
-            <motion.div
-              animate={{
-                rotateY: (ball.x - window.innerWidth / 2) * 0.02,
-                rotateX: (ball.y - window.innerHeight / 2) * -0.02,
-              }}
-              transition={{ type: "spring", stiffness: 40, damping: 20 }}
-              className="relative w-full max-w-[650px]"
-            >
+            <div className="relative w-full max-w-[650px]">
               <Image
                 src="/logo.png"
                 alt="PongLab Robot"
@@ -223,7 +215,7 @@ export default function Hero() {
                 height={650}
                 className="w-full h-auto drop-shadow-[0_0_80px_rgba(107,48,206,.6)]"
               />
-            </motion.div>
+            </div>
 
             {/* AI PANEL */}
             <div className="absolute top-10 right-10 bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl px-5 py-4">
@@ -234,7 +226,6 @@ export default function Hero() {
                 98% Accuracy
               </div>
             </div>
-
           </div>
 
         </div>
