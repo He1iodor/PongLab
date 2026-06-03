@@ -97,8 +97,8 @@ export default function FloatingParticles({ mousePosition }: any) {
             }}
             transition={{
               type: "spring",
-              stiffness: speed > 0.2 ? 60 : 15,
-              damping: speed > 0.2 ? 20 : 40,
+              stiffness: speed > 0.2 ? 6 : 1.5,
+              damping: speed > 0.2 ? 2 : 4,
             }}
           />
         );
