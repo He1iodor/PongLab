@@ -5,13 +5,12 @@ import { useEffect, useRef, useState } from "react";
 
 export default function FloatingParticles() {
   const particles = useRef(
-    Array.from({ length: 60 }).map(() => ({
+    Array.from({ length: 70 }).map(() => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
       size: Math.random() * 3 + 1,
-      speed: Math.random() * 0.2 + 0.05,
-      driftX: 0,
-      driftY: 0,
+      baseX: 0,
+      baseY: 0,
     }))
   ).current;
 
@@ -21,8 +20,8 @@ export default function FloatingParticles() {
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       setMouse({
-        x: (e.clientX / window.innerWidth - 0.5) * 2,
-        y: (e.clientY / window.innerHeight - 0.5) * 2,
+        x: e.clientX,
+        y: e.clientY,
       });
       setActive(true);
     };
@@ -41,7 +40,16 @@ export default function FloatingParticles() {
   return (
     <>
       {particles.map((p, i) => {
-        const driftStrength = active ? 1 : 0;
+        const dx = mouse.x - (window.innerWidth * p.x) / 100;
+        const dy = mouse.y - (window.innerHeight * p.y) / 100;
+
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // 🟣 cursor influence (gravity)
+        const cursorForce = active ? Math.max(80 - distance, 0) * 0.15 : 0;
+
+        const moveX = dx / (distance || 1) * cursorForce;
+        const moveY = dy / (distance || 1) * cursorForce;
 
         return (
           <motion.div
@@ -53,20 +61,18 @@ export default function FloatingParticles() {
               left: `${p.x}%`,
               top: `${p.y}%`,
               background: "rgba(143,91,255,0.6)",
-              boxShadow: "0 0 8px rgba(143,91,255,0.8)",
+              boxShadow: "0 0 10px rgba(143,91,255,0.8)",
             }}
             animate={{
-              x: mouse.x * 20 * driftStrength,
-              y: mouse.y * 20 * driftStrength,
-              opacity: active
-                ? [0.3, 0.8, 0.3]
-                : [0.2, 0.5, 0.2],
-              scale: active ? [1, 1.2, 1] : [1, 1.05, 1],
+              x: moveX,
+              y: moveY,
+              opacity: active ? 0.7 : 0.4,
+              scale: active ? 1.2 : 1,
             }}
             transition={{
-              duration: active ? 6 : 10,
-              repeat: Infinity,
-              ease: "easeInOut",
+              type: "spring",
+              stiffness: 30,
+              damping: 20,
             }}
           />
         );
