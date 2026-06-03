@@ -205,34 +205,76 @@ const handleMouseMove = (
 
              <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-4">
 
-                <div>
-                  <div className="text-4xl font-black">
-  <Counter end={10000} />+
+  <div
+    className="
+    rounded-3xl
+    border
+    border-white/10
+    bg-white/5
+    backdrop-blur-xl
+    p-6
+    transition-all
+    duration-300
+    hover:border-[#6B30CE]/40
+    hover:bg-white/10
+    "
+  >
+    <div className="text-4xl font-black">
+      <Counter end={10000} />+
+    </div>
+
+    <div className="mt-2 text-white/60">
+      тренировок
+    </div>
+  </div>
+
+  <div
+    className="
+    rounded-3xl
+    border
+    border-white/10
+    bg-white/5
+    backdrop-blur-xl
+    p-6
+    transition-all
+    duration-300
+    hover:border-[#6B30CE]/40
+    hover:bg-white/10
+    "
+  >
+    <div className="text-4xl font-black">
+      <Counter end={3500} />+
+    </div>
+
+    <div className="mt-2 text-white/60">
+      ударов за сессию
+    </div>
+  </div>
+
+  <div
+    className="
+    rounded-3xl
+    border
+    border-white/10
+    bg-white/5
+    backdrop-blur-xl
+    p-6
+    transition-all
+    duration-300
+    hover:border-[#6B30CE]/40
+    hover:bg-white/10
+    "
+  >
+    <div className="text-4xl font-black">
+      24/7
+    </div>
+
+    <div className="mt-2 text-white/60">
+      доступность
+    </div>
+  </div>
+
 </div>
-                  <div className="mt-2 text-white/60">
-                    тренировок
-                  </div>
-                </div>
-
-                <div>
-                 <div className="text-4xl font-black">
-  <Counter end={3500} />+
-</div>
-                  <div className="mt-2 text-white/60">
-                    ударов
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-4xl font-black">
-                    24/7
-                  </div>
-                  <div className="mt-2 text-white/60">
-                    доступ
-                  </div>
-                </div>
-
-              </div>
 
             </div>
 
