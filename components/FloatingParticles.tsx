@@ -6,11 +6,11 @@ import { useEffect, useRef, useState } from "react";
 export default function FloatingParticles({ ball }: any) {
   const particles = useRef(
     Array.from({ length: 160 }).map(() => ({
-      angle: Math.random() * Math.PI * 2,
-      radius: 30 + Math.random() * 140,
-      size: Math.random() * 3 + 1,
-      speed: 0.002 + Math.random() * 0.003,
-      offset: Math.random() * 1000,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 2.6 + 0.8,
+      drift: Math.random() * Math.PI * 2,
+      speed: 0.2 + Math.random() * 0.6,
     }))
   ).current;
 
@@ -19,7 +19,7 @@ export default function FloatingParticles({ ball }: any) {
 
   const [screen, setScreen] = useState({ width: 0, height: 0 });
 
-  // screen size
+  // screen size safe
   useEffect(() => {
     const update = () => {
       setScreen({
@@ -30,7 +30,6 @@ export default function FloatingParticles({ ball }: any) {
 
     update();
     window.addEventListener("resize", update);
-
     return () => window.removeEventListener("resize", update);
   }, []);
 
@@ -52,26 +51,30 @@ export default function FloatingParticles({ ball }: any) {
     };
   }, []);
 
-  const centerX = ball?.x ?? screen.width / 2;
-  const centerY = ball?.y ?? screen.height / 2;
-
   return (
     <>
       {particles.map((p, i) => {
-        // 🌪️ orbit evolution
-        const t = Date.now() * p.speed + p.offset;
+        const px = (screen.width * p.x) / 100;
+        const py = (screen.height * p.y) / 100;
 
-        const orbitX = Math.cos(t + p.angle) * p.radius;
-        const orbitY = Math.sin(t + p.angle) * p.radius;
+        // 🌟 base star floating motion
+        const floatX = Math.cos(Date.now() * 0.0003 + p.drift) * 8;
+        const floatY = Math.sin(Date.now() * 0.0003 + p.drift) * 8;
 
-        // 🧲 slight pull to ball position
-        const dx = centerX + orbitX - (screen.width * 0.5);
-        const dy = centerY + orbitY - (screen.height * 0.5);
+        // 🍃 mouse wind (soft, not pulling hard)
+        const windX = active ? (mouse.x - px) * 0.002 : 0;
+        const windY = active ? (mouse.y - py) * 0.002 : 0;
 
-        // ✨ velocity influence from mouse
-        const mouseForce = active
-          ? Math.sin(mouse.x * 0.01 + i) * 6
-          : 0;
+        // 🟣 ball influence (local only, not global collapse)
+        const dxBall = ball?.x - px;
+        const dyBall = ball?.y - py;
+        const distBall = Math.sqrt(dxBall * dxBall + dyBall * dyBall);
+
+        const ballForce =
+          distBall < 180 ? (180 - distBall) * 0.03 : 0;
+
+        const ballX = (dxBall / (distBall || 1)) * ballForce;
+        const ballY = (dyBall / (distBall || 1)) * ballForce;
 
         return (
           <motion.div
@@ -80,26 +83,24 @@ export default function FloatingParticles({ ball }: any) {
             style={{
               width: p.size,
               height: p.size,
+              left: px,
+              top: py,
 
-              left: "50%",
-              top: "50%",
-
-              background: "rgba(167, 139, 250, 0.95)",
-              boxShadow: "0 0 18px rgba(167, 139, 250, 1)",
-              filter: "blur(0.2px)",
+              background: "rgba(167, 139, 250, 0.85)",
+              boxShadow: "0 0 10px rgba(167, 139, 250, 0.9)",
             }}
             animate={{
-              x: dx + mouseForce,
-              y: dy + mouseForce,
+              x: floatX + windX + ballX,
+              y: floatY + windY + ballY,
 
               opacity: active
                 ? [0.4, 1, 0.6]
                 : [0.25, 0.6, 0.3],
 
-              scale: active ? [1, 1.25, 1] : [1, 1.1, 1],
+              scale: active ? [1, 1.15, 1] : [1, 1.05, 1],
             }}
             transition={{
-              duration: active ? 2.5 : 6,
+              duration: active ? 4 : 8,
               repeat: Infinity,
               ease: "easeInOut",
             }}
