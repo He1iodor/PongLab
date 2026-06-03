@@ -7,11 +7,11 @@ import { Menu, X } from "lucide-react";
 
 const navItems = [
   {
-    title: "Как работает",
+    title: "Как все работает",
     href: "/how-it-works",
   },
   {
-    title: "Почему эффективнее",
+    title: "Почему это эффективнее",
     href: "/why-effective",
   },
   {
@@ -69,7 +69,7 @@ export default function Navbar() {
           justify-between
           transition-all
           duration-500
-          rounded-[32px]
+          rounded-[40 px]
           border
 
           ${
