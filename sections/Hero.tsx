@@ -179,10 +179,10 @@ export default function Hero() {
               className="relative w-full max-w-[650px]"
             >
               <Image
-                src="/hero-bg.jpg"
+                src="/logo.png"
                 alt="PongLab Robot"
-                width={650}
-                height={650}
+                width={700}
+                height={700}
                 className="w-full h-auto drop-shadow-[0_0_80px_rgba(107,48,206,.6)]"
                 priority
               />
