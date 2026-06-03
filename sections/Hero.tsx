@@ -9,20 +9,23 @@ import { useEffect, useRef, useState } from "react";
 export default function Hero() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
+  // 🟣 BALL (with speed)
   const [ball, setBall] = useState({
     x: 300,
     y: 300,
     vx: 0,
     vy: 0,
+    speed: 0,
   });
 
+  // 🟣 TRAIL
   const [trail, setTrail] = useState<
     { x: number; y: number; vx: number; vy: number }[]
   >([]);
 
   const rafRef = useRef<number | null>(null);
 
-  // 🧠 physics + trail
+  // 🧠 PHYSICS LOOP
   useEffect(() => {
     const update = () => {
       setBall((prev) => {
@@ -32,15 +35,16 @@ export default function Hero() {
         const vx = x - prev.x;
         const vy = y - prev.y;
 
+        const speed = Math.min(Math.sqrt(vx * vx + vy * vy), 40);
+
+        // 🟣 TRAIL UPDATE
         setTrail((t) => {
           const next = [...t, { x, y, vx, vy }];
-
           if (next.length > 35) next.shift();
-
           return next;
         });
 
-        return { x, y, vx, vy };
+        return { x, y, vx, vy, speed };
       });
 
       rafRef.current = requestAnimationFrame(update);
@@ -107,7 +111,7 @@ export default function Hero() {
         className="absolute w-[280px] h-[280px] rounded-full bg-[#8F5BFF] opacity-30 blur-[90px] pointer-events-none"
       />
 
-      {/* 🟣 YOUR PARTICLES (STATIC LAYER) */}
+      {/* PARTICLES (your static system) */}
       <div className="absolute inset-0 pointer-events-none">
         <FloatingParticles />
       </div>
@@ -144,15 +148,67 @@ export default function Hero() {
         );
       })}
 
-      {/* BALL */}
+      {/* 🟣 BALL LEVEL 3 */}
       <motion.div
-        className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8),0_0_16px_rgba(143,91,255,0.4)] z-30 pointer-events-none"
+        className="absolute z-30 pointer-events-none"
         animate={{
           x: ball.x,
           y: ball.y,
         }}
-        transition={{ type: "spring", stiffness: 180, damping: 20 }}
-      />
+        transition={{
+          x: { type: "spring", stiffness: 180, damping: 20 },
+          y: { type: "spring", stiffness: 180, damping: 20 },
+        }}
+      >
+        {/* AURA */}
+        <div
+          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{
+            width: 20 + ball.speed * 0.6,
+            height: 20 + ball.speed * 0.6,
+            background:
+              "radial-gradient(circle, rgba(143,91,255,0.4) 0%, rgba(143,91,255,0) 70%)",
+            filter: "blur(8px)",
+            opacity: 0.6 + Math.min(ball.speed * 0.02, 0.4),
+          }}
+        />
+
+        {/* CORE */}
+        <div
+          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
+          style={{
+            width: 6,
+            height: 6,
+            boxShadow:
+              "0 0 10px rgba(255,255,255,0.9), 0 0 18px rgba(143,91,255,0.5)",
+          }}
+        />
+
+        {/* MICRO TRAIL */}
+        <div
+          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#8F5BFF]"
+          style={{
+            width: 10,
+            height: 10,
+            opacity: Math.min(ball.speed * 0.03, 0.3),
+            filter: "blur(4px)",
+            transform: "translate(-6px, -6px)",
+          }}
+        />
+
+        {/* IMPACT PULSE */}
+        {ball.speed > 18 && (
+          <div
+            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#8F5BFF]"
+            style={{
+              width: 30,
+              height: 30,
+              opacity: 0.2,
+              animation: "ping 0.6s cubic-bezier(0, 0, 0.2, 1)",
+            }}
+          />
+        )}
+      </motion.div>
 
       {/* CONTENT */}
       <div className="relative z-10 mx-auto max-w-[1400px] px-6">
