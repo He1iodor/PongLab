@@ -110,7 +110,7 @@ export default function Hero() {
                 умнее.
                 <br />
                 <span className="text-[#8F5BFF]">
-                  Играй сильнее.
+                  Играй сильн1ее.
                 </span>
               </motion.h1>
 
