@@ -153,8 +153,8 @@ export default function Hero() {
           y: ball.y,
         }}
         transition={{
-          x: { type: "spring", stiffness: 180, damping: 20 },
-          y: { type: "spring", stiffness: 180, damping: 20 },
+          x: { type: "spring", stiffness: 180, damping: 18 },
+          y: { type: "spring", stiffness: 180, damping: 18 },
         }}
       >
         {/* AURA */}
