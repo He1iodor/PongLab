@@ -1,157 +1,95 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 
-export default function FloatingParticles({ ball }: any) {
-  const particles = useRef(
-    Array.from({ length: 180 }).map(() => ({
+export default function FloatingParticles() {
+  const far = useRef(
+    Array.from({ length: 90 }).map(() => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
-      size: Math.random() * 2.4 + 0.6,
-
-      driftX: (Math.random() - 0.5) * 0.6,
-      driftY: (Math.random() - 0.5) * 0.6,
-
+      size: Math.random() * 1.2 + 0.3,
       phase: Math.random() * Math.PI * 2,
-      twinkleSpeed: 0.002 + Math.random() * 0.004,
+      speed: 0.0008 + Math.random() * 0.0015,
     }))
   ).current;
 
-  const mouseRef = useRef({ x: 0, y: 0 });
-  const prevMouseRef = useRef({ x: 0, y: 0 });
+  const mid = useRef(
+    Array.from({ length: 60 }).map(() => ({
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 1.6 + 0.6,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.0015 + Math.random() * 0.0025,
+    }))
+  ).current;
 
-  const [active, setActive] = useState(false);
-  const [screen, setScreen] = useState({ width: 0, height: 0 });
+  const near = useRef(
+    Array.from({ length: 30 }).map(() => ({
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 2.2 + 1,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.002 + Math.random() * 0.0035,
+    }))
+  ).current;
 
-  useEffect(() => {
-    const update = () => {
-      setScreen({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
+  const renderLayer = (arr: any[], z: number, intensity: number) =>
+    arr.map((p, i) => {
+      const px = (window.innerWidth * p.x) / 100;
+      const py = (window.innerHeight * p.y) / 100;
 
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
+      const t = Date.now() * p.speed;
 
-  useEffect(() => {
-    const handleMove = (e: MouseEvent) => {
-      prevMouseRef.current = mouseRef.current;
+      // 🌌 subtle independent drift per layer
+      const floatX = Math.cos(t + p.phase) * intensity;
+      const floatY = Math.sin(t + p.phase) * intensity;
 
-      mouseRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-      };
+      const flicker = Math.sin(t * 3);
 
-      setActive(true);
-    };
+      const glow = 6 + Math.abs(flicker) * 6;
+      const opacity = 0.2 + Math.abs(flicker) * 0.5;
 
-    const handleLeave = () => setActive(false);
+      return (
+        <motion.div
+          key={`${z}-${i}`}
+          className="absolute rounded-full"
+          style={{
+            width: p.size,
+            height: p.size,
+            left: px,
+            top: py,
+            zIndex: z,
 
-    window.addEventListener("mousemove", handleMove);
-    window.addEventListener("mouseleave", handleLeave);
+            background: "rgba(167, 139, 250, 0.85)",
+            boxShadow: `0 0 ${glow}px rgba(167, 139, 250, 1)`,
+          }}
+          animate={{
+            x: floatX,
+            y: floatY,
 
-    return () => {
-      window.removeEventListener("mousemove", handleMove);
-      window.removeEventListener("mouseleave", handleLeave);
-    };
-  }, []);
-
-  const velocityX =
-    mouseRef.current.x - prevMouseRef.current.x;
-  const velocityY =
-    mouseRef.current.y - prevMouseRef.current.y;
+            opacity,
+            scale: [1, 1.06, 1],
+          }}
+          transition={{
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      );
+    });
 
   return (
     <>
-      {particles.map((p, i) => {
-        const px = (screen.width * p.x) / 100;
-        const py = (screen.height * p.y) / 100;
+      {/* FAR LAYER */}
+      {renderLayer(far, 1, 4)}
 
-        // 🌟 natural slow movement (FIXED)
-        const time = Date.now() * p.twinkleSpeed;
+      {/* MID LAYER */}
+      {renderLayer(mid, 2, 8)}
 
-        const floatX =
-          Math.cos(time + p.phase) * 10 + p.driftX * 20;
-        const floatY =
-          Math.sin(time + p.phase) * 10 + p.driftY * 20;
-
-        // 🍃 stronger wind
-        const windStrength = active ? 0.012 : 0.002;
-
-        const windX =
-          (mouseRef.current.x - px) * windStrength;
-        const windY =
-          (mouseRef.current.y - py) * windStrength;
-
-        const velocityInfluence = active ? 0.2 : 0;
-
-        const velX = velocityX * velocityInfluence;
-        const velY = velocityY * velocityInfluence;
-
-        // 🟣 ball influence
-        const dxBall =
-          (ball?.x ?? screen.width / 2) - px;
-        const dyBall =
-          (ball?.y ?? screen.height / 2) - py;
-
-        const distBall = Math.sqrt(
-          dxBall * dxBall + dyBall * dyBall
-        );
-
-        const ballForce =
-          distBall < 200
-            ? (200 - distBall) * 0.03
-            : 0;
-
-        const ballX =
-          (dxBall / (distBall || 1)) * ballForce;
-
-        const ballY =
-          (dyBall / (distBall || 1)) * ballForce;
-
-        // ✨ star peak flicker
-        const flicker = Math.sin(time * 3);
-
-        const glow = active
-          ? 18 + flicker * 10
-          : 10 + flicker * 6;
-
-        const opacity = active
-          ? 0.4 + Math.abs(flicker) * 0.6
-          : 0.2 + Math.abs(flicker) * 0.4;
-
-        return (
-          <motion.div
-            key={i}
-            className="absolute rounded-full"
-            style={{
-              width: p.size,
-              height: p.size,
-              left: px,
-              top: py,
-
-              background: "rgba(167, 139, 250, 0.9)",
-              boxShadow: `0 0 ${glow}px rgba(167, 139, 250, 1)`,
-            }}
-            animate={{
-              x: floatX + windX + velX + ballX,
-              y: floatY + windY + velY + ballY,
-
-              opacity,
-              scale: active ? [1, 1.25, 1] : [1, 1.08, 1],
-            }}
-            transition={{
-              duration: active ? 3 : 6,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        );
-      })}
+      {/* NEAR LAYER */}
+      {renderLayer(near, 3, 12)}
     </>
   );
 }
