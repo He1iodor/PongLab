@@ -55,7 +55,7 @@ export default function Navbar() {
         z-50
         flex
         justify-center
-        pt-4
+        pt-5
         transition-all
         duration-500
         "
@@ -69,7 +69,7 @@ export default function Navbar() {
           justify-between
           transition-all
           duration-500
-          rounded-[30 px]
+          rounded-[30px]
           border
 
           ${
