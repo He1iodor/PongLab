@@ -29,17 +29,30 @@ const handleMouseMove = (
 
       <div className="absolute inset-0">
 
-        <Image
-          src="/hero-bg.png"
-          alt="PongLab"
-          fill
-          priority
-          className="
-            object-cover
-            object-center
-            scale-105
-          "
-        />
+        <motion.div
+  animate={{
+    x: mousePosition.x * 0.015,
+    y: mousePosition.y * 0.015,
+  }}
+  transition={{
+    type: "spring",
+    stiffness: 20,
+    damping: 30,
+  }}
+  className="absolute inset-0"
+>
+  <Image
+    src="/hero-bg.png"
+    alt="PongLab"
+    fill
+    priority
+    className="
+      object-cover
+      object-center
+      scale-110
+    "
+  />
+</motion.div>
 
       </div>
 
@@ -109,7 +122,18 @@ const handleMouseMove = (
 
           <div className="flex min-h-screen items-center">
 
-            <div className="max-w-[700px]">
+            <motion.div
+  animate={{
+    x: mousePosition.x * 0.003,
+    y: mousePosition.y * 0.003,
+  }}
+  transition={{
+    type: "spring",
+    stiffness: 30,
+    damping: 20,
+  }}
+  className="max-w-[700px]"
+>
 
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -282,7 +306,7 @@ const handleMouseMove = (
 
         </div>
 
-      </div>
+      </motion.div>
 
     </section>
   );
