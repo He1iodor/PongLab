@@ -108,7 +108,7 @@ export default function Hero() {
           y: mousePosition.y - 140,
         }}
         transition={{ type: "spring", stiffness: 80, damping: 18 }}
-        className="absolute w-[280px] h-[280px] rounded-full bg-[#8F5BFF] opacity-30 blur-[90px] pointer-events-none"
+        className="absolute w-100px] h-[100px] rounded-full bg-[#8F5BFF] opacity-30 blur-[90px] pointer-events-none"
       />
 
       {/* PARTICLES (your static system) */}
