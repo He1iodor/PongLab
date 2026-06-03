@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 
 const navItems = [
   {
@@ -28,10 +30,11 @@ const navItems = [
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const handler = () => {
-      setScrolled(window.scrollY > 30);
+      setScrolled(window.scrollY > 40);
     };
 
     window.addEventListener("scroll", handler);
@@ -42,121 +45,272 @@ export default function Navbar() {
   }, []);
 
   return (
-    <header
-      className={`
-      fixed
-      top-0
-      left-0
-      right-0
-      z-50
-      flex
-      justify-center
-      pt-6
-      transition-all
-      duration-500
-      `}
-    >
-      <div
-        className={`
-        w-[92%]
-        max-w-[1400px]
+    <>
+      <header
+        className="
+        fixed
+        top-0
+        left-0
+        right-0
+        z-50
         flex
-        items-center
-        justify-between
-        rounded-[24px]
-        border
+        justify-center
+        pt-5
         transition-all
         duration-500
-        
-        ${
-          scrolled
-            ? `
-            bg-[rgba(15,18,35,.75)]
-            backdrop-blur-xl
-            border-white/10
-            shadow-[0_0_50px_rgba(107,48,206,.12)]
-            py-3
-            px-6
-            `
-            : `
-            bg-[rgba(15,18,35,.35)]
-            backdrop-blur-md
-            border-white/5
-            py-4
-            px-8
-            `
-        }
-      `}
+        "
       >
-        <Link href="/">
-          <div className="flex flex-col">
-            <span className="font-black text-xl tracking-tight">
-              PONGLAB
-            </span>
+        <div
+          className={`
+          w-[94%]
+          max-w-[1450px]
+          flex
+          items-center
+          justify-between
+          transition-all
+          duration-500
+          rounded-[32px]
+          border
 
-            <span className="text-[10px] tracking-[3px] text-white/50">
-              SMART TRAINING
-            </span>
-          </div>
-        </Link>
+          ${
+            scrolled
+              ? `
+              py-3
+              px-6
+              bg-[rgba(10,12,24,.82)]
+              border-white/10
+              backdrop-blur-2xl
+              shadow-[0_10px_60px_rgba(107,48,206,.25)]
+              `
+              : `
+              py-4
+              px-8
+              bg-[rgba(10,12,24,.45)]
+              border-white/5
+              backdrop-blur-xl
+              shadow-[0_10px_40px_rgba(0,0,0,.35)]
+              `
+          }
+          `}
+        >
+          <Link href="/">
+            <div className="flex items-center gap-3 cursor-pointer">
+              <Image
+                src="/logo.png"
+                alt="PongLab"
+                width={42}
+                height={42}
+                priority
+              />
 
-        <nav className="hidden md:flex items-center gap-8">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="
-              text-sm
-              text-white/70
-              transition-all
-              duration-300
-              hover:text-white
-              hover:translate-y-[-2px]
-              "
-            >
-              {item.title}
-            </Link>
-          ))}
-        </nav>
+              <div className="hidden sm:flex flex-col">
+                <span
+                  className="
+                  font-black
+                  tracking-wide
+                  text-white
+                  "
+                >
+                  PONGLAB
+                </span>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden lg:flex items-center gap-2">
-            <div
-              className="
-              h-2.5
-              w-2.5
-              rounded-full
-              bg-green-400
-              animate-pulse
-              "
-            />
+                <span
+                  className="
+                  text-[10px]
+                  tracking-[4px]
+                  text-white/40
+                  "
+                >
+                  SMART TRAINING
+                </span>
+              </div>
+            </div>
+          </Link>
 
-            <span className="text-xs text-white/60">
-              Система онлайн
-            </span>
-          </div>
-
-          <button
+          <nav
             className="
-            rounded-[16px]
-            px-5
-            py-3
-            font-semibold
-            transition-all
-            duration-300
-
-            bg-gradient-to-r
-            from-[#6B30CE]
-            to-[#8F5BFF]
-
-            hover:scale-105
-            hover:shadow-[0_0_35px_rgba(107,48,206,.55)]
+            hidden
+            lg:flex
+            items-center
+            gap-10
             "
           >
-            Попробовать
-          </button>
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="
+                relative
+                group
+                text-sm
+                text-white/70
+                transition-all
+                duration-300
+                hover:text-white
+                "
+              >
+                {item.title}
+
+                <span
+                  className="
+                  absolute
+                  left-0
+                  -bottom-2
+                  h-[2px]
+                  w-0
+                  bg-[#8F5BFF]
+                  transition-all
+                  duration-300
+                  group-hover:w-full
+                  "
+                />
+              </Link>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-4">
+            <div
+              className="
+              hidden
+              xl:flex
+              items-center
+              gap-2
+              "
+            >
+              <div
+                className="
+                h-2.5
+                w-2.5
+                rounded-full
+                bg-green-400
+                animate-pulse
+                "
+              />
+
+              <span className="text-xs text-white/60">
+                Система онлайн
+              </span>
+            </div>
+
+            <button
+              className="
+              hidden
+              md:flex
+              relative
+              overflow-hidden
+              items-center
+              justify-center
+              rounded-[18px]
+              px-6
+              py-3
+              font-semibold
+              bg-gradient-to-r
+              from-[#6B30CE]
+              to-[#8F5BFF]
+              transition-all
+              duration-300
+              hover:scale-105
+              hover:shadow-[0_0_40px_rgba(107,48,206,.55)]
+              "
+            >
+              <span
+                className="
+                absolute
+                inset-0
+                bg-gradient-to-r
+                from-transparent
+                via-white/20
+                to-transparent
+                -translate-x-full
+                hover:translate-x-full
+                transition-all
+                duration-700
+                "
+              />
+
+              <span className="relative z-10">
+                Начать бесплатно
+              </span>
+            </button>
+
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="
+              lg:hidden
+              flex
+              items-center
+              justify-center
+              h-11
+              w-11
+              rounded-xl
+              bg-white/5
+              border
+              border-white/10
+              "
+            >
+              <Menu size={22} />
+            </button>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {mobileOpen && (
+        <div
+          className="
+          fixed
+          inset-0
+          z-[100]
+          bg-[#090B18]
+          flex
+          flex-col
+          "
+        >
+          <div
+            className="
+            flex
+            justify-between
+            items-center
+            p-6
+            "
+          >
+            <div className="font-black text-xl">
+              PONGLAB
+            </div>
+
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="
+              h-11
+              w-11
+              rounded-xl
+              bg-white/5
+              "
+            >
+              <X size={22} />
+            </button>
+          </div>
+
+          <div
+            className="
+            flex
+            flex-col
+            gap-8
+            p-8
+            text-2xl
+            "
+          >
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+              >
+                {item.title}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
