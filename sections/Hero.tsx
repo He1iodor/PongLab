@@ -51,6 +51,47 @@ export default function Hero() {
             className="object-cover scale-110"
           />
         </motion.div>
+        <motion.div
+  initial={{ opacity: 0, x: 100 }}
+  animate={{ opacity: 1, x: 0 }}
+  transition={{ duration: 1 }}
+  className="
+  hidden
+  lg:flex
+  relative
+  h-[750px]
+  w-[700px]
+  items-center
+  justify-center
+  "
+>
+  <motion.div
+    animate={{
+      y: [0, -20, 0],
+    }}
+    transition={{
+      duration: 6,
+      repeat: Infinity,
+      ease: "easeInOut",
+    }}
+    className="
+    relative
+    h-full
+    w-full
+    "
+  >
+    <Image
+      src="/hero-bg.png"
+      alt="PongLab Robot"
+      fill
+      priority
+      className="
+      object-contain
+      object-center
+      "
+    />
+  </motion.div>
+</motion.div>
       </div>
 
       {/* Overlay */}
