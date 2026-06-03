@@ -6,19 +6,19 @@ import FloatingParticles from "@/components/FloatingParticles";
 import { useEffect, useRef, useState } from "react";
 
 export default function Hero() {
-  // -----------------------------
-  // MOUSE (single source of truth)
-  // -----------------------------
+  // =========================
+  // MOUSE
+  // =========================
   const mouse = useRef({ x: 0, y: 0 });
 
-  // -----------------------------
+  // =========================
   // RACKET CURSOR
-  // -----------------------------
+  // =========================
   const racket = useRef({ x: 0, y: 0 });
 
-  // -----------------------------
-  // BALL (physics object)
-  // -----------------------------
+  // =========================
+  // BALL PHYSICS
+  // =========================
   const ball = useRef({
     x: 300,
     y: 300,
@@ -32,9 +32,9 @@ export default function Hero() {
 
   const rafRef = useRef<number | null>(null);
 
-  // -----------------------------
+  // =========================
   // MOUSE TRACKING
-  // -----------------------------
+  // =========================
   useEffect(() => {
     const move = (e: MouseEvent) => {
       mouse.current.x = e.clientX;
@@ -45,22 +45,22 @@ export default function Hero() {
     return () => window.removeEventListener("mousemove", move);
   }, []);
 
-  // -----------------------------
+  // =========================
   // ANIMATION LOOP
-  // -----------------------------
+  // =========================
   useEffect(() => {
     const update = () => {
       // -------------------------
-      // RACKET (smooth follow)
+      // RACKET FOLLOW (smooth)
       // -------------------------
       racket.current.x += (mouse.current.x - racket.current.x) * 0.25;
       racket.current.y += (mouse.current.y - racket.current.y) * 0.25;
 
-      const b = ball.current;
-
       // -------------------------
       // BALL PHYSICS
       // -------------------------
+      const b = ball.current;
+
       const dx = mouse.current.x - b.x;
       const dy = mouse.current.y - b.y;
 
@@ -77,10 +77,7 @@ export default function Hero() {
       // TRAIL
       // -------------------------
       setTrail((t) => {
-        const next = [
-          ...t,
-          { x: b.x, y: b.y, vx: b.vx, vy: b.vy },
-        ];
+        const next = [...t, { x: b.x, y: b.y, vx: b.vx, vy: b.vy }];
         if (next.length > 28) next.shift();
         return next;
       });
@@ -89,6 +86,7 @@ export default function Hero() {
     };
 
     rafRef.current = requestAnimationFrame(update);
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
@@ -97,7 +95,7 @@ export default function Hero() {
   return (
     <section className="relative min-h-screen overflow-hidden bg-[#090B18] text-white">
 
-      {/* CURSOR HIDE */}
+      {/* HIDE CURSOR */}
       <style jsx global>{`
         body {
           cursor: none;
@@ -117,16 +115,60 @@ export default function Hero() {
         }}
       />
 
-      {/* 🟣 RACKET CURSOR */}
+      {/* 🎾 TABLE TENNIS RACKET CURSOR */}
       <div
         className="fixed top-0 left-0 pointer-events-none z-[999]"
         style={{
-          transform: `translate(${racket.current.x}px, ${racket.current.y}px)`,
+          transform: `
+            translate(${racket.current.x}px, ${racket.current.y}px)
+            translate(-20px, -20px)
+            rotate(${(mouse.current.x - racket.current.x) * 0.03}deg)
+          `,
         }}
       >
-        <div className="relative w-10 h-10">
-          <div className="w-6 h-6 rounded-full border-2 border-white/80 shadow-[0_0_18px_rgba(255,255,255,0.6)]" />
-          <div className="absolute left-1/2 top-5 w-1 h-6 bg-white/80 -translate-x-1/2" />
+        <div className="relative w-12 h-14">
+
+          {/* HEAD */}
+          <div
+            className="absolute w-10 h-12 rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle at 35% 30%, #ffffff 0%, #d9d9d9 40%, #9a9a9a 100%)",
+              border: "1px solid rgba(255,255,255,0.25)",
+              boxShadow:
+                "0 0 18px rgba(255,255,255,0.35), 0 0 35px rgba(143,91,255,0.25)",
+            }}
+          />
+
+          {/* RUBBER TEXTURE */}
+          <div
+            className="absolute w-10 h-12 rounded-full"
+            style={{
+              background:
+                "repeating-radial-gradient(circle, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0.08) 1px, transparent 2px, transparent 4px)",
+              opacity: 0.25,
+            }}
+          />
+
+          {/* HANDLE */}
+          <div
+            className="absolute left-1/2 top-10 w-1.5 h-7 -translate-x-1/2 rounded-full"
+            style={{
+              background:
+                "linear-gradient(to bottom, #ffffff, #cfcfcf, #8a8a8a)",
+              boxShadow: "0 0 10px rgba(255,255,255,0.15)",
+            }}
+          />
+
+          {/* SMALL GLOW */}
+          <div
+            className="absolute w-3 h-3 rounded-full blur-[6px]"
+            style={{
+              left: "40%",
+              top: "35%",
+              background: "rgba(255,255,255,0.6)",
+            }}
+          />
         </div>
       </div>
 
@@ -161,7 +203,7 @@ export default function Hero() {
         );
       })}
 
-      {/* 🟣 BALL */}
+      {/* BALL */}
       <div
         className="absolute z-30 pointer-events-none"
         style={{
