@@ -289,6 +289,28 @@ export default function Hero() {
 
             </div>
           </motion.div>
+{/* RIGHT VISUAL */}
+
+<div className="hidden lg:flex relative w-[650px] h-[700px] items-center justify-center">
+
+  <motion.div
+    animate={{
+      y: [0, -15, 0],
+    }}
+    transition={{
+      duration: 4,
+      repeat: Infinity,
+    }}
+    className="relative"
+  >
+    <Image
+      src="/logo.png"
+      alt="PongLab"
+      width={600}
+      height={600}
+      className="drop-shadow-[0_0_60px_rgba(107,48,206,.8)]"
+    />
+  </motion.div>
 
         </div>
       </div>
