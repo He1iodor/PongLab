@@ -7,66 +7,60 @@ import { motion } from "framer-motion";
 
 export default function Hero() {
   const [mousePosition, setMousePosition] = useState({
-  x: 0,
-  y: 0,
-});
-
-const handleMouseMove = (
-  e: React.MouseEvent<HTMLElement>
-) => {
-  setMousePosition({
-    x: e.clientX,
-    y: e.clientY,
+    x: 0,
+    y: 0,
   });
-};
-  return (
-   <section
-  className="relative min-h-screen overflow-hidden"
-  onMouseMove={handleMouseMove}
->
 
-      {/* Фоновое изображение */}
+  const handleMouseMove = (
+    e: React.MouseEvent<HTMLElement>
+  ) => {
+    setMousePosition({
+      x: e.clientX,
+      y: e.clientY,
+    });
+  };
+
+  return (
+    <section
+      className="relative min-h-screen overflow-hidden"
+      onMouseMove={handleMouseMove}
+    >
+      {/* PARALLAX BACKGROUND */}
 
       <div className="absolute inset-0">
-
         <motion.div
-  animate={{
-    x: mousePosition.x * 0.015,
-    y: mousePosition.y * 0.015,
-  }}
-  transition={{
-    type: "spring",
-    stiffness: 20,
-    damping: 30,
-  }}
-  className="absolute inset-0"
->
-  <Image
-    src="/hero-bg.png"
-    alt="PongLab"
-    fill
-    priority
-    className="
-      object-cover
-      object-center
-      scale-110
-    "
-  />
-</motion.div>
-
+          animate={{
+            x: mousePosition.x * 0.015,
+            y: mousePosition.y * 0.015,
+          }}
+          transition={{
+            type: "spring",
+            stiffness: 20,
+            damping: 30,
+          }}
+          className="absolute inset-0"
+        >
+          <Image
+            src="/hero-bg.png"
+            alt="PongLab"
+            fill
+            priority
+            className="object-cover object-center scale-110"
+          />
+        </motion.div>
       </div>
 
-      {/* Затемнение */}
+      {/* DARK OVERLAY */}
 
       <div
         className="
         absolute
         inset-0
-        bg-[linear-gradient(90deg,#090B18_0%,rgba(9,11,24,.95)_30%,rgba(9,11,24,.65)_55%,rgba(9,11,24,.8)_100%)]
+        bg-[linear-gradient(90deg,#090B18_0%,rgba(9,11,24,.95)_30%,rgba(9,11,24,.65)_55%,rgba(9,11,24,.85)_100%)]
         "
       />
 
-      {/* Свет */}
+      {/* STATIC GLOW */}
 
       <div
         className="
@@ -95,46 +89,48 @@ const handleMouseMove = (
         blur-[150px]
         "
       />
-<motion.div
-  animate={{
-    x: mousePosition.x - 250,
-    y: mousePosition.y - 250,
-  }}
-  transition={{
-    type: "spring",
-    stiffness: 40,
-    damping: 20,
-  }}
-  className="
-  absolute
-  h-[500px]
-  w-[500px]
-  rounded-full
-  bg-[#6B30CE]
-  opacity-[0.12]
-  blur-[150px]
-  pointer-events-none
-  "
-/>
+
+      {/* CURSOR GLOW */}
+
+      <motion.div
+        animate={{
+          x: mousePosition.x - 250,
+          y: mousePosition.y - 250,
+        }}
+        transition={{
+          type: "spring",
+          stiffness: 40,
+          damping: 20,
+        }}
+        className="
+        absolute
+        h-[500px]
+        w-[500px]
+        rounded-full
+        bg-[#6B30CE]
+        opacity-[0.12]
+        blur-[150px]
+        pointer-events-none
+        "
+      />
+
+      {/* CONTENT */}
+
       <div className="relative z-10">
-
         <div className="mx-auto max-w-[1400px] px-6">
-
           <div className="flex min-h-screen items-center">
-
             <motion.div
-  animate={{
-    x: mousePosition.x * 0.003,
-    y: mousePosition.y * 0.003,
-  }}
-  transition={{
-    type: "spring",
-    stiffness: 30,
-    damping: 20,
-  }}
-  className="max-w-[700px]"
->
-
+              animate={{
+                x: mousePosition.x * 0.003,
+                y: mousePosition.y * 0.003,
+              }}
+              transition={{
+                type: "spring",
+                stiffness: 30,
+                damping: 20,
+              }}
+              className="max-w-[700px]"
+            >
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -158,7 +154,7 @@ const handleMouseMove = (
               <motion.h1
                 initial={{ opacity: 0, y: 50 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: .8 }}
+                transition={{ duration: 0.8 }}
                 className="
                 mt-8
                 text-6xl
@@ -179,7 +175,7 @@ const handleMouseMove = (
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: .3 }}
+                transition={{ delay: 0.3 }}
                 className="
                 mt-8
                 max-w-[620px]
@@ -194,7 +190,6 @@ const handleMouseMove = (
               </motion.p>
 
               <div className="mt-10 flex flex-wrap gap-4">
-
                 <button
                   className="
                   rounded-2xl
@@ -224,90 +219,82 @@ const handleMouseMove = (
                 >
                   Смотреть видео
                 </button>
-
               </div>
 
-             <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div
+                  className="
+                  rounded-3xl
+                  border
+                  border-white/10
+                  bg-white/5
+                  backdrop-blur-xl
+                  p-6
+                  transition-all
+                  duration-300
+                  hover:border-[#6B30CE]/40
+                  hover:bg-white/10
+                  "
+                >
+                  <div className="text-4xl font-black">
+                    <Counter end={10000} />+
+                  </div>
 
-  <div
-    className="
-    rounded-3xl
-    border
-    border-white/10
-    bg-white/5
-    backdrop-blur-xl
-    p-6
-    transition-all
-    duration-300
-    hover:border-[#6B30CE]/40
-    hover:bg-white/10
-    "
-  >
-    <div className="text-4xl font-black">
-      <Counter end={10000} />+
-    </div>
+                  <div className="mt-2 text-white/60">
+                    тренировок
+                  </div>
+                </div>
 
-    <div className="mt-2 text-white/60">
-      тренировок
-    </div>
-  </div>
+                <div
+                  className="
+                  rounded-3xl
+                  border
+                  border-white/10
+                  bg-white/5
+                  backdrop-blur-xl
+                  p-6
+                  transition-all
+                  duration-300
+                  hover:border-[#6B30CE]/40
+                  hover:bg-white/10
+                  "
+                >
+                  <div className="text-4xl font-black">
+                    <Counter end={3500} />+
+                  </div>
 
-  <div
-    className="
-    rounded-3xl
-    border
-    border-white/10
-    bg-white/5
-    backdrop-blur-xl
-    p-6
-    transition-all
-    duration-300
-    hover:border-[#6B30CE]/40
-    hover:bg-white/10
-    "
-  >
-    <div className="text-4xl font-black">
-      <Counter end={3500} />+
-    </div>
+                  <div className="mt-2 text-white/60">
+                    ударов за сессию
+                  </div>
+                </div>
 
-    <div className="mt-2 text-white/60">
-      ударов за сессию
-    </div>
-  </div>
+                <div
+                  className="
+                  rounded-3xl
+                  border
+                  border-white/10
+                  bg-white/5
+                  backdrop-blur-xl
+                  p-6
+                  transition-all
+                  duration-300
+                  hover:border-[#6B30CE]/40
+                  hover:bg-white/10
+                  "
+                >
+                  <div className="text-4xl font-black">
+                    24/7
+                  </div>
 
-  <div
-    className="
-    rounded-3xl
-    border
-    border-white/10
-    bg-white/5
-    backdrop-blur-xl
-    p-6
-    transition-all
-    duration-300
-    hover:border-[#6B30CE]/40
-    hover:bg-white/10
-    "
-  >
-    <div className="text-4xl font-black">
-      24/7
-    </div>
-
-    <div className="mt-2 text-white/60">
-      доступность
-    </div>
-  </div>
-
-</div>
-
-            </div>
-
+                  <div className="mt-2 text-white/60">
+                    доступность
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
-
         </div>
-
-      </motion.div>
-
+      </div>
     </section>
   );
 }
