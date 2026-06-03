@@ -98,7 +98,7 @@ export default function Hero() {
         className="absolute right-[-200px] bottom-[-100px] w-[450px] h-[450px] rounded-full bg-[#8F5BFF] opacity-25 blur-[140px]"
       />
 
-      {/* CURSOR GLOW (SMALLER) */}
+      {/* CURSOR GLOW */}
       <motion.div
         animate={{
           x: mousePosition.x - 70,
@@ -113,7 +113,7 @@ export default function Hero() {
         <FloatingParticles />
       </div>
 
-      {/* TRAIL */}
+      {/* TRAIL LEVEL 3 */}
       {trail.map((p, i) => {
         const t = i / trail.length;
         const speed = Math.min(Math.sqrt(p.vx * p.vx + p.vy * p.vy), 30);
@@ -145,7 +145,7 @@ export default function Hero() {
         );
       })}
 
-      {/* 🟣 BALL (SMALLER VERSION) */}
+      {/* 🟣 BALL (18PX FINAL VERSION) */}
       <motion.div
         className="absolute z-30 pointer-events-none"
         animate={{
@@ -161,8 +161,8 @@ export default function Hero() {
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: 22 + ball.speed * 0.4,
-            height: 22 + ball.speed * 0.4,
+            width: 20 + ball.speed * 0.4,
+            height: 20 + ball.speed * 0.4,
             background:
               "radial-gradient(circle, rgba(143,91,255,0.35) 0%, rgba(143,91,255,0) 70%)",
             filter: "blur(8px)",
@@ -170,12 +170,12 @@ export default function Hero() {
           }}
         />
 
-        {/* CORE (SMALLER BALL) */}
+        {/* CORE (18px BALL) */}
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: 20,
-            height: 20,
+            width: 18,
+            height: 18,
             background:
               "radial-gradient(circle at 35% 35%, #ffffff 0%, #f3f3f3 45%, #dcdcdc 100%)",
             boxShadow:
@@ -187,11 +187,11 @@ export default function Hero() {
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#8F5BFF]"
           style={{
-            width: 10,
-            height: 10,
+            width: 9,
+            height: 9,
             opacity: Math.min(ball.speed * 0.03, 0.3),
             filter: "blur(4px)",
-            transform: "translate(-5px, -5px)",
+            transform: "translate(-4.5px, -4.5px)",
           }}
         />
 
@@ -200,8 +200,8 @@ export default function Hero() {
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#8F5BFF]"
             style={{
-              width: 30,
-              height: 30,
+              width: 28,
+              height: 28,
               opacity: 0.25,
               animation: "ping 0.6s cubic-bezier(0, 0, 0.2, 1)",
             }}
@@ -220,6 +220,7 @@ export default function Hero() {
             </div>
 
             <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
+              <br />
               Тренируйся
               <br />
               умнее.
