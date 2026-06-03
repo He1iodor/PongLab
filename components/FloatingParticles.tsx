@@ -15,6 +15,27 @@ export default function FloatingParticles() {
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [active, setActive] = useState(false);
 
+  const [screen, setScreen] = useState({
+    width: 0,
+    height: 0,
+  });
+
+  // 🧠 safe window size
+  useEffect(() => {
+    const updateSize = () => {
+      setScreen({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    updateSize();
+    window.addEventListener("resize", updateSize);
+
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
+
+  // 🧠 mouse tracking
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       setMouse({
@@ -38,12 +59,11 @@ export default function FloatingParticles() {
   return (
     <>
       {particles.map((p, i) => {
-        const dx = mouse.x - (window.innerWidth * p.x) / 100;
-        const dy = mouse.y - (window.innerHeight * p.y) / 100;
+        const dx = mouse.x - (screen.width * p.x) / 100;
+        const dy = mouse.y - (screen.height * p.y) / 100;
 
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // 🟣 stronger influence
         const force = active ? Math.max(140 - distance, 0) * 0.22 : 0;
 
         const moveX = (dx / (distance || 1)) * force;
@@ -58,24 +78,17 @@ export default function FloatingParticles() {
               height: p.size,
               left: `${p.x}%`,
               top: `${p.y}%`,
-
-              // ✨ brighter glow
               background: "rgba(167, 139, 250, 0.85)",
               boxShadow: "0 0 14px rgba(167, 139, 250, 1)",
             }}
             animate={{
               x: moveX,
               y: moveY,
-
-              // ✨ stronger flicker
-              opacity: active
-                ? [0.5, 1, 0.6, 1]
-                : [0.3, 0.8, 0.4],
-
+              opacity: active ? [0.5, 1, 0.6, 1] : [0.3, 0.8, 0.4],
               scale: active ? [1, 1.25, 1] : [1, 1.1, 1],
             }}
             transition={{
-              duration: active ? 4 : 8, // faster motion
+              duration: active ? 4 : 8,
               repeat: Infinity,
               ease: "easeInOut",
             }}
