@@ -98,8 +98,8 @@ export default function Navbar() {
               <Image
                 src="/logo.png"
                 alt="PongLab"
-                width={42}
-                height={42}
+                width={160}
+                height={60}
                 priority
               />
 
