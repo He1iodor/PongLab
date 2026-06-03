@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 
 export default function FloatingParticles() {
   const far = useRef(
@@ -10,74 +10,40 @@ export default function FloatingParticles() {
       y: Math.random() * 100,
       size: Math.random() * 1.2 + 0.3,
       phase: Math.random() * Math.PI * 2,
-      speed: 0.0006 + Math.random() * 0.0012,
+      speed: 0.0008 + Math.random() * 0.0015,
     }))
   ).current;
 
   const mid = useRef(
-    Array.from({ length: 70 }).map(() => ({
+    Array.from({ length: 60 }).map(() => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
       size: Math.random() * 1.6 + 0.6,
       phase: Math.random() * Math.PI * 2,
-      speed: 0.0012 + Math.random() * 0.0022,
+      speed: 0.0015 + Math.random() * 0.0025,
     }))
   ).current;
 
   const near = useRef(
-    Array.from({ length: 40 }).map(() => ({
+    Array.from({ length: 30 }).map(() => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
       size: Math.random() * 2.2 + 1,
       phase: Math.random() * Math.PI * 2,
-      speed: 0.0018 + Math.random() * 0.0032,
+      speed: 0.002 + Math.random() * 0.0035,
     }))
   ).current;
 
-  const [screen, setScreen] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    const update = () => {
-      setScreen({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  // 🌫️ subtle “camera drift”
-  const cameraX =
-    Math.sin(Date.now() * 0.0001) * 12;
-
-  const cameraY =
-    Math.cos(Date.now() * 0.0001) * 10;
-
-  const renderLayer = (
-    arr: any[],
-    z: number,
-    intensity: number,
-    cameraMultiplier: number
-  ) =>
+  const renderLayer = (arr: any[], z: number, intensity: number) =>
     arr.map((p, i) => {
-      const px =
-        (screen.width * p.x) / 100 +
-        cameraX * cameraMultiplier;
-
-      const py =
-        (screen.height * p.y) / 100 +
-        cameraY * cameraMultiplier;
+      const px = (window.innerWidth * p.x) / 100;
+      const py = (window.innerHeight * p.y) / 100;
 
       const t = Date.now() * p.speed;
 
-      const floatX =
-        Math.cos(t + p.phase) * intensity;
-
-      const floatY =
-        Math.sin(t + p.phase) * intensity;
+      // 🌌 subtle independent drift per layer
+      const floatX = Math.cos(t + p.phase) * intensity;
+      const floatY = Math.sin(t + p.phase) * intensity;
 
       const flicker = Math.sin(t * 3);
 
@@ -116,14 +82,14 @@ export default function FloatingParticles() {
 
   return (
     <>
-      {/* FAR — почти статичный */}
-      {renderLayer(far, 1, 3, 0.2)}
+      {/* FAR LAYER */}
+      {renderLayer(far, 1, 4)}
 
-      {/* MID — лёгкое движение */}
-      {renderLayer(mid, 2, 6, 0.6)}
+      {/* MID LAYER */}
+      {renderLayer(mid, 2, 8)}
 
-      {/* NEAR — живой слой */}
-      {renderLayer(near, 3, 10, 1.2)}
+      {/* NEAR LAYER */}
+      {renderLayer(near, 3, 12)}
     </>
   );
 }
