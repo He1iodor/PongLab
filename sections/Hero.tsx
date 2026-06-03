@@ -3,24 +3,69 @@
 import Image from "next/image";
 import Counter from "@/components/Counter";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function Hero() {
-  const [mousePosition, setMousePosition] = useState({
-    x: 0,
-    y: 0,
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  const [ball, setBall] = useState({
+    x: 300,
+    y: 300,
+    vx: 2.5,
+    vy: 2,
   });
 
-  const ballPathX = [200, 400, 700, 1000, 700, 400, 200];
-  const ballPathY = [300, 200, 250, 150, 200, 280, 300];
+  const requestRef = useRef<number | null>(null);
+
+  // 🧠 PHYSICS LOOP (LEVEL 5)
+  useEffect(() => {
+    const update = () => {
+      setBall((prev) => {
+        let x = prev.x + prev.vx;
+        let y = prev.y + prev.vy;
+        let vx = prev.vx;
+        let vy = prev.vy;
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // mouse attraction (AI feel)
+        const dx = mousePosition.x - x;
+        const dy = mousePosition.y - y;
+
+        vx += dx * 0.00002;
+        vy += dy * 0.00002;
+
+        // damping (stability)
+        vx *= 0.99;
+        vy *= 0.99;
+
+        // bounce edges
+        if (x > width - 50 || x < 50) vx *= -1;
+        if (y > height - 50 || y < 50) vy *= -1;
+
+        return {
+          x,
+          y,
+          vx,
+          vy,
+        };
+      });
+
+      requestRef.current = requestAnimationFrame(update);
+    };
+
+    requestRef.current = requestAnimationFrame(update);
+
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, [mousePosition]);
 
   return (
     <section
       onMouseMove={(e) =>
-        setMousePosition({
-          x: e.clientX,
-          y: e.clientY,
-        })
+        setMousePosition({ x: e.clientX, y: e.clientY })
       }
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
@@ -44,11 +89,15 @@ export default function Hero() {
         </motion.div>
       </div>
 
-      {/* OVERLAY */}
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,#090B18_0%,rgba(9,11,24,.96)_30%,rgba(9,11,24,.7)_60%,rgba(9,11,24,.9)_100%)]" />
+      {/* DEPTH GLOWS */}
+      <motion.div
+        animate={{
+          x: mousePosition.x * 0.02,
+          y: mousePosition.y * 0.02,
+        }}
+        className="absolute left-[-250px] top-[100px] w-[700px] h-[700px] rounded-full bg-[#6B30CE] opacity-20 blur-[180px]"
+      />
 
-      {/* GLOWS */}
-      <div className="absolute left-[-250px] top-[100px] w-[700px] h-[700px] rounded-full bg-[#6B30CE] opacity-20 blur-[180px]" />
       <div className="absolute right-[-200px] bottom-[-100px] w-[500px] h-[500px] rounded-full bg-[#8F5BFF] opacity-20 blur-[150px]" />
 
       {/* MOUSE GLOW */}
@@ -61,32 +110,24 @@ export default function Hero() {
         className="absolute w-[500px] h-[500px] rounded-full bg-[#6B30CE] opacity-[0.12] blur-[150px] pointer-events-none"
       />
 
-      {/* LEVEL 2 — FLOATING BALL */}
+      {/* 🟣 LEVEL 5 BALL */}
       <motion.div
-        className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_30px_white] z-20 pointer-events-none"
+        className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_35px_white] z-30 pointer-events-none"
         animate={{
-          x: ballPathX,
-          y: ballPathY,
+          x: ball.x,
+          y: ball.y,
         }}
-        transition={{
-          duration: 6,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
+        transition={{ type: "spring", stiffness: 120, damping: 20 }}
       />
 
-      {/* LEVEL 3 — LIGHT TRAIL */}
+      {/* TRAIL */}
       <motion.div
-        className="absolute w-28 h-28 rounded-full bg-[#8F5BFF] blur-[60px] opacity-20 z-10 pointer-events-none"
+        className="absolute w-24 h-24 rounded-full bg-[#8F5BFF] blur-[60px] opacity-20 z-10 pointer-events-none"
         animate={{
-          x: ballPathX,
-          y: ballPathY,
+          x: ball.x - 40,
+          y: ball.y - 40,
         }}
-        transition={{
-          duration: 6,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
+        transition={{ type: "spring", stiffness: 60, damping: 25 }}
       />
 
       {/* FLOATING PARTICLES */}
@@ -102,7 +143,7 @@ export default function Hero() {
         className="absolute top-[40%] left-[80%] w-3 h-3 rounded-full bg-[#8F5BFF] shadow-[0_0_20px_#8F5BFF]"
       />
 
-      {/* MAIN GRID */}
+      {/* CONTENT GRID */}
       <div className="relative z-10 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
@@ -164,22 +205,15 @@ export default function Hero() {
             </div>
           </motion.div>
 
-          {/* RIGHT — ROBOT + UI */}
-          <div className="hidden lg:flex relative justify-center items-center">
-
-            {/* GLASS PANEL (LEVEL 4) */}
-            <div className="absolute top-10 right-10 bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl px-5 py-4 z-20">
-              <div className="text-[#B088FF] text-sm font-semibold">
-                AI Tracking
-              </div>
-              <div className="text-white/70 text-xs mt-1">
-                98% Accuracy
-              </div>
-            </div>
+          {/* RIGHT — ROBOT (LOOKS AT BALL) */}
+          <div className="hidden lg:flex justify-center items-center relative">
 
             <motion.div
-              animate={{ y: [0, -15, 0] }}
-              transition={{ duration: 4, repeat: Infinity }}
+              animate={{
+                rotateY: (ball.x - window.innerWidth / 2) * 0.02,
+                rotateX: (ball.y - window.innerHeight / 2) * -0.02,
+              }}
+              transition={{ type: "spring", stiffness: 40, damping: 20 }}
               className="relative w-full max-w-[650px]"
             >
               <Image
@@ -190,6 +224,17 @@ export default function Hero() {
                 className="w-full h-auto drop-shadow-[0_0_80px_rgba(107,48,206,.6)]"
               />
             </motion.div>
+
+            {/* AI PANEL */}
+            <div className="absolute top-10 right-10 bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl px-5 py-4">
+              <div className="text-[#B088FF] text-sm font-semibold">
+                AI Tracking
+              </div>
+              <div className="text-white/70 text-xs mt-1">
+                98% Accuracy
+              </div>
+            </div>
+
           </div>
 
         </div>
