@@ -1,108 +1,127 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
-type Particle = {
+type Star = {
+  x: number;
+  y: number;
+  z: number;
+  baseX: number;
+  baseY: number;
+};
+
+type ShootingStar = {
   x: number;
   y: number;
   vx: number;
   vy: number;
-  baseSize: number;
-  glow: number;
-  twinkle: number;
+  life: number;
+  maxLife: number;
 };
 
 export default function FloatingParticles() {
-  const [particles, setParticles] = useState<Particle[]>([]);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const starsRef = useRef<Star[]>([]);
+  const shootingRef = useRef<ShootingStar[]>([]);
   const rafRef = useRef<number | null>(null);
 
-  // init
   useEffect(() => {
-    const count = 60;
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
 
-    const initial: Particle[] = Array.from({ length: count }).map(() => ({
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: (Math.random() - 0.5) * 0.3,
-      baseSize: Math.random() * 2 + 1,
-      glow: Math.random(),
-      twinkle: Math.random() * 100,
-    }));
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
 
-    setParticles(initial);
-  }, []);
+      // ⭐ create MASSIVE starfield
+      const count = 300;
 
-  // animation loop
-  useEffect(() => {
-    const update = () => {
-      setParticles((prev) =>
-        prev.map((p) => {
-          let x = p.x + p.vx;
-          let y = p.y + p.vy;
-
-          // wrap edges
-          if (x < 0) x = window.innerWidth;
-          if (x > window.innerWidth) x = 0;
-          if (y < 0) y = window.innerHeight;
-          if (y > window.innerHeight) y = 0;
-
-          return {
-            ...p,
-            x,
-            y,
-            twinkle: p.twinkle + 0.8,
-            glow: Math.sin(p.twinkle * 0.02) * 0.5 + 0.5,
-          };
-        })
-      );
-
-      rafRef.current = requestAnimationFrame(update);
+      starsRef.current = Array.from({ length: count }).map(() => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        baseX: Math.random() * canvas.width,
+        baseY: Math.random() * canvas.height,
+        z: Math.random() * 1 + 0.2,
+      }));
     };
 
-    rafRef.current = requestAnimationFrame(update);
+    resize();
+    window.addEventListener("resize", resize);
+
+    const spawnShootingStar = () => {
+      const edge = Math.random() > 0.5;
+
+      shootingRef.current.push({
+        x: edge ? 0 : Math.random() * canvas.width,
+        y: edge ? Math.random() * canvas.height * 0.5 : 0,
+        vx: 6 + Math.random() * 6,
+        vy: 3 + Math.random() * 6,
+        life: 0,
+        maxLife: 60 + Math.random() * 30,
+      });
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 🌌 STAR FIELD
+      for (const star of starsRef.current) {
+        star.x += (star.baseX - star.x) * 0.01;
+        star.y += (star.baseY - star.y) * 0.01;
+
+        const size = star.z * 1.5;
+
+        const glow = 0.5 + Math.sin(Date.now() * 0.002 + star.x) * 0.5;
+
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(180,120,255,${0.3 + glow * 0.4})`;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "rgba(180,120,255,0.6)";
+        ctx.arc(star.x, star.y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 💫 SHOOTING STARS
+      if (Math.random() < 0.015) {
+        spawnShootingStar();
+      }
+
+      shootingRef.current = shootingRef.current.filter((s) => {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.life++;
+
+        const alpha = 1 - s.life / s.maxLife;
+
+        // tail (light ray effect)
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x - s.vx * 10, s.y - s.vy * 10);
+
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "rgba(160,120,255,0.8)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        return s.life < s.maxLife;
+      });
+
+      rafRef.current = requestAnimationFrame(draw);
+    };
+
+    rafRef.current = requestAnimationFrame(draw);
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", resize);
     };
   }, []);
 
   return (
-    <div className="absolute inset-0 pointer-events-none">
-      {particles.map((p, i) => {
-        const glow = p.glow;
-        const size = p.baseSize + glow * 2;
-
-        return (
-          <div
-            key={i}
-            className="absolute rounded-full"
-            style={{
-              left: p.x,
-              top: p.y,
-              width: size,
-              height: size,
-              transform: "translate(-50%, -50%)",
-
-              // ⭐ STAR CORE
-              background: `radial-gradient(circle,
-                rgba(255,255,255,${0.9 * glow}) 0%,
-                rgba(180,120,255,${0.6 * glow}) 40%,
-                rgba(0,0,0,0) 70%)`,
-
-              // ✨ STAR RAYS (glow lines effect)
-              boxShadow: `
-                0 0 ${10 + glow * 20}px rgba(180,120,255,${0.6 * glow}),
-                0 0 ${20 + glow * 30}px rgba(120,200,255,${0.3 * glow})
-              `,
-
-              filter: `blur(${0.5 + glow}px)`,
-
-              opacity: 0.6 + glow * 0.4,
-            }}
-          />
-        );
-      })}
-    </div>
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none"
+    />
   );
 }
