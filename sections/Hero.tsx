@@ -52,7 +52,7 @@ export default function Hero() {
           y: mousePosition.y - 70,
         }}
         transition={{ type: "spring", stiffness: 80, damping: 18 }}
-        className="absolute w-[140px] h-[140px] rounded-full bg-[#8F5BFF] opacity-40 blur-[50px] pointer-events-none"
+        className="absolute w-[170px] h-[140px] rounded-full bg-[#8F5BFF] opacity-40 blur-[50px] pointer-events-none"
       />
 
       {/* PARTICLES */}
