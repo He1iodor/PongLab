@@ -9,21 +9,22 @@ import { useEffect, useRef, useState } from "react";
 export default function Hero() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
+  // 🟣 BALL
   const [ball, setBall] = useState({
     x: 300,
     y: 300,
     vx: 0,
     vy: 0,
-    speed: 0,
   });
 
+  // 🟣 TRAIL (LEVEL 3)
   const [trail, setTrail] = useState<
     { x: number; y: number; vx: number; vy: number }[]
   >([]);
 
   const rafRef = useRef<number | null>(null);
 
-  // 🧠 physics loop
+  // 🧠 PHYSICS LOOP (smooth + energy)
   useEffect(() => {
     const update = () => {
       setBall((prev) => {
@@ -33,15 +34,18 @@ export default function Hero() {
         const vx = x - prev.x;
         const vy = y - prev.y;
 
-        const speed = Math.min(Math.sqrt(vx * vx + vy * vy), 40);
-
         setTrail((t) => {
-          const next = [...t, { x, y, vx, vy }];
+          const next = [
+            ...t,
+            { x, y, vx, vy },
+          ];
+
           if (next.length > 35) next.shift();
+
           return next;
         });
 
-        return { x, y, vx, vy, speed };
+        return { x, y, vx, vy };
       });
 
       rafRef.current = requestAnimationFrame(update);
@@ -61,7 +65,7 @@ export default function Hero() {
       }
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
-      {/* BACKGROUND */}
+      {/* 🧠 DEPTH BACKGROUND */}
       <motion.div
         animate={{
           x: mousePosition.x * 0.02,
@@ -81,7 +85,7 @@ export default function Hero() {
       {/* OVERLAY */}
       <div className="absolute inset-0 bg-[linear-gradient(90deg,#090B18_0%,rgba(9,11,24,.95)_40%,rgba(9,11,24,.7)_70%,rgba(9,11,24,.95)_100%)]" />
 
-      {/* GLOWS */}
+      {/* 🟣 DEPTH GLOWS */}
       <motion.div
         animate={{
           x: mousePosition.x * 0.03,
@@ -98,22 +102,22 @@ export default function Hero() {
         className="absolute right-[-200px] bottom-[-100px] w-[450px] h-[450px] rounded-full bg-[#8F5BFF] opacity-25 blur-[140px]"
       />
 
-      {/* CURSOR GLOW */}
+      {/* 🟣 CURSOR GLOW (FOCUSED) */}
       <motion.div
         animate={{
-          x: mousePosition.x - 70,
-          y: mousePosition.y - 70,
+          x: mousePosition.x - 140,
+          y: mousePosition.y - 140,
         }}
         transition={{ type: "spring", stiffness: 80, damping: 18 }}
-        className="absolute w-[140px] h-[140px] rounded-full bg-[#8F5BFF] opacity-40 blur-[50px] pointer-events-none"
+        className="absolute w-[280px] h-[280px] rounded-full bg-[#8F5BFF] opacity-30 blur-[90px] pointer-events-none"
       />
 
-      {/* PARTICLES */}
+      {/* 🟣 FLOATING PARTICLES (your system) */}
       <div className="absolute inset-0 pointer-events-none">
-        <FloatingParticles />
+        <FloatingParticles mousePosition={mousePosition} />
       </div>
 
-      {/* TRAIL LEVEL 3 */}
+      {/* 🟣 TRAIL LEVEL 3 (ENERGY FIELD) */}
       {trail.map((p, i) => {
         const t = i / trail.length;
         const speed = Math.min(Math.sqrt(p.vx * p.vx + p.vy * p.vy), 30);
@@ -129,11 +133,13 @@ export default function Hero() {
               width: size,
               height: size,
               transform: "translate(-50%, -50%)",
+
               background: `radial-gradient(circle,
                 rgba(255,255,255,${t}) 0%,
                 rgba(143,91,255,${t * 0.7}) 40%,
                 rgba(143,91,255,0) 100%
               )`,
+
               filter: "blur(6px)",
             }}
             animate={{
@@ -145,71 +151,17 @@ export default function Hero() {
         );
       })}
 
-      {/* 🟣 BALL (18PX FINAL VERSION) */}
+      {/* 🟣 BALL */}
       <motion.div
-        className="absolute z-30 pointer-events-none"
+        className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_40px_white] z-30 pointer-events-none"
         animate={{
           x: ball.x,
           y: ball.y,
         }}
-        transition={{
-          x: { type: "spring", stiffness: 180, damping: 20 },
-          y: { type: "spring", stiffness: 180, damping: 20 },
-        }}
-      >
-        {/* AURA */}
-        <div
-          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
-          style={{
-            width: 20 + ball.speed * 0.4,
-            height: 20 + ball.speed * 0.4,
-            background:
-              "radial-gradient(circle, rgba(143,91,255,0.35) 0%, rgba(143,91,255,0) 70%)",
-            filter: "blur(8px)",
-            opacity: 0.7,
-          }}
-        />
+        transition={{ type: "spring", stiffness: 180, damping: 20 }}
+      />
 
-        {/* CORE (18px BALL) */}
-        <div
-          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
-          style={{
-            width: 18,
-            height: 18,
-            background:
-              "radial-gradient(circle at 35% 35%, #ffffff 0%, #f3f3f3 45%, #dcdcdc 100%)",
-            boxShadow:
-              "0 0 12px rgba(255,255,255,0.9), 0 0 20px rgba(143,91,255,0.4)",
-          }}
-        />
-
-        {/* MICRO ENERGY */}
-        <div
-          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#8F5BFF]"
-          style={{
-            width: 9,
-            height: 9,
-            opacity: Math.min(ball.speed * 0.03, 0.3),
-            filter: "blur(4px)",
-            transform: "translate(-4.5px, -4.5px)",
-          }}
-        />
-
-        {/* IMPACT */}
-        {ball.speed > 18 && (
-          <div
-            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#8F5BFF]"
-            style={{
-              width: 28,
-              height: 28,
-              opacity: 0.25,
-              animation: "ping 0.6s cubic-bezier(0, 0, 0.2, 1)",
-            }}
-          />
-        )}
-      </motion.div>
-
-      {/* CONTENT */}
+      {/* MAIN CONTENT */}
       <div className="relative z-10 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
