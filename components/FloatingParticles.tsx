@@ -7,9 +7,9 @@ export default function FloatingParticles() {
     Array.from({ length: 120 }).map(() => ({
       x: Math.random() * window.innerWidth,
       y: Math.random() * window.innerHeight,
+      dx: (Math.random() - 0.5) * 0.4,
+      dy: (Math.random() - 0.5) * 0.4,
       size: Math.random() * 2 + 0.6,
-      dx: (Math.random() - 0.5) * 0.3,
-      dy: (Math.random() - 0.5) * 0.3,
     }))
   ).current;
 
@@ -19,18 +19,22 @@ export default function FloatingParticles() {
     let raf: number;
 
     const loop = () => {
-      particles.forEach((p, i) => {
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
         const el = refs.current[i];
-        if (!el) return;
+        if (!el) continue;
 
         p.x += p.dx;
         p.y += p.dy;
 
-        const x = p.x;
-        const y = p.y;
+        // wrap screen
+        if (p.x < 0) p.x = window.innerWidth;
+        if (p.x > window.innerWidth) p.x = 0;
+        if (p.y < 0) p.y = window.innerHeight;
+        if (p.y > window.innerHeight) p.y = 0;
 
-        el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-      });
+        el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0)`;
+      }
 
       raf = requestAnimationFrame(loop);
     };
