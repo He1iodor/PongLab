@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
 
 export default function Hero() {
   const mouse = useRef({ x: 0, y: 0 });
-  const parallax = useRef({ x: 0, y: 0 });
+  const scrollY = useRef(0);
 
   const glowRef = useRef<HTMLDivElement | null>(null);
   const botRef = useRef<HTMLDivElement | null>(null);
@@ -15,45 +15,52 @@ export default function Hero() {
   const bgRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const onScroll = () => {
+      scrollY.current = window.scrollY;
+    };
+
+    window.addEventListener("scroll", onScroll);
+
     let x = 0;
     let y = 0;
 
     const animate = () => {
-      // smooth cursor follow
+      // smooth mouse follow (ONLY glow)
       x += (mouse.current.x - x) * 0.12;
       y += (mouse.current.y - y) * 0.12;
 
-      const px = parallax.current.x;
-      const py = parallax.current.y;
+      const scroll = scrollY.current;
 
-      // glow (fast layer)
+      // glow (mouse-based)
       if (glowRef.current) {
         glowRef.current.style.transform =
-          `translate3d(${x - 150 + px * 60}px, ${y - 150 + py * 60}px, 0)`;
+          `translate3d(${x - 150}px, ${y - 150}px, 0)`;
       }
 
-      // particles (medium layer)
+      // particles (light scroll drift)
       if (particlesRef.current) {
         particlesRef.current.style.transform =
-          `translate3d(${px * -20}px, ${py * -20}px, 0)`;
+          `translate3d(0px, ${scroll * 0.05}px, 0)`;
       }
 
-      // bot (foreground layer)
-      if (botRef.current) {
-        botRef.current.style.transform =
-          `translate3d(${px * 35}px, ${py * 35}px, 0)`;
-      }
-
-      // background drift (very slow)
+      // background (slower scroll)
       if (bgRef.current) {
         bgRef.current.style.transform =
-          `translate3d(${px * -10}px, ${py * -10}px, 0)`;
+          `translate3d(0px, ${scroll * 0.03}px, 0)`;
+      }
+
+      // BOT (main scroll parallax)
+      if (botRef.current) {
+        botRef.current.style.transform =
+          `translate3d(0px, ${scroll * 0.12}px, 0)`;
       }
 
       requestAnimationFrame(animate);
     };
 
     animate();
+
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
@@ -61,11 +68,6 @@ export default function Hero() {
       onMouseMove={(e) => {
         mouse.current.x = e.clientX;
         mouse.current.y = e.clientY;
-
-        parallax.current.x =
-          (e.clientX / window.innerWidth - 0.5) * 2;
-        parallax.current.y =
-          (e.clientY / window.innerHeight - 0.5) * 2;
       }}
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
@@ -141,11 +143,11 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* RIGHT */}
+          {/* RIGHT (BOT scroll parallax) */}
           <div className="hidden lg:flex justify-center items-center">
             <div
               ref={botRef}
-              className="relative w-full max-w-[520px] transition-transform"
+              className="relative w-full max-w-[520px] will-change-transform"
             >
               <Image
                 src="/bot.png"
