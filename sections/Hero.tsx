@@ -36,33 +36,26 @@ export default function Hero() {
       }}
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
-      {/* BASE BACKGROUND */}
-      <div className="absolute inset-0 bg-[#090B18]" />
-
       {/* subtle vignette */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
 
-      {/* ✨ FLOATING PARTICLES (BACK LAYER) */}
+      {/* floating particles */}
       <div className="absolute inset-0 pointer-events-none z-10">
         <FloatingParticles />
       </div>
 
-      {/* CURSOR GLOW (SMOOTH GPU) */}
+      {/* cursor glow */}
       <div
         ref={glowRef}
         className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
       />
 
-      {/* CONTENT */}
+      {/* content */}
       <div className="relative z-30 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
           {/* LEFT */}
           <div className="max-w-[700px]">
-            <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-5 py-2 text-xs tracking-[2px] text-[#B088FF] backdrop-blur-xl">
-              УМНЫЕ ТРЕНИРОВКИ НОВОГО ПОКОЛЕНИЯ
-            </div>
-
             <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
               <br />
               Тренируйся
