@@ -71,6 +71,7 @@ export default function Hero() {
             </div>
 
             <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
+              <br />
               Тренируйся
               <br />
               умнее.
