@@ -115,8 +115,8 @@ export default function Hero() {
               <Image
                 src="/bot.png"
                 alt="Robot Training"
-                width={400}
-                height={400}
+                width={300}
+                height={300}
                 className="w-full h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
               />
             </div>
