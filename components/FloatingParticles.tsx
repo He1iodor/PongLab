@@ -5,9 +5,11 @@ import { useEffect, useRef } from "react";
 type Star = {
   x: number;
   y: number;
-  z: number;
   baseX: number;
   baseY: number;
+  size: number;
+  twinkle: number;
+  speed: number;
 };
 
 type ShootingStar = {
@@ -33,20 +35,60 @@ export default function FloatingParticles() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
 
-      // ⭐ create MASSIVE starfield
-      const count = 300;
+      // ⭐ LOTS OF STARS
+      const count = 350;
 
       starsRef.current = Array.from({ length: count }).map(() => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
         baseX: Math.random() * canvas.width,
         baseY: Math.random() * canvas.height,
-        z: Math.random() * 1 + 0.2,
+        size: Math.random() * 1.2 + 0.4,
+        twinkle: Math.random() * 1000,
+        speed: Math.random() * 0.3 + 0.1,
       }));
     };
 
     resize();
     window.addEventListener("resize", resize);
+
+    const drawStar = (
+      x: number,
+      y: number,
+      size: number,
+      glow: number
+    ) => {
+      ctx.save();
+      ctx.translate(x, y);
+
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 6);
+      g.addColorStop(0, `rgba(255,255,255,${0.9 * glow})`);
+      g.addColorStop(0.3, `rgba(180,120,255,${0.6 * glow})`);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+
+      ctx.strokeStyle = g;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = "rgba(180,120,255,0.6)";
+      ctx.lineWidth = 1;
+
+      // ✨ CROSS STAR ( + )
+      ctx.beginPath();
+      ctx.moveTo(-size * 6, 0);
+      ctx.lineTo(size * 6, 0);
+      ctx.moveTo(0, -size * 6);
+      ctx.lineTo(0, size * 6);
+      ctx.stroke();
+
+      // ✨ DIAGONAL STAR ( X )
+      ctx.beginPath();
+      ctx.moveTo(-size * 4, -size * 4);
+      ctx.lineTo(size * 4, size * 4);
+      ctx.moveTo(size * 4, -size * 4);
+      ctx.lineTo(-size * 4, size * 4);
+      ctx.stroke();
+
+      ctx.restore();
+    };
 
     const spawnShootingStar = () => {
       const edge = Math.random() > 0.5;
@@ -64,25 +106,20 @@ export default function FloatingParticles() {
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 🌌 STAR FIELD
+      // 🌌 STARS (cross + glow)
       for (const star of starsRef.current) {
         star.x += (star.baseX - star.x) * 0.01;
         star.y += (star.baseY - star.y) * 0.01;
 
-        const size = star.z * 1.5;
+        star.twinkle += star.speed;
 
-        const glow = 0.5 + Math.sin(Date.now() * 0.002 + star.x) * 0.5;
+        const glow = (Math.sin(star.twinkle * 0.01) + 1) * 0.5;
 
-        ctx.beginPath();
-        ctx.fillStyle = `rgba(180,120,255,${0.3 + glow * 0.4})`;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = "rgba(180,120,255,0.6)";
-        ctx.arc(star.x, star.y, size, 0, Math.PI * 2);
-        ctx.fill();
+        drawStar(star.x, star.y, star.size, glow);
       }
 
       // 💫 SHOOTING STARS
-      if (Math.random() < 0.015) {
+      if (Math.random() < 0.02) {
         spawnShootingStar();
       }
 
@@ -93,15 +130,15 @@ export default function FloatingParticles() {
 
         const alpha = 1 - s.life / s.maxLife;
 
-        // tail (light ray effect)
+        // tail
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x - s.vx * 10, s.y - s.vy * 10);
+        ctx.lineTo(s.x - s.vx * 12, s.y - s.vy * 12);
 
         ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = "rgba(160,120,255,0.8)";
-        ctx.lineWidth = 2;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "rgba(180,120,255,0.8)";
+        ctx.lineWidth = 1.5;
         ctx.stroke();
 
         return s.life < s.maxLife;
