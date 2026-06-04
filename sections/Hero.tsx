@@ -2,66 +2,56 @@
 
 import Image from "next/image";
 import Counter from "@/components/Counter";
-import FloatingParticles from "@/components/FloatingParticles";
-import { motion } from "framer-motion";
-import { useState } from "react";
+import AuroraBackground from "@/components/AuroraBackground";
+import { useEffect, useRef } from "react";
 
 export default function Hero() {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const mouse = useRef({ x: 0, y: 0 });
+  const glowRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let x = 0;
+    let y = 0;
+
+    const animate = () => {
+      x += (mouse.current.x - x) * 0.12;
+      y += (mouse.current.y - y) * 0.12;
+
+      if (glowRef.current) {
+        glowRef.current.style.transform =
+          `translate3d(${x - 150}px, ${y - 150}px, 0)`;
+      }
+
+      requestAnimationFrame(animate);
+    };
+
+    animate();
+  }, []);
 
   return (
     <section
-      onMouseMove={(e) =>
-        setMousePosition({ x: e.clientX, y: e.clientY })
-      }
+      onMouseMove={(e) => {
+        mouse.current.x = e.clientX;
+        mouse.current.y = e.clientY;
+      }}
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
-      {/* BACKGROUND */}
-      <motion.div
-        animate={{
-          x: mousePosition.x * 0.02,
-          y: mousePosition.y * 0.02,
-        }}
-        className="absolute inset-0"
-      />
-
-      {/* OVERLAY */}
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,#090B18_0%,rgba(9,11,24,.95)_40%,rgba(9,11,24,.7)_70%,rgba(9,11,24,.95)_100%)]" />
-
-      {/* GLOWS */}
-      <motion.div
-        animate={{
-          x: mousePosition.x * 0.03,
-          y: mousePosition.y * 0.03,
-        }}
-        className="absolute left-[-250px] top-[100px] w-[650px] h-[650px] rounded-full bg-[#6B30CE] opacity-30 blur-[160px]"
-      />
-
-      <motion.div
-        animate={{
-          x: mousePosition.x * -0.02,
-          y: mousePosition.y * -0.02,
-        }}
-        className="absolute right-[-200px] bottom-[-100px] w-[450px] h-[450px] rounded-full bg-[#8F5BFF] opacity-25 blur-[140px]"
-      />
-
-      {/* CURSOR GLOW */}
-      <motion.div
-        animate={{
-          x: mousePosition.x - 70,
-          y: mousePosition.y - 70,
-        }}
-        transition={{ type: "spring", stiffness: 80, damping: 18 }}
-        className="absolute w-[170px] h-[140px] rounded-full bg-[#8F5BFF] opacity-40 blur-[50px] pointer-events-none"
-      />
-
-      {/* PARTICLES */}
-      <div className="absolute inset-0 pointer-events-none">
-        <FloatingParticles />
+      {/* 🌌 GPU AURORA BACKGROUND */}
+      <div className="absolute inset-0 z-0">
+        <AuroraBackground />
       </div>
 
+      {/* 🌫 readability overlay */}
+      <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.85))]" />
+
+      {/* ✨ CURSOR GLOW (SMOOTH GPU) */}
+      <div
+        ref={glowRef}
+        className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
+      />
+
       {/* CONTENT */}
-      <div className="relative z-10 mx-auto max-w-[1400px] px-6">
+      <div className="relative z-30 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
           {/* LEFT */}
@@ -71,7 +61,6 @@ export default function Hero() {
             </div>
 
             <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
-              <br />
               Тренируйся
               <br />
               умнее.
@@ -79,7 +68,7 @@ export default function Hero() {
               <span className="text-[#8F5BFF]">Играй сильнее.</span>
             </h1>
 
-            <p className="mt-8 max-w-[620px] text-base md:text-lg leading-7 md:leading-8 text-white/75">
+            <p className="mt-8 max-w-[620px] text-base md:text-lg leading-7 md:leading-8 text-white/70">
               Персональные тренировки с роботизированной подачей,
               аналитикой и тысячами качественных повторений.
             </p>
@@ -121,10 +110,10 @@ export default function Hero() {
             <div className="relative w-full max-w-[650px]">
               <Image
                 src="/logo.png"
-                alt="PongLab Robot"
+                alt="Robot Training"
                 width={650}
                 height={650}
-                className="w-full h-auto drop-shadow-[0_0_100px_rgba(107,48,206,.7)]"
+                className="w-full h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
               />
             </div>
           </div>
