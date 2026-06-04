@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Counter from "@/components/Counter";
 import FloatingParticles from "@/components/FloatingParticles";
 import { useEffect, useRef } from "react";
+import Image from "next/image";
 
 export default function Hero() {
   const mouse = useRef({ x: 0, y: 0 });
@@ -19,7 +19,7 @@ export default function Hero() {
 
       if (glowRef.current) {
         glowRef.current.style.transform =
-          `translate3d(${x - 150}px, ${y - 150}px, 0)`;
+          `translate3d(${x - 160}px, ${y - 160}px, 0)`;
       }
 
       requestAnimationFrame(animate);
@@ -37,38 +37,36 @@ export default function Hero() {
       className="relative min-h-screen overflow-hidden text-white"
     >
 
-      {/* 🖼 BACKGROUND IMAGE (ВСТАВЛЯЕМ ЗДЕСЬ) */}
+      {/* 🖼 BACKGROUND IMAGE (NO DARKENING) */}
       <div className="absolute inset-0 z-0">
         <Image
           src="/hero-bg.jpg"
-          alt="Hero Background"
+          alt="Background"
           fill
           priority
           className="object-cover scale-105"
         />
       </div>
 
-      {/* 🌫 DARK OVERLAY */}
-      <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.25),rgba(0,0,0,0.85))]" />
-
       {/* ✨ PARTICLES */}
-      <div className="absolute inset-0 pointer-events-none z-20">
+      <div className="absolute inset-0 z-10 pointer-events-none">
         <FloatingParticles />
       </div>
 
       {/* 🔮 CURSOR GLOW */}
       <div
         ref={glowRef}
-        className="absolute z-30 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
+        className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
       />
 
       {/* CONTENT */}
-      <div className="relative z-40 mx-auto max-w-[1400px] px-6">
-        <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
+      <div className="relative z-30 mx-auto max-w-[1400px] px-6">
+        <div className="min-h-screen flex items-center">
 
-          {/* LEFT */}
-          <div className="max-w-[700px]">
-            <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-5 py-2 text-xs tracking-[2px] text-[#B088FF] backdrop-blur-xl">
+          {/* LEFT ONLY (no right column) */}
+          <div className="max-w-[750px]">
+
+            <div className="inline-flex rounded-full border border-white/10 bg-white/10 px-5 py-2 text-xs tracking-[2px] text-white backdrop-blur-xl">
               УМНЫЕ ТРЕНИРОВКИ НОВОГО ПОКОЛЕНИЯ
             </div>
 
@@ -80,7 +78,7 @@ export default function Hero() {
               <span className="text-[#8F5BFF]">Играй сильнее.</span>
             </h1>
 
-            <p className="mt-8 max-w-[620px] text-base md:text-lg leading-7 md:leading-8 text-white/70">
+            <p className="mt-8 max-w-[620px] text-base md:text-lg leading-7 md:leading-8 text-white/80">
               Персональные тренировки с роботизированной подачей,
               аналитикой и тысячами качественных повторений.
             </p>
@@ -90,44 +88,32 @@ export default function Hero() {
                 Попробовать
               </button>
 
-              <button className="rounded-2xl border border-white/10 bg-white/5 px-8 py-4 backdrop-blur-xl">
+              <button className="rounded-2xl border border-white/20 bg-white/10 px-8 py-4 backdrop-blur-xl">
                 Смотреть видео
               </button>
             </div>
 
             <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
+              <div className="rounded-3xl border border-white/10 bg-white/10 backdrop-blur-xl p-6">
                 <div className="text-3xl md:text-4xl font-black">
                   <Counter end={1000} />+
                 </div>
-                <div className="text-white/60 mt-2">тренировок</div>
+                <div className="text-white/70 mt-2">тренировок</div>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
+              <div className="rounded-3xl border border-white/10 bg-white/10 backdrop-blur-xl p-6">
                 <div className="text-3xl md:text-4xl font-black">
                   <Counter end={1500} />+
                 </div>
-                <div className="text-white/60 mt-2">ударов</div>
+                <div className="text-white/70 mt-2">ударов</div>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
+              <div className="rounded-3xl border border-white/10 bg-white/10 backdrop-blur-xl p-6">
                 <div className="text-3xl md:text-4xl font-black">24/7</div>
-                <div className="text-white/60 mt-2">доступ</div>
+                <div className="text-white/70 mt-2">доступ</div>
               </div>
             </div>
-          </div>
 
-          {/* RIGHT */}
-          <div className="hidden lg:flex justify-center items-center">
-            <div className="relative w-full max-w-[650px]">
-              <Image
-                src="/logo.png"
-                alt="Robot"
-                width={650}
-                height={650}
-                className="w-full h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
-              />
-            </div>
           </div>
 
         </div>
