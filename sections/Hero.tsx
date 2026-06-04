@@ -18,7 +18,7 @@ export default function Hero() {
   });
 
   const [trail, setTrail] = useState<
-    { x: number; y: number; vx: number; vy: number }[]
+    { x: number; y: number; vx: number; vy: number; life: number }[]
   >([]);
 
   const rafRef = useRef<number | null>(null);
@@ -27,18 +27,24 @@ export default function Hero() {
   useEffect(() => {
     const update = () => {
       setBall((prev) => {
-        const x = prev.x + (mousePosition.x - prev.x) * 0.22;
-        const y = prev.y + (mousePosition.y - prev.y) * 0.22;
+        const x = prev.x + (mousePosition.x - prev.x) * 0.18;
+        const y = prev.y + (mousePosition.y - prev.y) * 0.18;
 
         const vx = x - prev.x;
         const vy = y - prev.y;
 
         const speed = Math.min(Math.sqrt(vx * vx + vy * vy), 40);
 
+        // ⚡ PLASMA TRAIL (life-based)
         setTrail((t) => {
-          const next = [...t, { x, y, vx, vy }];
-          if (next.length > 35) next.shift();
-          return next;
+          const next = [
+            ...t,
+            { x, y, vx, vy, life: 1 },
+          ];
+
+          return next
+            .map((p) => ({ ...p, life: p.life - 0.03 }))
+            .filter((p) => p.life > 0);
         });
 
         return { x, y, vx, vy, speed };
@@ -68,15 +74,7 @@ export default function Hero() {
           y: mousePosition.y * 0.02,
         }}
         className="absolute inset-0"
-      >
-        <Image
-          src="/hero-bg.png"
-          alt="PongLab"
-          fill
-          priority
-          className="object-cover scale-110 opacity-80"
-        />
-      </motion.div>
+      />
 
       {/* OVERLAY */}
       <div className="absolute inset-0 bg-[linear-gradient(90deg,#090B18_0%,rgba(9,11,24,.95)_40%,rgba(9,11,24,.7)_70%,rgba(9,11,24,.95)_100%)]" />
@@ -113,11 +111,12 @@ export default function Hero() {
         <FloatingParticles />
       </div>
 
-      {/* TRAIL LEVEL 3 */}
+      {/* 🌌 NEON PLASMA TRAIL */}
       {trail.map((p, i) => {
-        const t = i / trail.length;
-        const speed = Math.min(Math.sqrt(p.vx * p.vx + p.vy * p.vy), 30);
-        const size = 2 + speed * 0.4;
+        const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        const glow = p.life;
+        const size = 4 + speed * 0.35;
+        const hue = 260 + speed * 2;
 
         return (
           <motion.div
@@ -129,23 +128,32 @@ export default function Hero() {
               width: size,
               height: size,
               transform: "translate(-50%, -50%)",
-              background: `radial-gradient(circle,
-                rgba(255,255,255,${t}) 0%,
-                rgba(143,91,255,${t * 0.7}) 40%,
-                rgba(143,91,255,0) 100%
-              )`,
-              filter: "blur(6px)",
+
+              background: `
+                radial-gradient(circle,
+                  hsla(${hue}, 100%, 85%, ${glow}) 0%,
+                  rgba(160,90,255,${glow * 0.7}) 30%,
+                  rgba(0,0,0,0) 70%
+                )
+              `,
+
+              filter: `
+                blur(${6 + speed * 0.2}px)
+                drop-shadow(0 0 12px rgba(143,91,255,${glow}))
+                drop-shadow(0 0 25px rgba(90,200,255,${glow * 0.6}))
+              `,
+
+              opacity: glow,
             }}
             animate={{
-              opacity: t,
-              scale: 1 + speed * 0.02,
+              scale: 1 + speed * 0.03,
             }}
             transition={{ duration: 0.05 }}
           />
         );
       })}
 
-      {/* 🟣 BALL (18PX FINAL VERSION) */}
+      {/* 🟣 BALL */}
       <motion.div
         className="absolute z-30 pointer-events-none"
         animate={{
@@ -170,7 +178,7 @@ export default function Hero() {
           }}
         />
 
-        {/* CORE (18px BALL) */}
+        {/* CORE */}
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
@@ -191,7 +199,6 @@ export default function Hero() {
             height: 9,
             opacity: Math.min(ball.speed * 0.03, 0.3),
             filter: "blur(4px)",
-            transform: "translate(-4.5px, -4.5px)",
           }}
         />
 
@@ -220,7 +227,6 @@ export default function Hero() {
             </div>
 
             <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
-              <br />
               Тренируйся
               <br />
               умнее.
