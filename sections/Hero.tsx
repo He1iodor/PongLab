@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Counter from "@/components/Counter";
 import FloatingParticles from "@/components/FloatingParticles";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 export default function Hero() {
   const mouse = useRef({ x: 0, y: 0 });
@@ -15,13 +15,12 @@ export default function Hero() {
     py: 300,
   });
 
-  const [renderBall, setRenderBall] = useState({
-    x: 300,
-    y: 300,
-    speed: 0,
-  });
+  const ballEl = useRef<HTMLDivElement | null>(null);
+  const auraEl = useRef<HTMLDivElement | null>(null);
+  const energyEl = useRef<HTMLDivElement | null>(null);
 
-  const trail = useRef<{ x: number; y: number; vx: number; vy: number }[]>([]);
+  const trail = useRef<HTMLDivElement[]>([]);
+  const trailData = useRef<{ x: number; y: number; vx: number; vy: number }[]>([]);
 
   useEffect(() => {
     let raf: number;
@@ -29,7 +28,7 @@ export default function Hero() {
     const loop = () => {
       const b = ball.current;
 
-      // 🧲 Verlet + attraction to mouse
+      // 🧲 Verlet physics
       const ax = (mouse.current.x - b.x) * 0.18;
       const ay = (mouse.current.y - b.y) * 0.18;
 
@@ -44,15 +43,42 @@ export default function Hero() {
 
       const speed = Math.min(Math.hypot(vx, vy), 50);
 
-      // ✨ trail (lightweight)
-      trail.current.push({ x: b.x, y: b.y, vx, vy });
-      if (trail.current.length > 28) trail.current.shift();
+      // ================= BALL =================
+      if (ballEl.current) {
+        ballEl.current.style.transform = `translate3d(${b.x}px, ${b.y}px, 0)`;
+      }
 
-      setRenderBall({
-        x: b.x,
-        y: b.y,
-        speed,
-      });
+      // aura scale
+      if (auraEl.current) {
+        const size = 22 + speed * 0.4;
+        auraEl.current.style.width = `${size}px`;
+        auraEl.current.style.height = `${size}px`;
+      }
+
+      // energy opacity
+      if (energyEl.current) {
+        energyEl.current.style.opacity = String(Math.min(speed * 0.03, 0.3));
+      }
+
+      // ================= TRAIL =================
+      trailData.current.push({ x: b.x, y: b.y, vx, vy });
+
+      if (trailData.current.length > 28) {
+        trailData.current.shift();
+      }
+
+      for (let i = 0; i < trailData.current.length; i++) {
+        const el = trail[i];
+        const p = trailData.current[i];
+        if (!el || !p) continue;
+
+        const t = i / trailData.current.length;
+
+        el.style.transform =
+          `translate3d(${p.x}px, ${p.y}px, 0) translate(-50%, -50%)`;
+
+        el.style.opacity = String(t);
+      }
 
       raf = requestAnimationFrame(loop);
     };
@@ -69,51 +95,51 @@ export default function Hero() {
       }}
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
-      {/* ================= BACKGROUND ================= */}
+      {/* BACKGROUND */}
       <div className="absolute inset-0" />
 
       <div className="absolute left-[-200px] top-[120px] w-[600px] h-[600px] bg-purple-600/30 blur-[140px]" />
       <div className="absolute right-[-200px] bottom-[-120px] w-[500px] h-[500px] bg-[#8F5BFF]/20 blur-[140px]" />
 
-      {/* ================= PARTICLES ================= */}
+      {/* PARTICLES */}
       <FloatingParticles />
 
-      {/* ================= TRAIL ================= */}
-      {trail.current.map((p, i) => {
-        const t = i / trail.current.length;
-        const size = 2 + Math.hypot(p.vx, p.vy) * 0.3;
-
+      {/* TRAIL DOM POOL */}
+      {Array.from({ length: 28 }).map((_, i) => {
         return (
           <div
             key={i}
+            ref={(el) => {
+              if (el) trail.current[i] = el;
+            }}
             className="absolute rounded-full pointer-events-none"
             style={{
-              width: size,
-              height: size,
-              transform: `translate3d(${p.x}px, ${p.y}px, 0) translate(-50%, -50%)`,
-              background: `radial-gradient(circle,
-                rgba(255,255,255,${t}) 0%,
-                rgba(143,91,255,${t * 0.7}) 40%,
-                transparent 100%)`,
+              width: 4,
+              height: 4,
+              background:
+                "radial-gradient(circle, rgba(255,255,255,0.8), rgba(143,91,255,0.2))",
               filter: "blur(6px)",
+              transform: "translate3d(-100px,-100px,0)",
             }}
           />
         );
       })}
 
-      {/* ================= BALL ================= */}
+      {/* BALL */}
       <div
+        ref={ballEl}
         className="absolute pointer-events-none z-30"
         style={{
-          transform: `translate3d(${renderBall.x}px, ${renderBall.y}px, 0)`,
+          transform: "translate3d(300px,300px,0)",
         }}
       >
         {/* aura */}
         <div
+          ref={auraEl}
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: 22 + renderBall.speed * 0.4,
-            height: 22 + renderBall.speed * 0.4,
+            width: 22,
+            height: 22,
             background:
               "radial-gradient(circle, rgba(143,91,255,0.35), transparent 70%)",
             filter: "blur(8px)",
@@ -135,31 +161,26 @@ export default function Hero() {
 
         {/* energy */}
         <div
+          ref={energyEl}
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#8F5BFF]"
           style={{
             width: 8,
             height: 8,
-            opacity: Math.min(renderBall.speed * 0.03, 0.3),
+            opacity: 0.1,
             filter: "blur(4px)",
           }}
         />
       </div>
 
-      {/* ================= CONTENT (unchanged) ================= */}
+      {/* CONTENT (unchanged React UI) */}
       <div className="relative z-10 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
           <div className="max-w-[700px]">
-            <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-5 py-2 text-xs text-[#B088FF]">
-              УМНЫЕ ТРЕНИРОВКИ
-            </div>
-
-            <h1 className="mt-8 text-6xl md:text-8xl font-black leading-[0.95]">
+            <h1 className="text-6xl md:text-8xl font-black leading-[0.95]">
               Тренируйся
               <br />
-              умнее.
-              <br />
-              <span className="text-[#8F5BFF]">Играй сильнее.</span>
+              <span className="text-[#8F5BFF]">умнее.</span>
             </h1>
 
             <button className="mt-10 px-8 py-4 rounded-2xl bg-[#6B30CE]">
@@ -180,12 +201,7 @@ export default function Hero() {
           </div>
 
           <div className="hidden lg:flex justify-center">
-            <Image
-              src="/logo.png"
-              alt="robot"
-              width={650}
-              height={650}
-            />
+            <Image src="/logo.png" alt="robot" width={650} height={650} />
           </div>
 
         </div>
