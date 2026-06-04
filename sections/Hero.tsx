@@ -57,7 +57,7 @@ export default function Hero() {
           {/* LEFT */}
           <div className="max-w-[700px]">
 
-            <h1 className="text-5xl md:text-8xl font-black leading-[0.95]">
+            <h1 className="mt-6 text-5xl md:text-8xl font-black leading-[0.95]">
               Тренируйся
               <br />
               умнее.
@@ -83,11 +83,10 @@ export default function Hero() {
             {/* CARDS */}
             <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-8">
 
-              {/* CARD 1 */}
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center justify-center text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center text-center">
                   <div className="text-2xl md:text-3xl font-black">
                     <Counter end={1000} />+
                   </div>
@@ -95,11 +94,10 @@ export default function Hero() {
                 </div>
               </div>
 
-              {/* CARD 2 */}
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center justify-center text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center text-center">
                   <div className="text-2xl md:text-3xl font-black">
                     <Counter end={1500} />+
                   </div>
@@ -107,11 +105,10 @@ export default function Hero() {
                 </div>
               </div>
 
-              {/* CARD 3 */}
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center justify-center text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center text-center">
                   <div className="text-2xl md:text-3xl font-black">24/7</div>
                   <div className="text-white/60 mt-2 text-sm">доступ</div>
                 </div>
@@ -122,7 +119,7 @@ export default function Hero() {
 
           {/* RIGHT */}
           <div className="hidden lg:flex justify-center items-center">
-            <div className="relative w-full max-w-[650px] lg:ml-8 lg:mt-6">
+            <div className="relative w-full max-w-[650px] lg:ml-14 lg:mt-6">
               <Image
                 src="/bot.png"
                 alt="Robot Training"
