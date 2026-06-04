@@ -1,89 +1,108 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
+type Particle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  baseSize: number;
+  glow: number;
+  twinkle: number;
+};
+
 export default function FloatingParticles() {
-  const particles = useRef(
-    Array.from({ length: 180 }).map(() => ({
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 2.2 + 0.6,
+  const [particles, setParticles] = useState<Particle[]>([]);
+  const rafRef = useRef<number | null>(null);
 
-      driftX: (Math.random() - 0.5) * 0.6,
-      driftY: (Math.random() - 0.5) * 0.6,
-
-      phase: Math.random() * Math.PI * 2,
-      speed: 0.0015 + Math.random() * 0.003,
-    }))
-  ).current;
-
-  const [screen, setScreen] = useState({
-    width: 0,
-    height: 0,
-  });
-
+  // init
   useEffect(() => {
-    const update = () => {
-      setScreen({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
+    const count = 60;
 
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    const initial: Particle[] = Array.from({ length: count }).map(() => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      baseSize: Math.random() * 2 + 1,
+      glow: Math.random(),
+      twinkle: Math.random() * 100,
+    }));
+
+    setParticles(initial);
   }, []);
 
-  const timeRef = useRef(Date.now());
+  // animation loop
+  useEffect(() => {
+    const update = () => {
+      setParticles((prev) =>
+        prev.map((p) => {
+          let x = p.x + p.vx;
+          let y = p.y + p.vy;
+
+          // wrap edges
+          if (x < 0) x = window.innerWidth;
+          if (x > window.innerWidth) x = 0;
+          if (y < 0) y = window.innerHeight;
+          if (y > window.innerHeight) y = 0;
+
+          return {
+            ...p,
+            x,
+            y,
+            twinkle: p.twinkle + 0.8,
+            glow: Math.sin(p.twinkle * 0.02) * 0.5 + 0.5,
+          };
+        })
+      );
+
+      rafRef.current = requestAnimationFrame(update);
+    };
+
+    rafRef.current = requestAnimationFrame(update);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   return (
-    <>
+    <div className="absolute inset-0 pointer-events-none">
       {particles.map((p, i) => {
-        const px = (screen.width * p.x) / 100;
-        const py = (screen.height * p.y) / 100;
-
-        const t = Date.now() * p.speed;
-
-        const floatX =
-          Math.cos(t + p.phase) * 10 + p.driftX * 12;
-
-        const floatY =
-          Math.sin(t + p.phase) * 10 + p.driftY * 12;
-
-        const flicker = Math.sin(t * 3);
-
-        const glow = 6 + Math.abs(flicker) * 6;
-        const opacity = 0.2 + Math.abs(flicker) * 0.4;
+        const glow = p.glow;
+        const size = p.baseSize + glow * 2;
 
         return (
-          <motion.div
+          <div
             key={i}
             className="absolute rounded-full"
             style={{
-              width: p.size,
-              height: p.size,
-              left: px,
-              top: py,
+              left: p.x,
+              top: p.y,
+              width: size,
+              height: size,
+              transform: "translate(-50%, -50%)",
 
-              background: "rgba(167, 139, 250, 0.8)",
-              boxShadow: `0 0 ${glow}px rgba(167, 139, 250, 1)`,
-            }}
-            animate={{
-              x: floatX,
-              y: floatY,
-              opacity,
-              scale: [1, 1.08, 1],
-            }}
-            transition={{
-              duration: 6,
-              repeat: Infinity,
-              ease: "easeInOut",
+              // ⭐ STAR CORE
+              background: `radial-gradient(circle,
+                rgba(255,255,255,${0.9 * glow}) 0%,
+                rgba(180,120,255,${0.6 * glow}) 40%,
+                rgba(0,0,0,0) 70%)`,
+
+              // ✨ STAR RAYS (glow lines effect)
+              boxShadow: `
+                0 0 ${10 + glow * 20}px rgba(180,120,255,${0.6 * glow}),
+                0 0 ${20 + glow * 30}px rgba(120,200,255,${0.3 * glow})
+              `,
+
+              filter: `blur(${0.5 + glow}px)`,
+
+              opacity: 0.6 + glow * 0.4,
             }}
           />
         );
       })}
-    </>
+    </div>
   );
 }
