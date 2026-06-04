@@ -34,27 +34,36 @@ export default function Hero() {
         mouse.current.x = e.clientX;
         mouse.current.y = e.clientY;
       }}
-      className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
+      className="relative min-h-screen overflow-hidden text-white"
     >
-      {/* BASE BACKGROUND */}
-      <div className="absolute inset-0 bg-[#090B18]" />
 
-      {/* subtle vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
+      {/* 🖼 BACKGROUND IMAGE (ВСТАВЛЯЕМ ЗДЕСЬ) */}
+      <div className="absolute inset-0 z-0">
+        <Image
+          src="/hero-bg.jpg"
+          alt="Hero Background"
+          fill
+          priority
+          className="object-cover scale-105"
+        />
+      </div>
 
-      {/* ✨ FLOATING PARTICLES (BACK LAYER) */}
-      <div className="absolute inset-0 pointer-events-none z-10">
+      {/* 🌫 DARK OVERLAY */}
+      <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.25),rgba(0,0,0,0.85))]" />
+
+      {/* ✨ PARTICLES */}
+      <div className="absolute inset-0 pointer-events-none z-20">
         <FloatingParticles />
       </div>
 
-      {/* CURSOR GLOW (SMOOTH GPU) */}
+      {/* 🔮 CURSOR GLOW */}
       <div
         ref={glowRef}
-        className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
+        className="absolute z-30 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
       />
 
       {/* CONTENT */}
-      <div className="relative z-30 mx-auto max-w-[1400px] px-6">
+      <div className="relative z-40 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
           {/* LEFT */}
@@ -113,7 +122,7 @@ export default function Hero() {
             <div className="relative w-full max-w-[650px]">
               <Image
                 src="/logo.png"
-                alt="Robot Training"
+                alt="Robot"
                 width={650}
                 height={650}
                 className="w-full h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
