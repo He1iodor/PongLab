@@ -11,47 +11,54 @@ export default function Hero() {
   const ball = useRef({
     x: 300,
     y: 300,
-    vx: 0,
-    vy: 0,
+    px: 300,
+    py: 300,
+  });
+
+  const [renderBall, setRenderBall] = useState({
+    x: 300,
+    y: 300,
     speed: 0,
   });
 
-  const [renderBall, setRenderBall] = useState(ball.current);
-  const [trail, setTrail] = useState<{ x: number; y: number; vx: number; vy: number }[]>([]);
-
-  const raf = useRef<number | null>(null);
+  const trail = useRef<{ x: number; y: number; vx: number; vy: number }[]>([]);
 
   useEffect(() => {
+    let raf: number;
+
     const loop = () => {
       const b = ball.current;
 
-      // 🧲 smooth follow (no spring, no framer)
-      b.x += (mouse.current.x - b.x) * 0.16;
-      b.y += (mouse.current.y - b.y) * 0.16;
+      // 🧲 Verlet + attraction to mouse
+      const ax = (mouse.current.x - b.x) * 0.18;
+      const ay = (mouse.current.y - b.y) * 0.18;
 
-      b.vx = b.x - (b.prevX ?? b.x);
-      b.vy = b.y - (b.prevY ?? b.y);
+      const vx = b.x - b.px;
+      const vy = b.y - b.py;
 
-      b.prevX = b.x;
-      b.prevY = b.y;
+      b.px = b.x;
+      b.py = b.y;
 
-      b.speed = Math.min(Math.hypot(b.vx, b.vy), 40);
+      b.x += vx + ax;
+      b.y += vy + ay;
 
-      // 🎯 render update (throttled naturally by RAF)
-      setRenderBall({ ...b });
+      const speed = Math.min(Math.hypot(vx, vy), 50);
 
       // ✨ trail (lightweight)
-      setTrail((t) => {
-        const next = [...t, { x: b.x, y: b.y, vx: b.vx, vy: b.vy }];
-        if (next.length > 28) next.shift();
-        return next;
+      trail.current.push({ x: b.x, y: b.y, vx, vy });
+      if (trail.current.length > 28) trail.current.shift();
+
+      setRenderBall({
+        x: b.x,
+        y: b.y,
+        speed,
       });
 
-      raf.current = requestAnimationFrame(loop);
+      raf = requestAnimationFrame(loop);
     };
 
-    raf.current = requestAnimationFrame(loop);
-    return () => raf.current && cancelAnimationFrame(raf.current);
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   return (
@@ -65,24 +72,15 @@ export default function Hero() {
       {/* ================= BACKGROUND ================= */}
       <div className="absolute inset-0" />
 
-      {/* glow layers */}
       <div className="absolute left-[-200px] top-[120px] w-[600px] h-[600px] bg-purple-600/30 blur-[140px]" />
       <div className="absolute right-[-200px] bottom-[-120px] w-[500px] h-[500px] bg-[#8F5BFF]/20 blur-[140px]" />
-
-      {/* cursor glow (still framer OK) */}
-      <div
-        className="absolute w-[140px] h-[140px] rounded-full bg-[#8F5BFF]/30 blur-[60px] pointer-events-none"
-        style={{
-          transform: `translate3d(${mouse.current.x - 70}px, ${mouse.current.y - 70}px, 0)`,
-        }}
-      />
 
       {/* ================= PARTICLES ================= */}
       <FloatingParticles />
 
       {/* ================= TRAIL ================= */}
-      {trail.map((p, i) => {
-        const t = i / trail.length;
+      {trail.current.map((p, i) => {
+        const t = i / trail.current.length;
         const size = 2 + Math.hypot(p.vx, p.vy) * 0.3;
 
         return (
@@ -163,10 +161,6 @@ export default function Hero() {
               <br />
               <span className="text-[#8F5BFF]">Играй сильнее.</span>
             </h1>
-
-            <p className="mt-8 text-white/70">
-              Персональные тренировки с AI-аналитикой.
-            </p>
 
             <button className="mt-10 px-8 py-4 rounded-2xl bg-[#6B30CE]">
               Попробовать
