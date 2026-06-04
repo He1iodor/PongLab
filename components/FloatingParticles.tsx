@@ -3,36 +3,32 @@
 import { useEffect, useRef } from "react";
 
 export default function FloatingParticles() {
-  const particles = useRef<any[]>([]);
+  const particles = useRef(
+    Array.from({ length: 140 }).map(() => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      dx: (Math.random() - 0.5) * 0.3,
+      dy: (Math.random() - 0.5) * 0.3,
+    }))
+  ).current;
+
   const refs = useRef<HTMLDivElement[]>([]);
 
   useEffect(() => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-
-    particles.current = Array.from({ length: 120 }).map(() => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      dx: (Math.random() - 0.5) * 0.4,
-      dy: (Math.random() - 0.5) * 0.4,
-      size: Math.random() * 2 + 0.6,
-    }));
-
     let raf: number;
 
     const loop = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
 
-      for (let i = 0; i < particles.current.length; i++) {
-        const p = particles.current[i];
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
         const el = refs.current[i];
         if (!el) continue;
 
         p.x += p.dx;
         p.y += p.dy;
 
-        // wrap
         if (p.x < 0) p.x = w;
         if (p.x > w) p.x = 0;
         if (p.y < 0) p.y = h;
@@ -50,13 +46,13 @@ export default function FloatingParticles() {
 
   return (
     <>
-      {Array.from({ length: 120 }).map((_, i) => (
+      {particles.map((p, i) => (
         <div
           key={i}
           ref={(el) => {
             if (el) refs.current[i] = el;
           }}
-          className="absolute rounded-full bg-purple-400/70"
+          className="absolute rounded-full bg-purple-400/60"
           style={{
             width: 2,
             height: 2,
