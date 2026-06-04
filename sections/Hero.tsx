@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Counter from "@/components/Counter";
+import FloatingParticles from "@/components/FloatingParticles";
 import { useEffect, useRef } from "react";
 
 export default function Hero() {
@@ -35,13 +36,18 @@ export default function Hero() {
       }}
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
-      {/* BACKGROUND BASE */}
+      {/* BASE BACKGROUND */}
       <div className="absolute inset-0 bg-[#090B18]" />
 
       {/* subtle vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.15),rgba(9,11,24,0.95))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
 
-      {/* CURSOR GLOW (SMOOTH + FAST) */}
+      {/* ✨ FLOATING PARTICLES (BACK LAYER) */}
+      <div className="absolute inset-0 pointer-events-none z-10">
+        <FloatingParticles />
+      </div>
+
+      {/* CURSOR GLOW (SMOOTH GPU) */}
       <div
         ref={glowRef}
         className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
