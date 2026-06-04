@@ -7,11 +7,11 @@ import { Menu, X } from "lucide-react";
 
 const navItems = [
   {
-    title: "Как все работает",
+    title: "Принцип работы",
     href: "/how-it-works",
   },
   {
-    title: "Почему это эффективнее",
+    title: "Эффективность",
     href: "/why-effective",
   },
   {
@@ -96,7 +96,7 @@ export default function Navbar() {
           <Link href="/">
             <div className="flex items-center gap-3 cursor-pointer">
               <Image
-                src="/logo.png"
+                src="/logotext.png"
                 alt="PongLab"
                 width={200}
                 height={60}
