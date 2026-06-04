@@ -1,89 +1,61 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 export default function FloatingParticles() {
   const particles = useRef(
-    Array.from({ length: 180 }).map(() => ({
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 2.2 + 0.6,
-
-      driftX: (Math.random() - 0.5) * 0.6,
-      driftY: (Math.random() - 0.5) * 0.6,
-
-      phase: Math.random() * Math.PI * 2,
-      speed: 0.0015 + Math.random() * 0.003,
+    Array.from({ length: 120 }).map(() => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      size: Math.random() * 2 + 0.6,
+      dx: (Math.random() - 0.5) * 0.3,
+      dy: (Math.random() - 0.5) * 0.3,
     }))
   ).current;
 
-  const [screen, setScreen] = useState({
-    width: 0,
-    height: 0,
-  });
+  const refs = useRef<HTMLDivElement[]>([]);
 
   useEffect(() => {
-    const update = () => {
-      setScreen({
-        width: window.innerWidth,
-        height: window.innerHeight,
+    let raf: number;
+
+    const loop = () => {
+      particles.forEach((p, i) => {
+        const el = refs.current[i];
+        if (!el) return;
+
+        p.x += p.dx;
+        p.y += p.dy;
+
+        const x = p.x;
+        const y = p.y;
+
+        el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
       });
+
+      raf = requestAnimationFrame(loop);
     };
 
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
   }, []);
-
-  const timeRef = useRef(Date.now());
 
   return (
     <>
-      {particles.map((p, i) => {
-        const px = (screen.width * p.x) / 100;
-        const py = (screen.height * p.y) / 100;
-
-        const t = Date.now() * p.speed;
-
-        const floatX =
-          Math.cos(t + p.phase) * 10 + p.driftX * 12;
-
-        const floatY =
-          Math.sin(t + p.phase) * 10 + p.driftY * 12;
-
-        const flicker = Math.sin(t * 3);
-
-        const glow = 6 + Math.abs(flicker) * 6;
-        const opacity = 0.2 + Math.abs(flicker) * 0.4;
-
-        return (
-          <motion.div
-            key={i}
-            className="absolute rounded-full"
-            style={{
-              width: p.size,
-              height: p.size,
-              left: px,
-              top: py,
-
-              background: "rgba(167, 139, 250, 0.8)",
-              boxShadow: `0 0 ${glow}px rgba(167, 139, 250, 1)`,
-            }}
-            animate={{
-              x: floatX,
-              y: floatY,
-              opacity,
-              scale: [1, 1.08, 1],
-            }}
-            transition={{
-              duration: 6,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-        );
-      })}
+      {particles.map((p, i) => (
+        <div
+          key={i}
+          ref={(el) => {
+            if (el) refs.current[i] = el;
+          }}
+          className="absolute rounded-full bg-purple-400/70"
+          style={{
+            width: p.size,
+            height: p.size,
+            boxShadow: "0 0 10px rgba(167,139,250,0.8)",
+            willChange: "transform",
+          }}
+        />
+      ))}
     </>
   );
 }
