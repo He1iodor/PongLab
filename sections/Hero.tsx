@@ -36,15 +36,15 @@ export default function Hero() {
       }}
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
-      {/* BASE BACKGROUND */}
+      {/* BACKGROUND */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
 
-      {/* FLOATING PARTICLES */}
+      {/* PARTICLES */}
       <div className="absolute inset-0 pointer-events-none z-10">
         <FloatingParticles />
       </div>
 
-      {/* CURSOR GLOW */}
+      {/* GLOW */}
       <div
         ref={glowRef}
         className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
@@ -57,7 +57,7 @@ export default function Hero() {
           {/* LEFT */}
           <div className="max-w-[700px]">
 
-            <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
+            <h1 className="mt-6 text-5xl md:text-8xl font-black leading-[0.95]">
               Тренируйся
               <br />
               умнее.
@@ -65,23 +65,23 @@ export default function Hero() {
               <span className="text-[#8F5BFF]">Играй сильнее.</span>
             </h1>
 
-            <p className="mt-8 max-w-[620px] text-base md:text-lg leading-7 md:leading-8 text-white/70">
+            <p className="mt-6 max-w-[620px] text-base md:text-lg leading-relaxed text-white/70">
               Персональные тренировки с роботизированной подачей,
               аналитикой и тысячами качественных повторений.
             </p>
 
-            <div className="mt-10 flex flex-wrap gap-4">
-              <button className="rounded-2xl px-8 py-4 font-semibold bg-[#6B30CE] hover:scale-105 transition">
+            <div className="mt-8 flex flex-wrap gap-4">
+              <button className="rounded-2xl px-8 py-4 font-semibold leading-none bg-[#6B30CE] hover:scale-105 transition">
                 Попробовать
               </button>
 
-              <button className="rounded-2xl border border-white/10 bg-white/5 px-8 py-4 backdrop-blur-xl">
+              <button className="rounded-2xl border border-white/10 bg-white/5 px-8 py-4 backdrop-blur-xl leading-none">
                 Смотреть видео
               </button>
             </div>
 
-            {/* 🔥 CARDS UPDATED */}
-            <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-8">
+            {/* CARDS */}
+            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-8">
 
               {/* CARD 1 */}
               <div className="relative p-[1px] rounded-2xl group">
