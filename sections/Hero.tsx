@@ -34,7 +34,7 @@ export default function Hero() {
         mouse.current.x = e.clientX;
         mouse.current.y = e.clientY;
       }}
-      className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
+      className="relative min-h-[100svh] pt-24 pb-16 overflow-hidden bg-[#090B18] text-white"
     >
       {/* BACKGROUND */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
@@ -52,12 +52,12 @@ export default function Hero() {
 
       {/* CONTENT */}
       <div className="relative z-30 mx-auto max-w-[1400px] px-6">
-        <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 items-start lg:items-center gap-12">
 
           {/* LEFT */}
           <div className="max-w-[700px]">
 
-            <h1 className="mt-6 text-5xl md:text-8xl font-black leading-[0.95]">
+            <h1 className="text-5xl md:text-8xl font-black leading-[0.95]">
               Тренируйся
               <br />
               умнее.
@@ -122,7 +122,7 @@ export default function Hero() {
 
           {/* RIGHT */}
           <div className="hidden lg:flex justify-center items-center">
-            <div className="relative w-full max-w-[650px] translate-x-12 translate-y-10 lg:translate-x-20 lg:translate-y-16">
+            <div className="relative w-full max-w-[650px] lg:ml-8 lg:mt-6">
               <Image
                 src="/bot.png"
                 alt="Robot Training"
