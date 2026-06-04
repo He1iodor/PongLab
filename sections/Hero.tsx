@@ -109,12 +109,12 @@ export default function Hero() {
           <div className="hidden lg:flex justify-center items-center">
             <div className="relative w-full max-w-[650px]">
               <Image
-                src="/logo.png"
-                alt="Robot Training"
-                width={650}
-                height={650}
-                className="w-full h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
-              />
+  src="/bot.png"
+  alt="Robot Training"
+  width={300}
+  height={300}
+  className="w-[420px] lg:w-[520px] h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
+/>
             </div>
           </div>
 
