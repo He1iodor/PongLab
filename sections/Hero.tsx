@@ -59,9 +59,6 @@ export default function Hero() {
 
           {/* LEFT */}
           <div className="max-w-[700px]">
-            <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-5 py-2 text-xs tracking-[2px] text-[#B088FF] backdrop-blur-xl">
-              УМНЫЕ ТРЕНИРОВКИ НОВОГО ПОКОЛЕНИЯ
-            </div>
 
             <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
               Тренируйся
