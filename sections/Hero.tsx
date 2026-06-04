@@ -80,8 +80,8 @@ export default function Hero() {
               </button>
             </div>
 
-            {/* CARDS */}
-            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-8">
+            {/* CARDS (чуть выше) */}
+            <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-8">
 
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
@@ -117,9 +117,9 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* RIGHT */}
-          <div className="hidden lg:flex justify-center items-center">
-            <div className="relative w-full max-w-[650px] lg:ml-14 lg:mt-6">
+          {/* RIGHT (bot moved further right) */}
+          <div className="hidden lg:flex justify-end items-center">
+            <div className="relative w-full max-w-[650px] lg:ml-24 lg:mt-6">
               <Image
                 src="/bot.png"
                 alt="Robot Training"
