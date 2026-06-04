@@ -7,60 +7,25 @@ import { useEffect, useRef } from "react";
 
 export default function Hero() {
   const mouse = useRef({ x: 0, y: 0 });
-  const scrollY = useRef(0);
-
   const glowRef = useRef<HTMLDivElement | null>(null);
-  const botRef = useRef<HTMLDivElement | null>(null);
-  const particlesRef = useRef<HTMLDivElement | null>(null);
-  const bgRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const onScroll = () => {
-      scrollY.current = window.scrollY;
-    };
-
-    window.addEventListener("scroll", onScroll);
-
     let x = 0;
     let y = 0;
 
     const animate = () => {
-      // smooth mouse follow (ONLY glow)
       x += (mouse.current.x - x) * 0.12;
       y += (mouse.current.y - y) * 0.12;
 
-      const scroll = scrollY.current;
-
-      // glow (mouse-based)
       if (glowRef.current) {
         glowRef.current.style.transform =
           `translate3d(${x - 150}px, ${y - 150}px, 0)`;
-      }
-
-      // particles (light scroll drift)
-      if (particlesRef.current) {
-        particlesRef.current.style.transform =
-          `translate3d(0px, ${scroll * 0.05}px, 0)`;
-      }
-
-      // background (slower scroll)
-      if (bgRef.current) {
-        bgRef.current.style.transform =
-          `translate3d(0px, ${scroll * 0.03}px, 0)`;
-      }
-
-      // BOT (main scroll parallax)
-      if (botRef.current) {
-        botRef.current.style.transform =
-          `translate3d(0px, ${scroll * 0.12}px, 0)`;
       }
 
       requestAnimationFrame(animate);
     };
 
     animate();
-
-    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
@@ -71,21 +36,18 @@ export default function Hero() {
       }}
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
-      {/* BACKGROUND */}
-      <div
-        ref={bgRef}
-        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]"
-      />
+      {/* BASE BACKGROUND */}
+      <div className="absolute inset-0 bg-[#090B18]" />
 
-      {/* PARTICLES */}
-      <div
-        ref={particlesRef}
-        className="absolute inset-0 pointer-events-none z-10"
-      >
+      {/* subtle vignette */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
+
+      {/* ✨ FLOATING PARTICLES (BACK LAYER) */}
+      <div className="absolute inset-0 pointer-events-none z-10">
         <FloatingParticles />
       </div>
 
-      {/* GLOW */}
+      {/* CURSOR GLOW (SMOOTH GPU) */}
       <div
         ref={glowRef}
         className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
@@ -97,8 +59,11 @@ export default function Hero() {
 
           {/* LEFT */}
           <div className="max-w-[700px]">
+            <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-5 py-2 text-xs tracking-[2px] text-[#B088FF] backdrop-blur-xl">
+              УМНЫЕ ТРЕНИРОВКИ НОВОГО ПОКОЛЕНИЯ
+            </div>
+
             <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
-              <br />
               Тренируйся
               <br />
               умнее.
@@ -108,7 +73,7 @@ export default function Hero() {
 
             <p className="mt-8 max-w-[620px] text-base md:text-lg leading-7 md:leading-8 text-white/70">
               Персональные тренировки с роботизированной подачей,
-              аналитикой и тысячами качественных повторений
+              аналитикой и тысячами качественных повторений.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-4">
@@ -143,18 +108,15 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* RIGHT (BOT scroll parallax) */}
+          {/* RIGHT */}
           <div className="hidden lg:flex justify-center items-center">
-            <div
-              ref={botRef}
-              className="relative w-full max-w-[520px] will-change-transform"
-            >
+            <div className="relative w-full max-w-[650px]">
               <Image
-                src="/bot.png"
+                src="/logo.png"
                 alt="Robot Training"
-                width={300}
-                height={300}
-                className="w-[420px] lg:w-[520px] h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
+                width={650}
+                height={650}
+                className="w-full h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
               />
             </div>
           </div>
