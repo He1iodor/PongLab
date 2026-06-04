@@ -5,24 +5,24 @@ import { useEffect, useRef } from "react";
 type Star = {
   x: number;
   y: number;
+  z: number;
   baseX: number;
   baseY: number;
-  size: number;
-  phase: number;
 };
 
-type Shooting = {
+type ShootingStar = {
   x: number;
   y: number;
   vx: number;
   vy: number;
   life: number;
+  maxLife: number;
 };
 
 export default function FloatingParticles() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const starsRef = useRef<Star[]>([]);
-  const shootingRef = useRef<Shooting[]>([]);
+  const shootingRef = useRef<ShootingStar[]>([]);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -33,81 +33,79 @@ export default function FloatingParticles() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
 
-      const count = 180; // 🔥 OPTIMIZED (was 350)
+      // ⭐ create MASSIVE starfield
+      const count = 300;
 
       starsRef.current = Array.from({ length: count }).map(() => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
         baseX: Math.random() * canvas.width,
         baseY: Math.random() * canvas.height,
-        size: Math.random() * 1.2 + 0.5,
-        phase: Math.random() * 1000,
+        z: Math.random() * 1 + 0.2,
       }));
     };
 
     resize();
     window.addEventListener("resize", resize);
 
-    const spawnShooting = () => {
+    const spawnShootingStar = () => {
+      const edge = Math.random() > 0.5;
+
       shootingRef.current.push({
-        x: 0,
-        y: Math.random() * canvas.height * 0.6,
-        vx: 6 + Math.random() * 4,
-        vy: 2 + Math.random() * 3,
+        x: edge ? 0 : Math.random() * canvas.width,
+        y: edge ? Math.random() * canvas.height * 0.5 : 0,
+        vx: 6 + Math.random() * 6,
+        vy: 3 + Math.random() * 6,
         life: 0,
+        maxLife: 60 + Math.random() * 30,
       });
-    };
-
-    const drawStar = (x: number, y: number, size: number, glow: number) => {
-      ctx.beginPath();
-
-      // ✨ SIMPLE CROSS STAR (no shadows, no gradients)
-      ctx.moveTo(x - size * 4, y);
-      ctx.lineTo(x + size * 4, y);
-      ctx.moveTo(x, y - size * 4);
-      ctx.lineTo(x, y + size * 4);
-
-      ctx.strokeStyle = `rgba(200,160,255,${0.3 + glow * 0.4})`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
     };
 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 🌟 STARS
-      for (let i = 0; i < starsRef.current.length; i++) {
-        const s = starsRef.current[i];
+      // 🌌 STAR FIELD
+      for (const star of starsRef.current) {
+        star.x += (star.baseX - star.x) * 0.01;
+        star.y += (star.baseY - star.y) * 0.01;
 
-        // ultra cheap motion
-        s.x += (s.baseX - s.x) * 0.005;
-        s.y += (s.baseY - s.y) * 0.005;
+        const size = star.z * 1.5;
 
-        const glow = (Math.sin(s.phase + Date.now() * 0.002) + 1) * 0.5;
+        const glow = 0.5 + Math.sin(Date.now() * 0.002 + star.x) * 0.5;
 
-        drawStar(s.x, s.y, s.size, glow);
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(180,120,255,${0.3 + glow * 0.4})`;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "rgba(180,120,255,0.6)";
+        ctx.arc(star.x, star.y, size, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      // 💫 shooting stars (rare)
-      if (Math.random() < 0.01) spawnShooting();
+      // 💫 SHOOTING STARS
+      if (Math.random() < 0.015) {
+        spawnShootingStar();
+      }
 
-      for (let i = shootingRef.current.length - 1; i >= 0; i--) {
-        const s = shootingRef.current[i];
-
+      shootingRef.current = shootingRef.current.filter((s) => {
         s.x += s.vx;
         s.y += s.vy;
         s.life++;
 
+        const alpha = 1 - s.life / s.maxLife;
+
+        // tail (light ray effect)
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x - s.vx * 8, s.y - s.vy * 8);
+        ctx.lineTo(s.x - s.vx * 10, s.y - s.vy * 10);
 
-        ctx.strokeStyle = `rgba(255,255,255,${1 - s.life / 50})`;
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "rgba(160,120,255,0.8)";
+        ctx.lineWidth = 2;
         ctx.stroke();
 
-        if (s.life > 50) shootingRef.current.splice(i, 1);
-      }
+        return s.life < s.maxLife;
+      });
 
       rafRef.current = requestAnimationFrame(draw);
     };
