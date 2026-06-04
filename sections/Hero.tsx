@@ -7,19 +7,47 @@ import { useEffect, useRef } from "react";
 
 export default function Hero() {
   const mouse = useRef({ x: 0, y: 0 });
+  const parallax = useRef({ x: 0, y: 0 });
+
   const glowRef = useRef<HTMLDivElement | null>(null);
+  const botRef = useRef<HTMLDivElement | null>(null);
+  const particlesRef = useRef<HTMLDivElement | null>(null);
+  const bgRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let x = 0;
     let y = 0;
 
     const animate = () => {
+      // smooth cursor follow
       x += (mouse.current.x - x) * 0.12;
       y += (mouse.current.y - y) * 0.12;
 
+      const px = parallax.current.x;
+      const py = parallax.current.y;
+
+      // glow (fast layer)
       if (glowRef.current) {
         glowRef.current.style.transform =
-          `translate3d(${x - 150}px, ${y - 150}px, 0)`;
+          `translate3d(${x - 150 + px * 60}px, ${y - 150 + py * 60}px, 0)`;
+      }
+
+      // particles (medium layer)
+      if (particlesRef.current) {
+        particlesRef.current.style.transform =
+          `translate3d(${px * -20}px, ${py * -20}px, 0)`;
+      }
+
+      // bot (foreground layer)
+      if (botRef.current) {
+        botRef.current.style.transform =
+          `translate3d(${px * 35}px, ${py * 35}px, 0)`;
+      }
+
+      // background drift (very slow)
+      if (bgRef.current) {
+        bgRef.current.style.transform =
+          `translate3d(${px * -10}px, ${py * -10}px, 0)`;
       }
 
       requestAnimationFrame(animate);
@@ -33,24 +61,35 @@ export default function Hero() {
       onMouseMove={(e) => {
         mouse.current.x = e.clientX;
         mouse.current.y = e.clientY;
+
+        parallax.current.x =
+          (e.clientX / window.innerWidth - 0.5) * 2;
+        parallax.current.y =
+          (e.clientY / window.innerHeight - 0.5) * 2;
       }}
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
-      {/* subtle vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
+      {/* BACKGROUND */}
+      <div
+        ref={bgRef}
+        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]"
+      />
 
-      {/* floating particles */}
-      <div className="absolute inset-0 pointer-events-none z-10">
+      {/* PARTICLES */}
+      <div
+        ref={particlesRef}
+        className="absolute inset-0 pointer-events-none z-10"
+      >
         <FloatingParticles />
       </div>
 
-      {/* cursor glow */}
+      {/* GLOW */}
       <div
         ref={glowRef}
         className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
       />
 
-      {/* content */}
+      {/* CONTENT */}
       <div className="relative z-30 mx-auto max-w-[1400px] px-6">
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 items-center gap-12">
 
@@ -104,13 +143,16 @@ export default function Hero() {
 
           {/* RIGHT */}
           <div className="hidden lg:flex justify-center items-center">
-            <div className="relative w-full max-w-[650px]">
+            <div
+              ref={botRef}
+              className="relative w-full max-w-[520px] transition-transform"
+            >
               <Image
                 src="/bot.png"
                 alt="Robot Training"
                 width={300}
                 height={300}
-                className="w-full h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
+                className="w-[420px] lg:w-[520px] h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
               />
             </div>
           </div>
