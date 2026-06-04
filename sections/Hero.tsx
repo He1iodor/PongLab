@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Counter from "@/components/Counter";
 import FloatingParticles from "@/components/FloatingParticles";
-import { motion } from "framer-motion";
 import { useEffect, useRef } from "react";
 
 export default function Hero() {
@@ -118,173 +117,18 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* RIGHT */}
-
-<div className="hidden lg:flex justify-end items-center">
-  <div className="relative w-full max-w-[700px] lg:ml-28">
-
-    <motion.div
-      animate={{
-        y: [0, -20, 0],
-      }}
-      transition={{
-        duration: 6,
-        repeat: Infinity,
-        ease: "easeInOut",
-      }}
-      className="relative flex items-center justify-center"
-    >
-
-      {/* MAIN GLOW */}
-
-      <div
-        className="
-        absolute
-        w-[650px]
-        h-[650px]
-        rounded-full
-        bg-[#6B30CE]
-        opacity-20
-        blur-[160px]
-        "
-      />
-
-      {/* OUTER RING */}
-
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{
-          duration: 40,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-        className="
-        absolute
-        w-[600px]
-        h-[600px]
-        rounded-full
-        border
-        border-[#8F5BFF]/20
-        "
-      />
-
-      {/* INNER RING */}
-
-      <motion.div
-        animate={{ rotate: -360 }}
-        transition={{
-          duration: 25,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-        className="
-        absolute
-        w-[500px]
-        h-[500px]
-        rounded-full
-        border
-        border-[#8F5BFF]/40
-        "
-      />
-
-      {/* ROBOT */}
-
-      <Image
-        src="/bot.png"
-        alt="Robot"
-        width={700}
-        height={700}
-        className="
-        relative
-        z-20
-        w-[520px]
-        h-auto
-        drop-shadow-[0_0_140px_rgba(107,48,206,.8)]
-        "
-      />
-
-      {/* CARD 1 */}
-
-      <div
-        className="
-        absolute
-        top-[70px]
-        left-[20px]
-        z-30
-        rounded-2xl
-        border
-        border-white/10
-        bg-white/5
-        backdrop-blur-xl
-        px-5
-        py-3
-        "
-      >
-        <div className="text-xs text-white/50">
-          AI Accuracy
-        </div>
-
-        <div className="font-bold text-[#8F5BFF]">
-          98.7%
-        </div>
-      </div>
-
-      {/* CARD 2 */}
-
-      <div
-        className="
-        absolute
-        bottom-[80px]
-        right-[20px]
-        z-30
-        rounded-2xl
-        border
-        border-white/10
-        bg-white/5
-        backdrop-blur-xl
-        px-5
-        py-3
-        "
-      >
-        <div className="text-xs text-white/50">
-          Ball Tracking
-        </div>
-
-        <div className="font-bold text-[#8F5BFF]">
-          LIVE
-        </div>
-      </div>
-
-      {/* CARD 3 */}
-
-      <div
-        className="
-        absolute
-        top-[220px]
-        right-[-10px]
-        z-30
-        rounded-2xl
-        border
-        border-white/10
-        bg-white/5
-        backdrop-blur-xl
-        px-5
-        py-3
-        "
-      >
-        <div className="text-xs text-white/50">
-          Reaction Speed
-        </div>
-
-        <div className="font-bold text-[#8F5BFF]">
-          0.04s
-        </div>
-      </div>
-
-    </motion.div>
-
-  </div>
-</div>
+          {/* RIGHT (bot more right) */}
+          <div className="hidden lg:flex justify-end items-center">
+            <div className="relative w-full max-w-[650px] lg:ml-28 lg:mt-6">
+              <Image
+                src="/bot.png"
+                alt="Robot Training"
+                width={300}
+                height={300}
+                className="w-[420px] lg:w-[520px] h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
+              />
+            </div>
+          </div>
 
         </div>
       </div>
