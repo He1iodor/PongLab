@@ -71,6 +71,7 @@ export default function Hero() {
             </div>
 
             <h1 className="mt-8 text-5xl md:text-8xl font-black leading-[0.95]">
+              <br />
               Тренируйся
               <br />
               умнее.
@@ -80,7 +81,7 @@ export default function Hero() {
 
             <p className="mt-8 max-w-[620px] text-base md:text-lg leading-7 md:leading-8 text-white/80">
               Персональные тренировки с роботизированной подачей,
-              аналитикой и тысячами качественных повторений.
+              аналитикой и тысячами качественных повторений
             </p>
 
             <div className="mt-10 flex flex-wrap gap-4">
