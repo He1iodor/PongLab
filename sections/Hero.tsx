@@ -37,17 +37,14 @@ export default function Hero() {
       className="relative min-h-screen overflow-hidden bg-[#090B18] text-white"
     >
       {/* BASE BACKGROUND */}
-      <div className="absolute inset-0 bg-[#090B18]" />
-
-      {/* subtle vignette */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
 
-      {/* ✨ FLOATING PARTICLES (BACK LAYER) */}
+      {/* FLOATING PARTICLES */}
       <div className="absolute inset-0 pointer-events-none z-10">
         <FloatingParticles />
       </div>
 
-      {/* CURSOR GLOW (SMOOTH GPU) */}
+      {/* CURSOR GLOW */}
       <div
         ref={glowRef}
         className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
@@ -83,25 +80,43 @@ export default function Hero() {
               </button>
             </div>
 
-            <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
-                <div className="text-3xl md:text-4xl font-black">
-                  <Counter end={1000} />+
+            {/* 🔥 CARDS UPDATED */}
+            <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-8">
+
+              {/* CARD 1 */}
+              <div className="relative p-[1px] rounded-2xl group">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
+
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center justify-center text-center">
+                  <div className="text-2xl md:text-3xl font-black">
+                    <Counter end={1000} />+
+                  </div>
+                  <div className="text-white/60 mt-2 text-sm">тренировок</div>
                 </div>
-                <div className="text-white/60 mt-2">тренировок</div>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
-                <div className="text-3xl md:text-4xl font-black">
-                  <Counter end={1500} />+
+              {/* CARD 2 */}
+              <div className="relative p-[1px] rounded-2xl group">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
+
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center justify-center text-center">
+                  <div className="text-2xl md:text-3xl font-black">
+                    <Counter end={1500} />+
+                  </div>
+                  <div className="text-white/60 mt-2 text-sm">ударов</div>
                 </div>
-                <div className="text-white/60 mt-2">ударов</div>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
-                <div className="text-3xl md:text-4xl font-black">24/7</div>
-                <div className="text-white/60 mt-2">доступ</div>
+              {/* CARD 3 */}
+              <div className="relative p-[1px] rounded-2xl group">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
+
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center justify-center text-center">
+                  <div className="text-2xl md:text-3xl font-black">24/7</div>
+                  <div className="text-white/60 mt-2 text-sm">доступ</div>
+                </div>
               </div>
+
             </div>
           </div>
 
@@ -109,12 +124,12 @@ export default function Hero() {
           <div className="hidden lg:flex justify-center items-center">
             <div className="relative w-full max-w-[650px] translate-x-12 translate-y-10 lg:translate-x-20 lg:translate-y-16">
               <Image
-  src="/bot.png"
-  alt="Robot Training"
-  width={300}
-  height={300}
-  className="w-[420px] lg:w-[520px] h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
-/>
+                src="/bot.png"
+                alt="Robot Training"
+                width={300}
+                height={300}
+                className="w-[420px] lg:w-[520px] h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
+              />
             </div>
           </div>
 
