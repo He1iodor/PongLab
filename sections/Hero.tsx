@@ -36,7 +36,7 @@ export default function Hero() {
       }}
       className="relative min-h-[100svh] pt-24 pb-16 overflow-hidden bg-[#090B18] text-white"
     >
-      {/* BACKGROUND PARTICLES */}
+      {/* PARTICLES */}
       <div className="absolute inset-0 pointer-events-none z-10">
         <FloatingParticles />
       </div>
@@ -94,18 +94,18 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* RIGHT — ROBOT + ORBIT SYSTEM */}
+          {/* RIGHT */}
           <div className="hidden lg:flex justify-end items-center">
             <div className="relative w-full max-w-[650px] lg:ml-28 lg:mt-6 flex items-center justify-center">
 
-              {/* GLITCH RING */}
-              <div className="absolute w-[560px] h-[560px] orbit-spin orbit-glitch">
-                <div className="absolute inset-0 rounded-full orbit-trail" />
+              {/* MAIN ROTATING RING */}
+              <div className="absolute w-[560px] h-[560px] orbit-spin">
+                <div className="absolute inset-0 rounded-full orbit-core" />
               </div>
 
-              {/* MAIN ENERGY RING */}
-              <div className="absolute w-[560px] h-[560px] orbit-spin orbit-glitch">
-                <div className="absolute inset-0 rounded-full orbit-core" />
+              {/* TRAIL GLOW (SMOOTH BREATHING) */}
+              <div className="absolute w-[560px] h-[560px] orbit-spin">
+                <div className="absolute inset-0 rounded-full orbit-trail" />
               </div>
 
               {/* PARTICLES */}
@@ -114,10 +114,11 @@ export default function Hero() {
                 <span className="orbit-particle slow" />
                 <span className="orbit-particle fast" />
                 <span className="orbit-particle slow" />
+                <span className="orbit-particle fast" />
               </div>
 
               {/* INNER GLOW */}
-              <div className="absolute w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(143,91,255,0.15),transparent_65%)] blur-2xl" />
+              <div className="absolute w-[500px] h-[500px] rounded-full orbit-inner-glow bg-[radial-gradient(circle,rgba(143,91,255,0.15),transparent_65%)] blur-2xl" />
 
               {/* ROBOT */}
               <Image
