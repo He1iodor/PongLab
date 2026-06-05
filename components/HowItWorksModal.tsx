@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { X, Play } from "lucide-react";
+import { useEffect } from "react";
+import { X } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -9,24 +9,21 @@ type Props = {
 };
 
 export default function HowItWorksModal({ open, onClose }: Props) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  useEffect(() => {
+    if (!open) return;
 
-  const handlePlay = () => {
-    const video = videoRef.current;
-    if (!video) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
 
-    video.play();
-    setIsPlaying(true);
-  };
+    document.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
 
-  const handlePause = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.pause();
-    setIsPlaying(false);
-  };
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "auto";
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -37,14 +34,35 @@ export default function HowItWorksModal({ open, onClose }: Props) {
         className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
         onClick={onClose}
       >
+        {/* MODAL */}
         <div
-          className="relative w-[92%] max-w-5xl max-h-[90vh] overflow-y-auto hide-scrollbar rounded-3xl bg-[#0B0D18] border border-white/10 p-10 text-white"
+          className="
+            relative
+            w-[92%]
+            max-w-5xl
+            max-h-[90vh]
+            overflow-y-auto
+            hide-scrollbar
+            rounded-3xl
+            bg-[#0B0D18]
+            border border-white/10
+            p-10
+            text-white
+          "
           onClick={(e) => e.stopPropagation()}
         >
-          {/* CLOSE */}
+          {/* CLOSE BUTTON */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 h-11 w-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center"
+            className="
+              absolute top-5 right-5
+              h-11 w-11
+              rounded-xl
+              bg-white/5
+              hover:bg-white/10
+              transition
+              flex items-center justify-center
+            "
           >
             <X size={20} />
           </button>
@@ -63,58 +81,41 @@ export default function HowItWorksModal({ open, onClose }: Props) {
             <div className="rounded-3xl bg-white/5 p-6">
               <div className="text-[#8F5BFF] font-bold">ШАГ 1</div>
               <h3 className="mt-3 text-xl font-bold">Анализ уровня</h3>
-              <p className="mt-2 text-white/60">Система определяет текущий уровень игрока.</p>
+              <p className="mt-2 text-white/60">
+                Система определяет текущий уровень игрока.
+              </p>
             </div>
 
             <div className="rounded-3xl bg-white/5 p-6">
               <div className="text-[#8F5BFF] font-bold">ШАГ 2</div>
-              <h3 className="mt-3 text-xl font-bold">Персональная программа</h3>
-              <p className="mt-2 text-white/60">Формируется индивидуальная тренировка.</p>
+              <h3 className="mt-3 text-xl font-bold">
+                Персональная программа
+              </h3>
+              <p className="mt-2 text-white/60">
+                Формируется индивидуальная тренировочная программа.
+              </p>
             </div>
 
             <div className="rounded-3xl bg-white/5 p-6">
               <div className="text-[#8F5BFF] font-bold">ШАГ 3</div>
               <h3 className="mt-3 text-xl font-bold">Аналитика</h3>
-              <p className="mt-2 text-white/60">Сохраняются данные и отслеживается прогресс.</p>
+              <p className="mt-2 text-white/60">
+                Сохраняются данные и отслеживается прогресс.
+              </p>
             </div>
           </div>
 
-          {/* VIDEO */}
-          <div className="mt-10 relative group">
+          {/* VIDEO (НИЖЕ КАРТОЧЕК) */}
+          <div className="mt-10">
             <video
-              ref={videoRef}
               className="w-full aspect-video rounded-3xl border border-white/10 bg-black"
-              src="/video.mp4"
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-            />
-
-            {/* OVERLAY PLAY BUTTON */}
-            {!isPlaying && (
-              <button
-                onClick={handlePlay}
-                className="
-                  absolute inset-0
-                  flex items-center justify-center
-                  bg-black/40
-                  rounded-3xl
-                  transition
-                  hover:bg-black/50
-                "
-              >
-                <div className="h-20 w-20 rounded-full bg-[#8F5BFF] flex items-center justify-center shadow-lg hover:scale-105 transition">
-                  <Play size={32} fill="white" />
-                </div>
-              </button>
-            )}
-
-            {/* CLICK TO PAUSE WHEN PLAYING */}
-            {isPlaying && (
-              <button
-                onClick={handlePause}
-                className="absolute inset-0 w-full h-full"
-              />
-            )}
+              controls
+              controlsList="nodownload"
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              <source src="/video.mp4" type="video/mp4" />
+              Ваш браузер не поддерживает видео.
+            </video>
           </div>
         </div>
       </div>
