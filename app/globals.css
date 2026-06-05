@@ -29,13 +29,16 @@ html {
 body {
   background: var(--background);
   color: var(--text);
+
   overflow-x: hidden;
+
   font-family: Montserrat, system-ui, sans-serif;
+
   cursor: url("/cursor.png") 6 6, auto;
 }
 
 /* =========================
-   INTERACTIONS
+   INTERACTIVE ELEMENTS
 ========================= */
 
 a,
@@ -48,7 +51,7 @@ label {
 }
 
 /* =========================
-   SCROLLBAR
+   SCROLLBAR HIDE (OPTIONAL UTILITY)
 ========================= */
 
 .hide-scrollbar {
@@ -61,8 +64,7 @@ label {
 }
 
 /* =========================
-   SMOOTH ORBIT ROTATION
-   (ВАЖНО: без рывков)
+   ORBIT ENERGY RING (PRO)
 ========================= */
 
 @keyframes orbitSpin {
@@ -75,117 +77,44 @@ label {
 }
 
 .orbit-spin {
-  animation: orbitSpin 10s linear infinite;
-  transform-origin: center;
-  will-change: transform;
+  animation: orbitSpin 6s linear infinite;
 }
 
-/* =========================
-   CONTINUOUS ENERGY RING
-   (без "разрывов")
-========================= */
-
+/* MAIN ENERGY CORE (moving light segment) */
 .orbit-core {
   background: conic-gradient(
     from 0deg,
-    #8F5BFF,
-    #6B30CE,
-    #3B82F6,
-    #8F5BFF
+    transparent 0deg,
+    rgba(143, 91, 255, 0) 40deg,
+    rgba(143, 91, 255, 0.95) 75deg,
+    rgba(107, 48, 206, 0.9) 110deg,
+    rgba(59, 130, 246, 0.8) 150deg,
+    rgba(143, 91, 255, 0) 200deg,
+    transparent 360deg
   );
 
   -webkit-mask: radial-gradient(circle, transparent 58%, black 60%);
   mask: radial-gradient(circle, transparent 58%, black 60%);
-
-  /* убираем резкие переходы */
-  filter: blur(0.6px);
 }
 
-/* =========================
-   SMOOTH GLOW (ДЫШИТ, НЕ ПРЕРЫВАЕТСЯ)
-========================= */
-
-@keyframes softGlow {
-  0% {
-    opacity: 0.55;
-    filter: blur(10px);
-  }
-  50% {
-    opacity: 0.9;
-    filter: blur(14px);
-  }
-  100% {
-    opacity: 0.55;
-    filter: blur(10px);
-  }
-}
-
+/* TRAIL LAYER (soft glow tail) */
 .orbit-trail {
   background: conic-gradient(
     from 0deg,
-    rgba(143, 91, 255, 0.15),
-    rgba(143, 91, 255, 0.35),
-    rgba(59, 130, 246, 0.2),
-    rgba(143, 91, 255, 0.15)
+    transparent 0deg,
+    rgba(143, 91, 255, 0.25) 80deg,
+    transparent 160deg,
+    transparent 360deg
   );
 
   -webkit-mask: radial-gradient(circle, transparent 58%, black 60%);
   mask: radial-gradient(circle, transparent 58%, black 60%);
 
-  animation: softGlow 4s ease-in-out infinite;
+  filter: blur(10px);
+  opacity: 0.6;
 }
 
-/* =========================
-   PARTICLES (SMOOTHER ORBIT)
-========================= */
-
-@keyframes particleOrbit {
-  from {
-    transform: rotate(0deg) translateX(270px) rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg) translateX(270px) rotate(-360deg);
-  }
-}
-
-.orbit-particle {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #8F5BFF;
-  box-shadow: 0 0 12px rgba(143, 91, 255, 0.9);
-  animation: particleOrbit 6s linear infinite;
-  will-change: transform;
-}
-
-.orbit-particle.slow {
-  animation-duration: 9s;
-}
-
-.orbit-particle.fast {
-  animation-duration: 4.5s;
-}
-
-/* =========================
-   GLOW BREATH (ROBOT AREA)
-========================= */
-
-@keyframes breathe {
-  0% {
-    opacity: 0.12;
-    transform: scale(0.98);
-  }
-  50% {
-    opacity: 0.22;
-    transform: scale(1.03);
-  }
-  100% {
-    opacity: 0.12;
-    transform: scale(0.98);
-  }
-}
-
-.orbit-inner-glow {
-  animation: breathe 5s ease-in-out infinite;
+/* extra glow */
+.orbit-glow {
+  filter: drop-shadow(0 0 12px rgba(143, 91, 255, 0.6));
 }
