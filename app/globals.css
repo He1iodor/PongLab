@@ -38,7 +38,7 @@ body {
 }
 
 /* =========================
-   INTERACTIVE ELEMENTS
+   INTERACTIVE
 ========================= */
 
 a,
@@ -51,7 +51,7 @@ label {
 }
 
 /* =========================
-   SCROLLBAR HIDE (OPTIONAL UTILITY)
+   HIDE SCROLLBAR
 ========================= */
 
 .hide-scrollbar {
@@ -64,32 +64,31 @@ label {
 }
 
 /* =========================
-   ORBIT ENERGY RING (PRO)
+   ORBIT BASE SPIN
 ========================= */
 
 @keyframes orbitSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .orbit-spin {
   animation: orbitSpin 6s linear infinite;
 }
 
-/* MAIN ENERGY CORE (moving light segment) */
+/* =========================
+   ENERGY CORE (moving light)
+========================= */
+
 .orbit-core {
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    rgba(143, 91, 255, 0) 40deg,
-    rgba(143, 91, 255, 0.95) 75deg,
+    rgba(143, 91, 255, 0) 35deg,
+    rgba(143, 91, 255, 0.95) 70deg,
     rgba(107, 48, 206, 0.9) 110deg,
     rgba(59, 130, 246, 0.8) 150deg,
-    rgba(143, 91, 255, 0) 200deg,
+    rgba(143, 91, 255, 0) 220deg,
     transparent 360deg
   );
 
@@ -97,13 +96,16 @@ label {
   mask: radial-gradient(circle, transparent 58%, black 60%);
 }
 
-/* TRAIL LAYER (soft glow tail) */
+/* =========================
+   TRAIL GLOW
+========================= */
+
 .orbit-trail {
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    rgba(143, 91, 255, 0.25) 80deg,
-    transparent 160deg,
+    rgba(143, 91, 255, 0.25) 90deg,
+    transparent 180deg,
     transparent 360deg
   );
 
@@ -114,7 +116,57 @@ label {
   opacity: 0.6;
 }
 
-/* extra glow */
-.orbit-glow {
-  filter: drop-shadow(0 0 12px rgba(143, 91, 255, 0.6));
+/* =========================
+   ENERGY GLITCH (BREAK EFFECT)
+========================= */
+
+@keyframes glitchPulse {
+  0% {
+    filter: brightness(1) drop-shadow(0 0 10px rgba(143, 91, 255, 0.4));
+  }
+  25% {
+    filter: brightness(1.6) drop-shadow(0 0 25px rgba(143, 91, 255, 0.9));
+    transform: scale(1.01);
+  }
+  50% {
+    filter: brightness(0.8) drop-shadow(0 0 5px rgba(59, 130, 246, 0.4));
+  }
+  75% {
+    filter: brightness(1.4) drop-shadow(0 0 20px rgba(143, 91, 255, 0.8));
+    transform: scale(1.005);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+.orbit-glitch {
+  animation: glitchPulse 3.5s infinite ease-in-out;
+}
+
+/* =========================
+   PARTICLES ON ORBIT
+========================= */
+
+@keyframes particleSpin {
+  from { transform: rotate(0deg) translateX(280px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(280px) rotate(-360deg); }
+}
+
+.orbit-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #8F5BFF;
+  box-shadow: 0 0 10px rgba(143, 91, 255, 0.9);
+  animation: particleSpin 4s linear infinite;
+}
+
+.orbit-particle.slow {
+  animation-duration: 7s;
+}
+
+.orbit-particle.fast {
+  animation-duration: 3s;
 }
