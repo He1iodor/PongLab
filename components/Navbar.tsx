@@ -7,24 +7,24 @@ import { Menu, X } from "lucide-react";
 
 const navItems = [
   {
-    title: "Принцип работы",
-    href: "/how-it-works",
+    title: "Как работает",
+    id: "how-it-works",
   },
   {
-    title: "Эффективность",
-    href: "/why-effective",
+    title: "Эффективнее",
+    id: "why-better",
   },
   {
     title: "Тарифы",
-    href: "/pricing",
+    id: "pricing",
   },
   {
     title: "Аналитика",
-    href: "/analytics",
+    id: "analytics",
   },
   {
     title: "FAQ",
-    href: "/faq",
+    id: "faq",
   },
 ];
 
