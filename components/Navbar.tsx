@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import HowItWorksModal from "@/components/HowItWorksModal";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
@@ -30,6 +31,7 @@ const navItems = [
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -279,18 +281,80 @@ export default function Navbar() {
             text-2xl
             "
           >
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-              >
-                {item.title}
-              </Link>
-            ))}
+           {navItems.map((item) => {
+  if (item.href === "/how-it-works") {
+    return (
+      <button
+        key={item.href}
+        onClick={() => setHowItWorksOpen(true)}
+        className="
+        relative
+        group
+        text-sm
+        text-white/70
+        transition-all
+        duration-300
+        hover:text-white
+        "
+      >
+        {item.title}
+
+        <span
+          className="
+          absolute
+          left-0
+          -bottom-2
+          h-[2px]
+          w-0
+          bg-[#8F5BFF]
+          transition-all
+          duration-300
+          group-hover:w-full
+          "
+        />
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      key={item.href}
+      href={item.href}
+      className="
+      relative
+      group
+      text-sm
+      text-white/70
+      transition-all
+      duration-300
+      hover:text-white
+      "
+    >
+      {item.title}
+
+      <span
+        className="
+        absolute
+        left-0
+        -bottom-2
+        h-[2px]
+        w-0
+        bg-[#8F5BFF]
+        transition-all
+        duration-300
+        group-hover:w-full
+        "
+      />
+    </Link>
+  );
+})}
           </div>
         </div>
       )}
+      <HowItWorksModal
+  open={howItWorksOpen}
+  onClose={() => setHowItWorksOpen(false)}
+/>
     </>
   );
 }
