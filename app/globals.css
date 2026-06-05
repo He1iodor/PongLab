@@ -33,11 +33,27 @@ body {
   overflow-x: hidden;
 
   font-family: Montserrat, system-ui, sans-serif;
+
+  /* 🔥 hide native cursor (PRO CURSOR ENABLED) */
+  cursor: none;
+}
+
+/* =========================
+   GLOBAL CURSOR OVERRIDE
+========================= */
+
+a,
+button,
+input,
+textarea,
+select,
+label {
+  cursor: none;
 }
 
 /* =========================
    HIDE SCROLLBAR (KEEP FUNCTION)
-   - works for modals, containers, etc.
+   works for modals, containers, etc.
 ========================= */
 
 .hide-scrollbar {
@@ -50,8 +66,7 @@ body {
 }
 
 /* =========================
-   OPTIONAL: PREMIUM SCROLL FEEL (GLOBAL)
-   (uncomment if you want smoother feel everywhere)
+   OPTIONAL: SMOOTH SCROLL (GLOBAL)
 ========================= */
 
 /*
