@@ -102,7 +102,14 @@ export default function Navbar() {
           }
           `}
         >
-          <Link href="/">
+          <button
+  onClick={() =>
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    })
+  }
+>
             <div className="flex items-center gap-3 cursor-pointer">
               <Image
                 src="/logotext.png"
