@@ -1,41 +1,61 @@
 @import "tailwindcss";
 
+/* =========================
+   DESIGN TOKENS
+========================= */
+
 :root {
-
   --background: #090B18;
-
   --surface: #111427;
-
-  --card: rgba(15,18,35,.72);
+  --card: rgba(15, 18, 35, 0.72);
 
   --accent: #6B30CE;
-
   --accent-bright: #8F5BFF;
-
   --accent-dark: #3E1D75;
 
   --text: #FFFFFF;
-
-  --text-secondary: rgba(255,255,255,.72);
-
-  --text-muted: rgba(255,255,255,.45);
-
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-muted: rgba(255, 255, 255, 0.45);
 }
+
+/* =========================
+   BASE
+========================= */
 
 html {
   scroll-behavior: smooth;
 }
 
 body {
-
-  background: #090B18;
-
-  color: white;
+  background: var(--background);
+  color: var(--text);
 
   overflow-x: hidden;
 
-  font-family:
-    Montserrat,
-    system-ui,
-    sans-serif;
+  font-family: Montserrat, system-ui, sans-serif;
 }
+
+/* =========================
+   HIDE SCROLLBAR (KEEP FUNCTION)
+   - works for modals, containers, etc.
+========================= */
+
+.hide-scrollbar {
+  -ms-overflow-style: none; /* IE + Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+/* =========================
+   OPTIONAL: PREMIUM SCROLL FEEL (GLOBAL)
+   (uncomment if you want smoother feel everywhere)
+========================= */
+
+/*
+* {
+  scroll-behavior: smooth;
+}
+*/
