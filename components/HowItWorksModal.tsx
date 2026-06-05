@@ -28,89 +28,93 @@ export default function HowItWorksModal({ open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
-      onClick={onClose}
-    >
+    <>
       {/* BACKDROP */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" />
-
-      {/* MODAL */}
       <div
-        className="
-          relative
-          w-[92%]
-          max-w-5xl
-          max-h-[90vh]
-          overflow-y-auto
-          hide-scrollbar
-          rounded-3xl
-          bg-[#0B0D18]
-          border border-white/10
-          p-10
-          text-white
-        "
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+        onClick={onClose}
       >
-        {/* CLOSE BUTTON */}
-        <button
-          onClick={onClose}
+        {/* MODAL */}
+        <div
           className="
-            absolute top-5 right-5
-            h-11 w-11
-            rounded-xl
-            bg-white/5
-            hover:bg-white/10
-            transition
-            flex items-center justify-center
+            relative
+            w-[92%]
+            max-w-5xl
+            max-h-[90vh]
+            overflow-y-auto
+            hide-scrollbar
+            rounded-3xl
+            bg-[#0B0D18]
+            border border-white/10
+            p-10
+            text-white
           "
+          onClick={(e) => e.stopPropagation()}
         >
-          <X size={20} />
-        </button>
+          {/* CLOSE BUTTON */}
+          <button
+            onClick={onClose}
+            className="
+              absolute top-5 right-5
+              h-11 w-11
+              rounded-xl
+              bg-white/5
+              hover:bg-white/10
+              transition
+              flex items-center justify-center
+            "
+          >
+            <X size={20} />
+          </button>
 
-        {/* CONTENT */}
-        <h2 className="text-4xl md:text-6xl font-black">
-          Как работает PongLab
-        </h2>
+          {/* CONTENT */}
+          <h2 className="text-4xl md:text-6xl font-black">
+            Как работает PongLab
+          </h2>
 
-        <p className="mt-4 text-white/60 max-w-2xl">
-          Роботизированная система тренировок, аналитики и развития игровых навыков.
-        </p>
+          <p className="mt-4 text-white/60 max-w-2xl">
+            Роботизированная система тренировок, аналитики и развития игровых навыков.
+          </p>
 
-        {/* VIDEO */}
-        <div className="mt-10 aspect-video rounded-3xl border border-white/10 bg-white/5 flex items-center justify-center text-white/50">
-          ВИДЕО БУДЕТ ЗДЕСЬ
-        </div>
+          {/* STEPS */}
+          <div className="mt-10 grid md:grid-cols-3 gap-6">
+            <div className="rounded-3xl bg-white/5 p-6">
+              <div className="text-[#8F5BFF] font-bold">ШАГ 1</div>
+              <h3 className="mt-3 text-xl font-bold">Анализ уровня</h3>
+              <p className="mt-2 text-white/60">
+                Система определяет текущий уровень игрока.
+              </p>
+            </div>
 
-        {/* STEPS */}
-        <div className="mt-10 grid md:grid-cols-3 gap-6">
-          <div className="rounded-3xl bg-white/5 p-6">
-            <div className="text-[#8F5BFF] font-bold">ШАГ 1</div>
-            <h3 className="mt-3 text-xl font-bold">Анализ уровня</h3>
-            <p className="mt-2 text-white/60">
-              Система определяет текущий уровень игрока.
-            </p>
+            <div className="rounded-3xl bg-white/5 p-6">
+              <div className="text-[#8F5BFF] font-bold">ШАГ 2</div>
+              <h3 className="mt-3 text-xl font-bold">Персональная программа</h3>
+              <p className="mt-2 text-white/60">
+                Формируется индивидуальная тренировка.
+              </p>
+            </div>
+
+            <div className="rounded-3xl bg-white/5 p-6">
+              <div className="text-[#8F5BFF] font-bold">ШАГ 3</div>
+              <h3 className="mt-3 text-xl font-bold">Аналитика</h3>
+              <p className="mt-2 text-white/60">
+                Сохраняются данные и отслеживается прогресс.
+              </p>
+            </div>
           </div>
 
-          <div className="rounded-3xl bg-white/5 p-6">
-            <div className="text-[#8F5BFF] font-bold">ШАГ 2</div>
-            <h3 className="mt-3 text-xl font-bold">
-              Персональная программа
-            </h3>
-            <p className="mt-2 text-white/60">
-              Формируется индивидуальная тренировка.
-            </p>
-          </div>
-
-          <div className="rounded-3xl bg-white/5 p-6">
-            <div className="text-[#8F5BFF] font-bold">ШАГ 3</div>
-            <h3 className="mt-3 text-xl font-bold">Аналитика</h3>
-            <p className="mt-2 text-white/60">
-              Сохраняются данные и отслеживается прогресс.
-            </p>
+          {/* VIDEO (НИЖЕ КАРТОЧЕК) */}
+          <div className="mt-10">
+            <video
+              className="w-full aspect-video rounded-3xl border border-white/10 bg-black"
+              controls
+            >
+              <source src="/video.mp4" type="video/mp4" />
+              Ваш браузер не поддерживает видео.
+            </video>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
