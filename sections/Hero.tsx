@@ -51,7 +51,7 @@ export default function Hero() {
       <div className="relative z-30 mx-auto max-w-[1400px] px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 items-start lg:items-center gap-12">
 
-          {/* LEFT SIDE */}
+          {/* LEFT */}
           <div className="max-w-[700px]">
 
             <h1 className="mt-6 text-5xl md:text-8xl font-black leading-[0.95]">
@@ -68,11 +68,11 @@ export default function Hero() {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-4">
-              <button className="rounded-2xl px-8 py-4 font-semibold leading-none bg-[#6B30CE] hover:scale-105 transition">
+              <button className="rounded-2xl px-8 py-4 font-semibold bg-[#6B30CE] hover:scale-105 transition">
                 Попробовать
               </button>
 
-              <button className="rounded-2xl border border-white/10 bg-white/5 px-8 py-4 backdrop-blur-xl leading-none">
+              <button className="rounded-2xl border border-white/10 bg-white/5 px-8 py-4 backdrop-blur-xl">
                 Смотреть видео
               </button>
             </div>
@@ -83,7 +83,7 @@ export default function Hero() {
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
                   <div className="text-2xl md:text-3xl font-black">
                     <Counter end={1000} />+
                   </div>
@@ -94,7 +94,7 @@ export default function Hero() {
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
                   <div className="text-2xl md:text-3xl font-black">
                     <Counter end={1500} />+
                   </div>
@@ -105,7 +105,7 @@ export default function Hero() {
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
                   <div className="text-2xl md:text-3xl font-black">24/7</div>
                   <div className="text-white/60 mt-2 text-sm">доступ</div>
                 </div>
@@ -114,16 +114,21 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* RIGHT SIDE — ROBOT + ENERGY RING */}
+          {/* RIGHT — ROBOT + ENERGY RING */}
           <div className="hidden lg:flex justify-end items-center">
             <div className="relative w-full max-w-[650px] lg:ml-28 lg:mt-6 flex items-center justify-center">
 
-              {/* ENERGY RING */}
-              <div className="absolute w-[560px] h-[560px] animate-spin-slow">
-                <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_0deg,#8F5BFF,#6B30CE,#3B82F6,#8F5BFF)] [mask-image:radial-gradient(circle,transparent_58%,black_60%)] opacity-80 blur-[2px]" />
+              {/* TRAIL LAYER */}
+              <div className="absolute w-[560px] h-[560px] orbit-spin">
+                <div className="absolute inset-0 rounded-full orbit-trail orbit-glow" />
               </div>
 
-              {/* SOFT GLOW */}
+              {/* MAIN ENERGY RING */}
+              <div className="absolute w-[560px] h-[560px] orbit-spin">
+                <div className="absolute inset-0 rounded-full orbit-core" />
+              </div>
+
+              {/* INNER GLOW */}
               <div className="absolute w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(143,91,255,0.15),transparent_65%)] blur-2xl" />
 
               {/* ROBOT */}
