@@ -29,7 +29,16 @@ const navItems = [
 ];
 
 export default function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
+ const scrollToSection = (id: string) => {
+  const section = document.getElementById(id);
+
+  if (!section) return;
+
+  section.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+};
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -281,10 +290,20 @@ export default function Navbar() {
           >
             {navItems.map((item) => (
               <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-              >
+               <button
+  key={item.id}
+  onClick={() => scrollToSection(item.id)}
+  className="
+  text-sm
+  text-white/70
+  transition-all
+  duration-300
+  hover:text-white
+  hover:-translate-y-1
+  "
+>
+  {item.title}
+</button>
                 {item.title}
               </Link>
             ))}
