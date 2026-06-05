@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, Play } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -9,6 +9,9 @@ type Props = {
 };
 
 export default function HowItWorksModal({ open, onClose }: Props) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
   useEffect(() => {
     if (!open) return;
 
@@ -26,6 +29,14 @@ export default function HowItWorksModal({ open, onClose }: Props) {
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const handlePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.play();
+    setIsPlaying(true);
+  };
 
   return (
     <>
@@ -51,18 +62,10 @@ export default function HowItWorksModal({ open, onClose }: Props) {
           "
           onClick={(e) => e.stopPropagation()}
         >
-          {/* CLOSE BUTTON */}
+          {/* CLOSE */}
           <button
             onClick={onClose}
-            className="
-              absolute top-5 right-5
-              h-11 w-11
-              rounded-xl
-              bg-white/5
-              hover:bg-white/10
-              transition
-              flex items-center justify-center
-            "
+            className="absolute top-5 right-5 h-11 w-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center"
           >
             <X size={20} />
           </button>
@@ -105,17 +108,38 @@ export default function HowItWorksModal({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* VIDEO (НИЖЕ КАРТОЧЕК) */}
-          <div className="mt-10">
+          {/* VIDEO */}
+          <div className="mt-10 relative group">
             <video
+              ref={videoRef}
               className="w-full aspect-video rounded-3xl border border-white/10 bg-black"
               controls
               controlsList="nodownload"
               onContextMenu={(e) => e.preventDefault()}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
             >
               <source src="/video.mp4" type="video/mp4" />
-              Ваш браузер не поддерживает видео.
             </video>
+
+            {/* PLAY BUTTON OVERLAY */}
+            {!isPlaying && (
+              <button
+                onClick={handlePlay}
+                className="
+                  absolute inset-0
+                  flex items-center justify-center
+                  bg-black/40
+                  rounded-3xl
+                  hover:bg-black/50
+                  transition
+                "
+              >
+                <div className="h-20 w-20 rounded-full bg-[#8F5BFF] flex items-center justify-center shadow-lg hover:scale-105 transition">
+                  <Play size={34} fill="white" />
+                </div>
+              </button>
+            )}
           </div>
         </div>
       </div>
