@@ -9,7 +9,6 @@ type Props = {
 };
 
 export default function HowItWorksModal({ open, onClose }: Props) {
-  // закрытие по ESC + блокировка скролла страницы
   useEffect(() => {
     if (!open) return;
 
@@ -44,6 +43,7 @@ export default function HowItWorksModal({ open, onClose }: Props) {
           max-w-5xl
           max-h-[90vh]
           overflow-y-auto
+          hide-scrollbar
           rounded-3xl
           bg-[#0B0D18]
           border border-white/10
