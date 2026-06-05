@@ -137,7 +137,7 @@ export default function Navbar() {
               "
             >
               <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-all duration-700" />
-              <span className="relative z-10">Начать бесплатно</span>
+              <span className="relative z-10">Личный кабинет</span>
             </button>
 
             <button
