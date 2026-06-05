@@ -1,46 +1,36 @@
 "use client";
 
+import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
 const navItems = [
   {
-    title: "Как работает",
-    id: "how-it-works",
+    title: "Принцип работы",
+    href: "/how-it-works",
   },
   {
-    title: "Эффективнее",
-    id: "why-better",
+    title: "Эффективность",
+    href: "/why-effective",
   },
   {
     title: "Тарифы",
-    id: "pricing",
+    href: "/pricing",
   },
   {
     title: "Аналитика",
-    id: "analytics",
+    href: "/analytics",
   },
   {
     title: "FAQ",
-    id: "faq",
+    href: "/faq",
   },
 ];
 
 export default function Navbar() {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-
-  const scrollToSection = (id: string) => {
-    const section = document.getElementById(id);
-
-    if (!section) return;
-
-    section.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  };
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const handler = () => {
@@ -65,7 +55,9 @@ export default function Navbar() {
         z-50
         flex
         justify-center
-        pt-6
+        pt-5
+        transition-all
+        duration-500
         "
       >
         <div
@@ -101,14 +93,7 @@ export default function Navbar() {
           }
           `}
         >
-          <button
-            onClick={() =>
-              window.scrollTo({
-                top: 0,
-                behavior: "smooth",
-              })
-            }
-          >
+          <Link href="/">
             <div className="flex items-center gap-3 cursor-pointer">
               <Image
                 src="/logotext.png"
@@ -117,8 +102,10 @@ export default function Navbar() {
                 height={60}
                 priority
               />
+
+              
             </div>
-          </button>
+          </Link>
 
           <nav
             className="
@@ -129,9 +116,9 @@ export default function Navbar() {
             "
           >
             {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => scrollToSection(item.id)}
+              <Link
+                key={item.href}
+                href={item.href}
                 className="
                 relative
                 group
@@ -157,7 +144,7 @@ export default function Navbar() {
                   group-hover:w-full
                   "
                 />
-              </button>
+              </Link>
             ))}
           </nav>
 
@@ -206,6 +193,21 @@ export default function Navbar() {
               hover:shadow-[0_0_40px_rgba(107,48,206,.55)]
               "
             >
+              <span
+                className="
+                absolute
+                inset-0
+                bg-gradient-to-r
+                from-transparent
+                via-white/20
+                to-transparent
+                -translate-x-full
+                hover:translate-x-full
+                transition-all
+                duration-700
+                "
+              />
+
               <span className="relative z-10">
                 Начать бесплатно
               </span>
@@ -278,23 +280,13 @@ export default function Navbar() {
             "
           >
             {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  scrollToSection(item.id);
-                  setMobileOpen(false);
-                }}
-                className="
-                text-left
-                text-2xl
-                text-white/80
-                hover:text-[#8F5BFF]
-                transition-all
-                duration-300
-                "
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
               >
                 {item.title}
-              </button>
+              </Link>
             ))}
           </div>
         </div>
