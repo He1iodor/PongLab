@@ -69,11 +69,11 @@ export default function Hero() {
 
             <div className="mt-8 flex flex-wrap gap-4">
               <button className="rounded-2xl px-8 py-4 font-semibold bg-[#6B30CE] hover:scale-105 transition">
-                Попробовать
+                Записаться
               </button>
 
               <button className="rounded-2xl border border-white/10 bg-white/5 px-8 py-4 backdrop-blur-xl">
-                Смотреть видео
+                Узнать больше
               </button>
             </div>
 
