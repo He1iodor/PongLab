@@ -36,15 +36,12 @@ export default function Hero() {
       }}
       className="relative min-h-[100svh] pt-24 pb-16 overflow-hidden bg-[#090B18] text-white"
     >
-      {/* BACKGROUND */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(0,0,0,0.2),rgba(9,11,24,0.95))]" />
-
-      {/* PARTICLES */}
+      {/* BACKGROUND PARTICLES */}
       <div className="absolute inset-0 pointer-events-none z-10">
         <FloatingParticles />
       </div>
 
-      {/* GLOW */}
+      {/* MOUSE GLOW */}
       <div
         ref={glowRef}
         className="absolute z-20 w-[320px] h-[320px] rounded-full bg-[#8F5BFF] opacity-25 blur-[120px] pointer-events-none"
@@ -80,13 +77,13 @@ export default function Hero() {
               </button>
             </div>
 
-            {/* CARDS (ближе к кнопкам) */}
+            {/* STATS */}
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-8">
 
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition text-center">
                   <div className="text-2xl md:text-3xl font-black">
                     <Counter end={1000} />+
                   </div>
@@ -97,7 +94,7 @@ export default function Hero() {
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition text-center">
                   <div className="text-2xl md:text-3xl font-black">
                     <Counter end={1500} />+
                   </div>
@@ -108,7 +105,7 @@ export default function Hero() {
               <div className="relative p-[1px] rounded-2xl group">
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#8F5BFF]/0 via-[#8F5BFF] to-[#6B30CE]/0 opacity-0 group-hover:opacity-100 blur-md transition duration-500" />
 
-                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition flex flex-col items-center text-center">
+                <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 opacity-80 group-hover:opacity-100 transition text-center">
                   <div className="text-2xl md:text-3xl font-black">24/7</div>
                   <div className="text-white/60 mt-2 text-sm">доступ</div>
                 </div>
@@ -117,15 +114,28 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* RIGHT (bot more right) */}
+          {/* RIGHT — ROBOT WITH ORBIT */}
           <div className="hidden lg:flex justify-end items-center">
-            <div className="relative w-full max-w-[650px] lg:ml-28 lg:mt-6">
+            <div className="relative w-full max-w-[650px] lg:ml-28 lg:mt-6 flex items-center justify-center">
+
+              {/* ORBIT LAYER 1 */}
+              <div className="absolute w-[560px] h-[560px] rounded-full orbit-ring orbit-glow">
+                <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_0deg,#8F5BFF,#3B82F6,#8F5BFF)] opacity-60 blur-[2px]" />
+                <div className="absolute inset-6 rounded-full bg-[radial-gradient(circle,rgba(143,91,255,0.15),transparent_60%)] blur-xl" />
+              </div>
+
+              {/* ORBIT LAYER 2 */}
+              <div className="absolute w-[500px] h-[500px] rounded-full orbit-ring-slow opacity-40">
+                <div className="absolute inset-0 rounded-full border border-[#8F5BFF]/30 blur-sm" />
+              </div>
+
+              {/* ROBOT */}
               <Image
                 src="/bot.png"
                 alt="Robot Training"
-                width={300}
-                height={300}
-                className="w-[420px] lg:w-[520px] h-auto drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
+                width={520}
+                height={520}
+                className="relative drop-shadow-[0_0_120px_rgba(107,48,206,.6)]"
               />
             </div>
           </div>
