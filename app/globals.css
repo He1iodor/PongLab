@@ -34,7 +34,7 @@ body {
 
   font-family: Montserrat, system-ui, sans-serif;
 
-  /* ✅ CUSTOM CURSOR (SIMPLE, NO JS) */
+  /* cursor */
   cursor: url("/cursor.png") 6 6, auto;
 }
 
@@ -52,22 +52,56 @@ label {
 }
 
 /* =========================
-   HIDE SCROLLBAR (KEEP FUNCTION)
+   HIDE SCROLLBAR
 ========================= */
 
 .hide-scrollbar {
-  -ms-overflow-style: none; /* IE + Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .hide-scrollbar::-webkit-scrollbar {
-  display: none; /* Chrome, Safari */
+  display: none;
 }
 
 /* =========================
-   SMOOTH SCROLL
+   ORBIT ANIMATIONS (ROBOT RING)
 ========================= */
 
-html {
-  scroll-behavior: smooth;
+/* вращение */
+@keyframes orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* лёгкое "дыхание" свечения */
+@keyframes orbit-pulse {
+  0%, 100% {
+    opacity: 0.6;
+    filter: blur(1px) brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(2px) brightness(1.3);
+  }
+}
+
+/* =========================
+   ORBIT UTILITY CLASSES
+========================= */
+
+.orbit-ring {
+  animation: orbit-spin 12s linear infinite;
+}
+
+.orbit-ring-slow {
+  animation: orbit-spin 18s linear infinite reverse;
+}
+
+.orbit-glow {
+  animation: orbit-pulse 3s ease-in-out infinite;
 }
