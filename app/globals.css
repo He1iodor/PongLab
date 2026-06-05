@@ -51,7 +51,7 @@ label {
 }
 
 /* =========================
-   HIDE SCROLLBAR
+   SCROLLBAR HIDE (OPTIONAL UTILITY)
 ========================= */
 
 .hide-scrollbar {
@@ -64,31 +64,57 @@ label {
 }
 
 /* =========================
-   ENERGY ORBIT RING
+   ORBIT ENERGY RING (PRO)
 ========================= */
 
 @keyframes orbitSpin {
-  0% {
+  from {
     transform: rotate(0deg);
   }
-  100% {
+  to {
     transform: rotate(360deg);
   }
 }
 
 .orbit-spin {
-  animation: orbitSpin 8s linear infinite;
+  animation: orbitSpin 6s linear infinite;
 }
 
-/* движущийся свет по кольцу */
-.orbit-ring {
+/* MAIN ENERGY CORE (moving light segment) */
+.orbit-core {
   background: conic-gradient(
     from 0deg,
-    #8F5BFF,
-    #6B30CE,
-    #3B82F6,
-    #8F5BFF
+    transparent 0deg,
+    rgba(143, 91, 255, 0) 40deg,
+    rgba(143, 91, 255, 0.95) 75deg,
+    rgba(107, 48, 206, 0.9) 110deg,
+    rgba(59, 130, 246, 0.8) 150deg,
+    rgba(143, 91, 255, 0) 200deg,
+    transparent 360deg
   );
-  mask: radial-gradient(circle, transparent 58%, black 60%);
+
   -webkit-mask: radial-gradient(circle, transparent 58%, black 60%);
+  mask: radial-gradient(circle, transparent 58%, black 60%);
+}
+
+/* TRAIL LAYER (soft glow tail) */
+.orbit-trail {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(143, 91, 255, 0.25) 80deg,
+    transparent 160deg,
+    transparent 360deg
+  );
+
+  -webkit-mask: radial-gradient(circle, transparent 58%, black 60%);
+  mask: radial-gradient(circle, transparent 58%, black 60%);
+
+  filter: blur(10px);
+  opacity: 0.6;
+}
+
+/* extra glow */
+.orbit-glow {
+  filter: drop-shadow(0 0 12px rgba(143, 91, 255, 0.6));
 }
