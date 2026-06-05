@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
 type Props = {
@@ -7,149 +9,169 @@ type Props = {
   onClose: () => void;
 };
 
-export default function HowItWorksModal({
-  open,
-  onClose,
-}: Props) {
-  if (!open) return null;
+export default function HowItWorksModal({ open, onClose }: Props) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "auto";
+    };
+  }, [open, onClose]);
 
   return (
-    <div
-      className="
-      fixed
-      inset-0
-      z-[999]
-      flex
-      items-center
-      justify-center
-      bg-black/70
-      backdrop-blur-xl
-      p-4
-      "
-    >
-      <div
-        className="
-        relative
-        w-full
-        max-w-6xl
-        rounded-[40px]
-        border
-        border-white/10
-        bg-[#0D1020]
-        p-8
-        md:p-12
-        shadow-[0_0_120px_rgba(107,48,206,.25)]
-        "
-      >
-        <button
-          onClick={onClose}
-          className="
-          absolute
-          right-6
-          top-6
-          flex
-          h-12
-          w-12
-          items-center
-          justify-center
-          rounded-xl
-          bg-white/5
-          hover:bg-white/10
-          "
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
         >
-          <X />
-        </button>
+          {/* BACKDROP */}
+          <motion.div
+            className="absolute inset-0 bg-black/70 backdrop-blur-2xl"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          />
 
-        <h2
-          className="
-          text-4xl
-          md:text-6xl
-          font-black
-          "
-        >
-          Как работает PongLab
-        </h2>
+          {/* MODAL */}
+          <motion.div
+            className="
+              relative
+              w-[92%] max-w-6xl
+              max-h-[90vh]
+              overflow-y-auto
+              rounded-[28px]
+              bg-[#0B0D18]
+              border border-white/10
+              shadow-[0_0_120px_rgba(107,48,206,.25)]
+              p-10
+            "
+            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.92, y: 40 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 40 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
+            {/* CLOSE */}
+            <button
+              onClick={onClose}
+              className="
+                absolute top-5 right-5
+                h-11 w-11
+                rounded-xl
+                bg-white/5
+                hover:bg-white/10
+                transition
+                flex items-center justify-center
+              "
+            >
+              <X size={20} />
+            </button>
 
-        <p
-          className="
-          mt-4
-          text-white/60
-          max-w-2xl
-          "
-        >
-          Роботизированная система тренировок,
-          аналитики и развития игровых навыков.
-        </p>
+            {/* HEADER */}
+            <motion.h2
+              className="text-4xl md:text-6xl font-black"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              Как работает PongLab
+            </motion.h2>
 
-        <div
-          className="
-          mt-10
-          aspect-video
-          rounded-3xl
-          border
-          border-white/10
-          bg-white/5
-          flex
-          items-center
-          justify-center
-          text-white/50
-          "
-        >
-          ВИДЕО БУДЕТ ЗДЕСЬ
-        </div>
+            <motion.p
+              className="mt-4 text-white/60 max-w-2xl"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+            >
+              Роботизированная система тренировок, аналитики и развития игровых навыков.
+            </motion.p>
 
-        <div
-          className="
-          mt-10
-          grid
-          md:grid-cols-3
-          gap-6
-          "
-        >
-          <div className="rounded-3xl bg-white/5 p-6">
-            <div className="text-[#8F5BFF] font-bold">
-              ШАГ 1
+            {/* VIDEO */}
+            <motion.div
+              className="
+                mt-10
+                aspect-video
+                rounded-3xl
+                border border-white/10
+                bg-black
+                overflow-hidden
+              "
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <iframe
+                className="w-full h-full"
+                src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                title="How it works"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </motion.div>
+
+            {/* STEPS */}
+            <div className="mt-12 grid md:grid-cols-3 gap-6">
+              {[
+                {
+                  title: "Анализ уровня",
+                  text: "Система определяет текущий уровень игрока.",
+                },
+                {
+                  title: "Персональная программа",
+                  text: "Формируется индивидуальная тренировка.",
+                },
+                {
+                  title: "Аналитика",
+                  text: "Сохраняются данные и отслеживается прогресс.",
+                },
+              ].map((step, i) => (
+                <motion.div
+                  key={step.title}
+                  className="
+                    rounded-3xl
+                    bg-white/5
+                    border border-white/10
+                    p-6
+                    hover:bg-white/10
+                    transition
+                  "
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 + i * 0.1 }}
+                  whileHover={{ scale: 1.03 }}
+                >
+                  <div className="text-[#8F5BFF] font-bold">
+                    ШАГ {i + 1}
+                  </div>
+
+                  <h3 className="mt-3 text-xl font-bold">
+                    {step.title}
+                  </h3>
+
+                  <p className="mt-2 text-white/60">
+                    {step.text}
+                  </p>
+                </motion.div>
+              ))}
             </div>
 
-            <h3 className="mt-3 text-xl font-bold">
-              Анализ уровня
-            </h3>
-
-            <p className="mt-2 text-white/60">
-              Система определяет текущий уровень
-              игрока.
-            </p>
-          </div>
-
-          <div className="rounded-3xl bg-white/5 p-6">
-            <div className="text-[#8F5BFF] font-bold">
-              ШАГ 2
-            </div>
-
-            <h3 className="mt-3 text-xl font-bold">
-              Персональная программа
-            </h3>
-
-            <p className="mt-2 text-white/60">
-              Формируется индивидуальная тренировка.
-            </p>
-          </div>
-
-          <div className="rounded-3xl bg-white/5 p-6">
-            <div className="text-[#8F5BFF] font-bold">
-              ШАГ 3
-            </div>
-
-            <h3 className="mt-3 text-xl font-bold">
-              Аналитика
-            </h3>
-
-            <p className="mt-2 text-white/60">
-              Сохраняются данные и отслеживается прогресс.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+            {/* GLOW ACCENT */}
+            <div className="absolute -top-40 -right-40 w-[300px] h-[300px] bg-[#8F5BFF]/20 blur-[120px]" />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
