@@ -22,7 +22,10 @@ const steps = [
 
 export default function HowItWorks() {
   return (
-    <section className="relative py-32 overflow-hidden">
+    <section
+  id="how-it-works"
+  className="relative py-32 overflow-hidden"
+>
 
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#101425] to-transparent" />
 
