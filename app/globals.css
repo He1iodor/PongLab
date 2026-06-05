@@ -34,12 +34,12 @@ body {
 
   font-family: Montserrat, system-ui, sans-serif;
 
-  /* 🔥 hide native cursor (PRO CURSOR ENABLED) */
-  cursor: none;
+  /* ✅ CUSTOM CURSOR (SIMPLE, NO JS) */
+  cursor: url("/cursor.png") 6 6, auto;
 }
 
 /* =========================
-   GLOBAL CURSOR OVERRIDE
+   INTERACTIVE ELEMENTS
 ========================= */
 
 a,
@@ -48,12 +48,11 @@ input,
 textarea,
 select,
 label {
-  cursor: none;
+  cursor: url("/cursor.png") 6 6, pointer;
 }
 
 /* =========================
    HIDE SCROLLBAR (KEEP FUNCTION)
-   works for modals, containers, etc.
 ========================= */
 
 .hide-scrollbar {
@@ -66,11 +65,9 @@ label {
 }
 
 /* =========================
-   OPTIONAL: SMOOTH SCROLL (GLOBAL)
+   SMOOTH SCROLL
 ========================= */
 
-/*
-* {
+html {
   scroll-behavior: smooth;
 }
-*/
