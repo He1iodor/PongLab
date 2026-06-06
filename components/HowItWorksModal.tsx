@@ -49,8 +49,8 @@ export default function HowItWorksModal({ open, onClose }: Props) {
         <div
           className="
             relative
-            w-[92%]
-            max-w-[1700px]
+            w-[96%]
+            max-w-[1800px]
             max-h-[90vh]
             overflow-y-auto
             hide-scrollbar
@@ -72,17 +72,18 @@ export default function HowItWorksModal({ open, onClose }: Props) {
 
           {/* TITLE */}
           <div className="text-center">
-  <h2 className="text-4xl md:text-6xl font-black">
-    Начать тренироваться проще, чем кажется
-  </h2>
+ h2 className="text-5xl md:text-7xl font-black tracking-tight">
+  Начать тренироваться проще, чем кажется
+</h2>
 
-  <p className="mt-6 text-lg md:text-xl text-white/60 max-w-5xl mx-auto leading-relaxed">
-    Мы сделали процесс максимально удобным, чтобы вы могли сосредоточиться только на игре и прогрессе
-  </p>
+<p className="mt-6 text-lg md:text-xl text-white/60 max-w-4xl mx-auto leading-relaxed">
+  Мы сделали процесс максимально удобным, чтобы вы могли
+  сосредоточиться только на игре и прогрессе.
+</p>
 </div>
 
           {/* STEPS */}
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
+         <div className="mt-20 grid grid-cols-1 lg:grid-cols-5 gap-5">
   {[1, 2, 3, 4, 5].map((step) => (
     <div
       key={step}
@@ -97,11 +98,11 @@ export default function HowItWorksModal({ open, onClose }: Props) {
         justify-center
       "
     >
-      <div className="text-[#8F5BFF] text-sm font-bold tracking-[0.2em]">
+      <div className="text-[#8F5BFF] text-xs font-black tracking-[0.3em]">
         ШАГ {step}
       </div>
 
-      <h3 className="mt-5 text-2xl font-bold">
+      <h3 className="mt-6 text-[30px] leading-tight font-black">
         {step === 1 && "Подходящяя программа"}
         {step === 2 && "Бронирование"}
         {step === 3 && "Начало тренировки"}
@@ -109,7 +110,7 @@ export default function HowItWorksModal({ open, onClose }: Props) {
         {step === 5 && "Прогресс и аналитика"}
       </h3>
 
-      <p className="mt-4 text-white/60 leading-relaxed">
+      <p className="mt-5 text-white/60 text-[15px] leading-8 flex-1">
         {step === 1 &&
           "Подберите формат тренировок под свои цели: от первого знакомства с системой до регулярных занятий с расширенными возможностями и сопровождением.Каждый тариф открывает доступ к тренировкам и дополнительным функциям платформы"}
 
@@ -128,8 +129,20 @@ export default function HowItWorksModal({ open, onClose }: Props) {
     </div>
   ))}
 </div>
+        <div className="mt-20 text-center">
+  <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+  <h3 className="mt-12 text-3xl md:text-4xl font-black">
+    Посмотрите тренировку в действии
+  </h3>
+
+  <p className="mt-4 text-white/60 max-w-2xl mx-auto">
+    За несколько минут вы увидите, как работает система,
+    как проходит тренировка и какие возможности доступны игроку.
+  </p>
+</div>
           {/* VIDEO */}
-          <div className="mt-16 relative group max-w-6xl mx-auto">
+          <div className="mt-12 relative group max-w-6xl mx-auto">
             <video
               ref={videoRef}
               className="w-full aspect-video rounded-3xl border border-white/10 bg-black"
