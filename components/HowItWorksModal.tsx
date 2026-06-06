@@ -72,38 +72,38 @@ export default function HowItWorksModal({ open, onClose }: Props) {
 
           {/* TITLE */}
           <h2 className="text-4xl md:text-6xl font-black">
-            Как работает PongLab
+            Начать тренироваться проще, чем кажется
           </h2>
 
           <p className="mt-4 text-white/60 max-w-2xl">
-            Роботизированная система тренировок, аналитики и развития игровых навыков.
+            Мы сделали процесс максимально удобным и настравыемым, чтобы вы могли сосредоточиться только на игре и прогрессе
           </p>
 
           {/* STEPS */}
           <div className="mt-10 grid md:grid-cols-3 gap-6">
             <div className="rounded-3xl bg-white/5 p-6">
               <div className="text-[#8F5BFF] font-bold">ШАГ 1</div>
-              <h3 className="mt-3 text-xl font-bold">Анализ уровня</h3>
+              <h3 className="mt-3 text-xl font-bold">Выберите подходящий тариф</h3>
               <p className="mt-2 text-white/60">
-                Система определяет текущий уровень игрока.
+                Подберите формат тренировок под свои цели: от первого знакомства с системой до регулярных занятий с расширенными возможностями и сопровождением. Каждый тариф открывает доступ к тренировкам и дополнительным функциям платформы.
               </p>
             </div>
 
             <div className="rounded-3xl bg-white/5 p-6">
               <div className="text-[#8F5BFF] font-bold">ШАГ 2</div>
               <h3 className="mt-3 text-xl font-bold">
-                Персональная программа
+                Забронируйте удобное время
               </h3>
               <p className="mt-2 text-white/60">
-                Формируется индивидуальная тренировочная программа.
+               Выберите свободный слот в онлайн-календаре и запланируйте тренировку на удобное для вас время. Никаких звонков, ожидания подтверждений и переписок — вся запись происходит онлайн за несколько секунд.
               </p>
             </div>
 
             <div className="rounded-3xl bg-white/5 p-6">
               <div className="text-[#8F5BFF] font-bold">ШАГ 3</div>
-              <h3 className="mt-3 text-xl font-bold">Аналитика</h3>
+              <h3 className="mt-3 text-xl font-bold">Приходите и начинайте тренировку</h3>
               <p className="mt-2 text-white/60">
-                Сохраняются данные и отслеживается прогресс.
+                В назначенное время приходите на площадку и запускайте тренировку через личный кабинет. Робот уже готов к работе, а вам остаётся только выйти к столу и начать заниматься.
               </p>
             </div>
           </div>
