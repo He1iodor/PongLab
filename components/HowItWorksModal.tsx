@@ -50,14 +50,14 @@ export default function HowItWorksModal({ open, onClose }: Props) {
           className="
             relative
             w-[92%]
-            max-w-5xl
+            max-w-[1700px]
             max-h-[90vh]
             overflow-y-auto
             hide-scrollbar
             rounded-3xl
             bg-[#0B0D18]
             border border-white/10
-            p-10
+            p-12 md:p-16
             text-white
           "
           onClick={(e) => e.stopPropagation()}
@@ -65,113 +65,74 @@ export default function HowItWorksModal({ open, onClose }: Props) {
           {/* CLOSE */}
           <button
             onClick={onClose}
-            className="
-              absolute top-5 right-5
-              h-11 w-11
-              rounded-xl
-              bg-white/5
-              hover:bg-white/10
-              transition
-              flex items-center justify-center
-            "
+            className="absolute top-5 right-5 h-11 w-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center"
           >
             <X size={20} />
           </button>
 
           {/* TITLE */}
-          <h2 className="text-4xl md:text-6xl font-black">
-            Начать тренироваться проще, чем кажется
-          </h2>
+          <div className="text-center">
+  <h2 className="text-4xl md:text-6xl font-black">
+    Как работает PongLab
+  </h2>
 
-          <p className="mt-5 text-lg text-white/60 max-w-3xl leading-relaxed">
-            Мы сделали процесс максимально удобным и понятным, чтобы вы могли
-            сосредоточиться на тренировках, прогрессе и достижении своих целей.
-          </p>
+  <p className="mt-6 text-lg md:text-xl text-white/60 max-w-5xl mx-auto leading-relaxed">
+    Роботизированная система тренировок, аналитики и развития игровых
+    навыков. Каждый этап построен таким образом, чтобы игрок мог
+    максимально эффективно развивать технику, скорость реакции и
+    стабильность игровых действий.
+  </p>
+</div>
 
           {/* STEPS */}
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
-              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
-                ШАГ 1
-              </div>
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
+  {[1, 2, 3, 4, 5].map((step) => (
+    <div
+      key={step}
+      className="
+        rounded-3xl
+        bg-white/[0.04]
+        border border-white/10
+        p-8
+        text-center
+        min-h-[280px]
+        flex flex-col
+        justify-center
+      "
+    >
+      <div className="text-[#8F5BFF] text-sm font-bold tracking-[0.2em]">
+        ШАГ {step}
+      </div>
 
-              <h3 className="mt-4 text-2xl font-bold leading-tight">
-                Выберите подходящий тариф
-              </h3>
+      <h3 className="mt-5 text-2xl font-bold">
+        {step === 1 && "Анализ уровня"}
+        {step === 2 && "Персональная программа"}
+        {step === 3 && "Аналитика"}
+        {step === 4 && "Название этапа"}
+        {step === 5 && "Название этапа"}
+      </h3>
 
-              <p className="mt-4 text-white/60 leading-relaxed">
-                Подберите формат тренировок под свои цели: от первого знакомства
-                с системой до регулярных занятий с расширенными возможностями и
-                сопровождением.
-              </p>
-            </div>
+      <p className="mt-4 text-white/60 leading-relaxed">
+        {step === 1 &&
+          "Система определяет текущий уровень игрока."}
 
-            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
-              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
-                ШАГ 2
-              </div>
+        {step === 2 &&
+          "Формируется индивидуальная тренировочная программа."}
 
-              <h3 className="mt-4 text-2xl font-bold leading-tight">
-                Забронируйте удобное время
-              </h3>
+        {step === 3 &&
+          "Сохраняются данные и отслеживается прогресс."}
 
-              <p className="mt-4 text-white/60 leading-relaxed">
-                Выберите свободный слот в онлайн-календаре и запланируйте
-                тренировку на удобное время. Вся запись происходит онлайн за
-                несколько секунд.
-              </p>
-            </div>
+        {step === 4 &&
+          "Здесь будет ваш текст. Позже замените его на описание нужного этапа."}
 
-            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
-              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
-                ШАГ 3
-              </div>
-
-              <h3 className="mt-4 text-2xl font-bold leading-tight">
-                Приходите и начинайте тренировку
-              </h3>
-
-              <p className="mt-4 text-white/60 leading-relaxed">
-                В назначенное время приходите на площадку и запускайте
-                тренировку через личный кабинет. Робот уже готов к работе.
-              </p>
-            </div>
-
-            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
-              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
-                ШАГ 4
-              </div>
-
-              <h3 className="mt-4 text-2xl font-bold leading-tight">
-                Название этапа
-              </h3>
-
-              <p className="mt-4 text-white/60 leading-relaxed">
-                Здесь будет ваш текст. Можно рассказать о дополнительной
-                функции, сервисе или процессе, который происходит после начала
-                тренировок.
-              </p>
-            </div>
-
-            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
-              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
-                ШАГ 5
-              </div>
-
-              <h3 className="mt-4 text-2xl font-bold leading-tight">
-                Название этапа
-              </h3>
-
-              <p className="mt-4 text-white/60 leading-relaxed">
-                Здесь будет ваш текст. Используйте этот блок для описания
-                финального этапа, результатов или дополнительных возможностей
-                платформы.
-              </p>
-            </div>
-          </div>
-
+        {step === 5 &&
+          "Здесь будет ваш текст. Используйте карточку для дополнительной функции платформы."}
+      </p>
+    </div>
+  ))}
+</div>
           {/* VIDEO */}
-          <div className="mt-10 relative group">
+          <div className="mt-16 relative group max-w-6xl mx-auto">
             <video
               ref={videoRef}
               className="w-full aspect-video rounded-3xl border border-white/10 bg-black"
@@ -184,6 +145,7 @@ export default function HowItWorksModal({ open, onClose }: Props) {
               <source src="/video.mp4" type="video/mp4" />
             </video>
 
+            {/* PLAY BUTTON OVERLAY */}
             {!isPlaying && (
               <button
                 onClick={handlePlay}
