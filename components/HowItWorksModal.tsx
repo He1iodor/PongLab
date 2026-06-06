@@ -65,7 +65,15 @@ export default function HowItWorksModal({ open, onClose }: Props) {
           {/* CLOSE */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 h-11 w-11 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center"
+            className="
+              absolute top-5 right-5
+              h-11 w-11
+              rounded-xl
+              bg-white/5
+              hover:bg-white/10
+              transition
+              flex items-center justify-center
+            "
           >
             <X size={20} />
           </button>
@@ -75,35 +83,89 @@ export default function HowItWorksModal({ open, onClose }: Props) {
             Начать тренироваться проще, чем кажется
           </h2>
 
-          <p className="mt-4 text-white/60 max-w-2xl">
-            Мы сделали процесс максимально удобным и настравыемым, чтобы вы могли сосредоточиться только на игре и прогрессе
+          <p className="mt-5 text-lg text-white/60 max-w-3xl leading-relaxed">
+            Мы сделали процесс максимально удобным и понятным, чтобы вы могли
+            сосредоточиться на тренировках, прогрессе и достижении своих целей.
           </p>
 
           {/* STEPS */}
-          <div className="mt-10 grid md:grid-cols-3 gap-6">
-            <div className="rounded-3xl bg-white/5 p-6">
-              <div className="text-[#8F5BFF] font-bold">ШАГ 1</div>
-              <h3 className="mt-3 text-xl font-bold">Выберите подходящий тариф</h3>
-              <p className="mt-2 text-white/60">
-                Подберите формат тренировок под свои цели: от первого знакомства с системой до регулярных занятий с расширенными возможностями и сопровождением. Каждый тариф открывает доступ к тренировкам и дополнительным функциям платформы.
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
+              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
+                ШАГ 1
+              </div>
+
+              <h3 className="mt-4 text-2xl font-bold leading-tight">
+                Выберите подходящий тариф
+              </h3>
+
+              <p className="mt-4 text-white/60 leading-relaxed">
+                Подберите формат тренировок под свои цели: от первого знакомства
+                с системой до регулярных занятий с расширенными возможностями и
+                сопровождением.
               </p>
             </div>
 
-            <div className="rounded-3xl bg-white/5 p-6">
-              <div className="text-[#8F5BFF] font-bold">ШАГ 2</div>
-              <h3 className="mt-3 text-xl font-bold">
+            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
+              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
+                ШАГ 2
+              </div>
+
+              <h3 className="mt-4 text-2xl font-bold leading-tight">
                 Забронируйте удобное время
               </h3>
-              <p className="mt-2 text-white/60">
-               Выберите свободный слот в онлайн-календаре и запланируйте тренировку на удобное для вас время. Никаких звонков, ожидания подтверждений и переписок — вся запись происходит онлайн за несколько секунд.
+
+              <p className="mt-4 text-white/60 leading-relaxed">
+                Выберите свободный слот в онлайн-календаре и запланируйте
+                тренировку на удобное время. Вся запись происходит онлайн за
+                несколько секунд.
               </p>
             </div>
 
-            <div className="rounded-3xl bg-white/5 p-6">
-              <div className="text-[#8F5BFF] font-bold">ШАГ 3</div>
-              <h3 className="mt-3 text-xl font-bold">Приходите и начинайте тренировку</h3>
-              <p className="mt-2 text-white/60">
-                В назначенное время приходите на площадку и запускайте тренировку через личный кабинет. Робот уже готов к работе, а вам остаётся только выйти к столу и начать заниматься.
+            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
+              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
+                ШАГ 3
+              </div>
+
+              <h3 className="mt-4 text-2xl font-bold leading-tight">
+                Приходите и начинайте тренировку
+              </h3>
+
+              <p className="mt-4 text-white/60 leading-relaxed">
+                В назначенное время приходите на площадку и запускайте
+                тренировку через личный кабинет. Робот уже готов к работе.
+              </p>
+            </div>
+
+            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
+              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
+                ШАГ 4
+              </div>
+
+              <h3 className="mt-4 text-2xl font-bold leading-tight">
+                Название этапа
+              </h3>
+
+              <p className="mt-4 text-white/60 leading-relaxed">
+                Здесь будет ваш текст. Можно рассказать о дополнительной
+                функции, сервисе или процессе, который происходит после начала
+                тренировок.
+              </p>
+            </div>
+
+            <div className="rounded-3xl bg-white/[0.04] border border-white/10 p-7 backdrop-blur-sm">
+              <div className="text-[#8F5BFF] text-sm font-bold tracking-wider">
+                ШАГ 5
+              </div>
+
+              <h3 className="mt-4 text-2xl font-bold leading-tight">
+                Название этапа
+              </h3>
+
+              <p className="mt-4 text-white/60 leading-relaxed">
+                Здесь будет ваш текст. Используйте этот блок для описания
+                финального этапа, результатов или дополнительных возможностей
+                платформы.
               </p>
             </div>
           </div>
@@ -122,7 +184,6 @@ export default function HowItWorksModal({ open, onClose }: Props) {
               <source src="/video.mp4" type="video/mp4" />
             </video>
 
-            {/* PLAY BUTTON OVERLAY */}
             {!isPlaying && (
               <button
                 onClick={handlePlay}
