@@ -8,34 +8,6 @@ type Props = {
   onClose: () => void;
 };
 
-const steps = [
-  {
-    title: "Подходящая программа",
-    text:
-      "Подберите формат тренировок под свои цели: от первого знакомства до регулярных занятий с расширенными возможностями и сопровождением. Каждый тариф открывает доступ к тренировкам и дополнительным функциям платформы.",
-  },
-  {
-    title: "Бронирование",
-    text:
-      "Выберите свободный слот в онлайн-календаре и запланируйте тренировку. Вся запись происходит онлайн за несколько секунд без звонков и ожидания.",
-  },
-  {
-    title: "Начало тренировки",
-    text:
-      "В назначенное время приходите на площадку и запускайте тренировку через личный кабинет. Робот уже готов к работе.",
-  },
-  {
-    title: "Режимы тренировки",
-    text:
-      "Используйте сценарии или создавайте собственные настройки подачи: скорость, вращение, направление и точка подачи.",
-  },
-  {
-    title: "Прогресс и аналитика",
-    text:
-      "После тренировки статистика сохраняется в профиле: история занятий, точность ударов и динамика прогресса.",
-  },
-];
-
 export default function HowItWorksModal({ open, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -74,10 +46,11 @@ export default function HowItWorksModal({ open, onClose }: Props) {
         className="
           relative
           w-[96%]
-          max-w-[1200px]
+          max-w-[1400px]
           max-h-[90vh]
           overflow-y-auto
-          snap-y snap-mandatory scroll-smooth
+          snap-y snap-mandatory
+          scroll-smooth
           rounded-3xl
           bg-[#0B0D18]
           border border-white/10
@@ -86,50 +59,87 @@ export default function HowItWorksModal({ open, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
-        <div className="sticky top-0 z-10 bg-[#0B0D18]/80 backdrop-blur p-6 border-b border-white/10">
+        <div className="sticky top-0 z-10 bg-[#0B0D18]/80 backdrop-blur border-b border-white/10 px-8 py-6">
           <h2 className="text-xl font-bold">Как это работает</h2>
         </div>
 
-        {/* STEPS */}
-        {steps.map((step, index) => (
-          <section
-            key={index}
-            className="
-              min-h-[80vh]
-              flex items-center justify-center
-              snap-center
-              px-6
-            "
-          >
-            <div
-              className="
-                max-w-3xl w-full
-                rounded-3xl
-                border border-white/10
-                bg-white/[0.03]
-                backdrop-blur-xl
-                p-10 md:p-14
-                transition-all duration-700
-                hover:scale-[1.01]
-              "
-            >
-              <span className="text-[#8F5BFF] font-bold">
-                ШАГ {index + 1}
-              </span>
+        {/* ===== STEP 1 ===== */}
+        <section className="min-h-[80vh] snap-center flex items-center px-10">
+          <div className="max-w-3xl">
+            <span className="text-[#8F5BFF] font-bold">ШАГ 1</span>
 
-              <h2 className="mt-4 text-4xl md:text-5xl font-black">
-                {step.title}
-              </h2>
+            <h3 className="mt-6 text-[30px] leading-tight font-black">
+              Подходящая программа
+            </h3>
 
-              <p className="mt-8 text-white/70 text-lg leading-9">
-                {step.text}
-              </p>
-            </div>
-          </section>
-        ))}
+            <p className="mt-5 text-white/60 text-[15px] leading-8">
+              Подберите формат тренировок под свои цели: от первого знакомства с системой до регулярных занятий с расширенными возможностями и сопровождением.Каждый тариф открывает доступ к тренировкам и дополнительным функциям платформы
+            </p>
+          </div>
+        </section>
 
-        {/* VIDEO */}
-        <section className="min-h-[90vh] flex items-center justify-center snap-center px-6">
+        {/* ===== STEP 2 ===== */}
+        <section className="min-h-[80vh] snap-center flex items-center px-10">
+          <div className="max-w-3xl">
+            <span className="text-[#8F5BFF] font-bold">ШАГ 2</span>
+
+            <h3 className="mt-6 text-[30px] leading-tight font-black">
+              Бронирование
+            </h3>
+
+            <p className="mt-5 text-white/60 text-[15px] leading-8">
+              Выберите свободный слот в онлайн-календаре и запланируйте тренировку на удобное для вас время.Никаких звонков, ожидания подтверждений и переписок — вся запись происходит онлайн за несколько секунд
+            </p>
+          </div>
+        </section>
+
+        {/* ===== STEP 3 ===== */}
+        <section className="min-h-[80vh] snap-center flex items-center px-10">
+          <div className="max-w-3xl">
+            <span className="text-[#8F5BFF] font-bold">ШАГ 3</span>
+
+            <h3 className="mt-6 text-[30px] leading-tight font-black">
+              Начало тренировки
+            </h3>
+
+            <p className="mt-5 text-white/60 text-[15px] leading-8">
+              В назначенное время приходите на площадку и запускайте тренировку через личный кабинет. Робот уже готов к работе, а вам остаётся только выйти к столу и начать заниматься
+            </p>
+          </div>
+        </section>
+
+        {/* ===== STEP 4 ===== */}
+        <section className="min-h-[80vh] snap-center flex items-center px-10">
+          <div className="max-w-3xl">
+            <span className="text-[#8F5BFF] font-bold">ШАГ 4</span>
+
+            <h3 className="mt-6 text-[30px] leading-tight font-black">
+              Режимы тренировки
+            </h3>
+
+            <p className="mt-5 text-white/60 text-[15px] leading-8">
+              Используйте готовые сценарии тренировок или создавайте собственные настройки подачи. Скорость, вращение, направление и частота подачи настраиваются под ваш уровень и цели. Можно выбрать конкретную точку на столе для подачи и отрабатывать конкретный удар
+            </p>
+          </div>
+        </section>
+
+        {/* ===== STEP 5 ===== */}
+        <section className="min-h-[80vh] snap-center flex items-center px-10">
+          <div className="max-w-3xl">
+            <span className="text-[#8F5BFF] font-bold">ШАГ 5</span>
+
+            <h3 className="mt-6 text-[30px] leading-tight font-black">
+              Прогресс и аналитика
+            </h3>
+
+            <p className="mt-5 text-white/60 text-[15px] leading-8">
+              После каждой тренировки статистика сохраняется в вашем профиле. История занятий, показатели активности, точность ударов и динамика прогресса помогают видеть результаты, и двигаться вперёд системно
+            </p>
+          </div>
+        </section>
+
+        {/* ===== VIDEO ===== */}
+        <section className="min-h-[90vh] snap-center flex items-center justify-center px-10">
           <div className="w-full max-w-5xl">
             <h2 className="text-center text-5xl font-black mb-10">
               Посмотрите как это работает
