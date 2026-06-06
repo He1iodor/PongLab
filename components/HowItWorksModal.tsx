@@ -71,15 +71,15 @@ export default function HowItWorksModal({ open, onClose }: Props) {
           </button>
 
           {/* TITLE */}
-          <div className="text-center">
- h2 className="text-5xl md:text-7xl font-black tracking-tight">
-  Начать тренироваться проще, чем кажется
-</h2>
+<div className="text-center">
+  <h2 className="text-5xl md:text-7xl font-black tracking-tight">
+    Начать тренироваться проще, чем кажется
+  </h2>
 
-<p className="mt-6 text-lg md:text-xl text-white/60 max-w-4xl mx-auto leading-relaxed">
-  Мы сделали процесс максимально удобным, чтобы вы могли
-  сосредоточиться только на игре и прогрессе.
-</p>
+  <p className="mt-6 text-lg md:text-xl text-white/60 max-w-4xl mx-auto leading-relaxed">
+    Мы сделали процесс максимально удобным, чтобы вы могли
+    сосредоточиться только на игре и прогрессе.
+  </p>
 </div>
 
           {/* STEPS */}
@@ -103,7 +103,7 @@ export default function HowItWorksModal({ open, onClose }: Props) {
       </div>
 
       <h3 className="mt-6 text-[30px] leading-tight font-black">
-        {step === 1 && "Подходящяя программа"}
+        {step === 1 && "Подходящая программа"}
         {step === 2 && "Бронирование"}
         {step === 3 && "Начало тренировки"}
         {step === 4 && "Режимы тренировки"}
