@@ -155,7 +155,7 @@ export default function HowItWorksModal({
 
            <div className="mt-10">
 
-  <h3 className="text-xl font-bold mb-6">
+<h3 className="text-lg font-semibold text-white/90 mb-6">
     Всё, что нужно для роста в одном месте
   </h3>
 
@@ -231,7 +231,7 @@ export default function HowItWorksModal({
 </div>
           </div>
 
-          <div className="relative">
+         <div className="relative -mt-8">
 
   <div
     className="
@@ -298,6 +298,8 @@ export default function HowItWorksModal({
       </button>
     )}
   </div>
+
+</div>
 
 </div>
 
