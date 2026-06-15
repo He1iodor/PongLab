@@ -166,13 +166,13 @@ export default function HowItWorksModal({
   "Автоматический доступ",
   "Умный робот для тренировок",
 
-  "Индивидуальные режимы подачи с точностью до точки",
+  "Индивидуальные режимы. Точность до точки",
   "Автоматический сбор мячей",
-  "Возможность тренировки в паре либо против друг друга",
+  "Парная игра и спарринги",
 
-  "Турниры выходного дня между живыми игроками",
-  "Статистика достижений и история занятий",
-  "Поддержка тренера при необходимости или по желанию",
+  "Турниры выходного дня оффлайн",
+  "Личная статистика и история занятий",
+  "Поддержка тренера по желанию",
 ].map((item) => (
       <div
         key={item}
@@ -263,7 +263,7 @@ export default function HowItWorksModal({
       "
       controls={isPlaying}
     >
-      <source src="/video/how-it-works.mp4" />
+      <source src="/video/video.mp4" />
     </video>
 
     {!isPlaying && (
@@ -300,45 +300,6 @@ export default function HowItWorksModal({
   </div>
 
 </div>
-                <source src="/video.mp4" />
-              </video>
-
-              {!isPlaying && (
-                <button
-                  onClick={handlePlay}
-                  className="
-                    absolute
-                    inset-0
-                    flex
-                    items-center
-                    justify-center
-                    bg-black/40
-                  "
-                >
-                  <div
-                    className="
-                      h-24
-                      w-24
-                      rounded-full
-                      bg-[#8F5BFF]
-                      flex
-                      items-center
-                      justify-center
-                      shadow-[0_0_60px_rgba(143,91,255,.8)]
-                    "
-                  >
-                    <Play
-                      size={38}
-                      fill="white"
-                    />
-                  </div>
-                </button>
-              )}
-            </div>
-
-          </div>
-
-        </div>
 
         <div className="mt-20 hidden xl:flex items-center justify-between">
 
