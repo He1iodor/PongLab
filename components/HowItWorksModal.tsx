@@ -153,85 +153,9 @@ export default function HowItWorksModal({
               сосредоточились только на игре и прогрессе.
             </p>
 
-           <div className="mt-10">
-
-<h3 className="text-lg font-semibold text-white/90 mb-6">
-    Всё, что нужно для роста в одном месте
-  </h3>
-
-  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-
-    {[
-  "Онлайн-бронирование",
-  "Автоматический доступ",
-  "Умный робот для тренировок",
-
-  "Индивидуальные режимы. Точность до точки",
-  "Автоматический сбор мячей",
-  "Парная игра и спарринги",
-
-  "Турниры выходного дня оффлайн",
-  "Личная статистика и история занятий",
-  "Поддержка тренера по желанию",
-].map((item) => (
-      <div
-        key={item}
-        className="
-          flex
-          items-center
-          gap-3
-          rounded-2xl
-          border
-          border-white/10
-          bg-white/5
-          px-5
-          py-4
-          backdrop-blur-xl
-          hover:border-[#8F5BFF]/40
-          hover:bg-white/[0.07]
-          transition-all
-        "
-      >
-        <div
-          className="
-            flex
-            h-7
-            w-7
-            items-center
-            justify-center
-            rounded-full
-            bg-[#8F5BFF]/15
-            border
-            border-[#8F5BFF]/30
-            shrink-0
-          "
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#8F5BFF"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </div>
-
-        <span className="text-white/85 text-[15px] font-medium">
-          {item}
-        </span>
-      </div>
-    ))}
-
-  </div>
-
-</div>
           </div>
 
-         <div className="relative -mt-8">
+         <div className="relative -mt-10">
 
   <div
     className="
@@ -300,7 +224,82 @@ export default function HowItWorksModal({
   </div>
 
 </div>
+<div className="mt-14">
 
+  <h3 className="text-center text-xl font-bold mb-8">
+    Всё, что нужно для роста в одном месте
+  </h3>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+
+    {[
+      "Онлайн-бронирование",
+      "Автоматический доступ",
+      "Умный робот для тренировок",
+
+      "Индивидуальные режимы. Точность до точки",
+      "Автоматический сбор мячей",
+      "Парная игра и спарринги",
+
+      "Турниры выходного дня оффлайн",
+      "Личная статистика и история занятий",
+      "Поддержка тренера по желанию",
+    ].map((item) => (
+      <div
+        key={item}
+        className="
+          flex
+          items-center
+          gap-3
+          rounded-2xl
+          border
+          border-white/10
+          bg-white/5
+          px-5
+          py-4
+          backdrop-blur-xl
+          hover:border-[#8F5BFF]/40
+          hover:bg-white/[0.07]
+          transition-all
+        "
+      >
+        <div
+          className="
+            flex
+            h-7
+            w-7
+            items-center
+            justify-center
+            rounded-full
+            bg-[#8F5BFF]/15
+            border
+            border-[#8F5BFF]/30
+            shrink-0
+          "
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#8F5BFF"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+
+        <span className="text-white/85 text-[15px] font-medium">
+          {item}
+        </span>
+      </div>
+    ))}
+
+  </div>
+
+</div>
 </div>
 
         <div className="mt-20 hidden xl:flex items-center justify-between">
