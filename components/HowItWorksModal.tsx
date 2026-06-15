@@ -153,18 +153,78 @@ export default function HowItWorksModal({
               сосредоточились только на игре и прогрессе.
             </p>
 
-            <div className="mt-10 flex gap-4 flex-wrap">
+           <div className="mt-10">
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4">
-                ⚡ Бронирование за 30 секунд
-              </div>
+  <h3 className="text-xl font-bold mb-6">
+    Всё, что нужно для роста в одном месте
+  </h3>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4">
-                🎯 До 1500 ударов за тренировку
-              </div>
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            </div>
+    {[
+      "Онлайн-бронирование",
+      "Автоматический доступ",
+      "Умный робот для тренировок",
+      "Индивидуальные режимы подачи",
+      "Статистика и история занятий",
+      "Поддержка тренера при необходимости",
+      "Турниры и соревнования сообщества",
+    ].map((item) => (
+      <div
+        key={item}
+        className="
+          flex
+          items-center
+          gap-3
+          rounded-2xl
+          border
+          border-white/10
+          bg-white/5
+          px-5
+          py-4
+          backdrop-blur-xl
+          hover:border-[#8F5BFF]/40
+          hover:bg-white/[0.07]
+          transition-all
+        "
+      >
+        <div
+          className="
+            flex
+            h-7
+            w-7
+            items-center
+            justify-center
+            rounded-full
+            bg-[#8F5BFF]/15
+            border
+            border-[#8F5BFF]/30
+            shrink-0
+          "
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#8F5BFF"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
 
+        <span className="text-white/85 text-[15px] font-medium">
+          {item}
+        </span>
+      </div>
+    ))}
+
+  </div>
+
+</div>
           </div>
 
           <div>
@@ -184,7 +244,7 @@ export default function HowItWorksModal({
                 className="w-full aspect-video object-cover"
                 controls={isPlaying}
               >
-                <source src="/video/how-it-works.mp4" />
+                <source src="/video.mp4" />
               </video>
 
               {!isPlaying && (
