@@ -286,7 +286,16 @@ export default function HowItWorksModal({
         </div>
 
         {/* FEATURES */}
-
+<div
+  className="
+    absolute
+    inset-0
+    opacity-0
+    group-hover:opacity-100
+    transition
+    bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
+  "
+/>
         <div className="mt-20">
 
           <h3
@@ -306,19 +315,23 @@ export default function HowItWorksModal({
               <div
                 key={item}
                 className="
-                  flex
-                  items-center
-                  gap-3
-                  rounded-2xl
-                  border
-                  border-white/10
-                  bg-white/5
-                  px-5
-                  py-5
-                  backdrop-blur-xl
-                  hover:border-[#8F5BFF]/40
-                  transition-all
-                "
+group
+relative
+overflow-hidden
+flex
+items-center
+gap-3
+rounded-2xl
+border
+border-white/10
+bg-white/5
+px-5
+py-5
+backdrop-blur-xl
+transition-all
+hover:border-[#8F5BFF]/40
+hover:-translate-y-1
+"
               >
                 <div
                   className="
