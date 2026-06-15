@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Play, Calendar, BarChart3, Rocket, Target, UserCheck } from "lucide-react";
+import {
+  X,
+  Play,
+  Calendar,
+  BarChart3,
+  Rocket,
+  Target,
+  UserCheck,
+} from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -13,32 +21,46 @@ const steps = [
     icon: UserCheck,
     number: "01",
     title: "Выберите программу",
-    text: "Подберите тариф под свои цели — от первого знакомства с системой до регулярных тренировок с расширенными возможностями."
+    text: "Подберите тариф под свои цели и уровень подготовки.",
   },
   {
     icon: Calendar,
     number: "02",
     title: "Забронируйте время",
-    text: "Выберите свободный слот в календаре и забронируйте тренировку за несколько секунд."
+    text: "Выберите свободный слот в календаре и подтвердите тренировку.",
   },
   {
     icon: Rocket,
     number: "03",
     title: "Получите доступ",
-    text: "После оплаты система автоматически активирует тренировку и подготовит площадку."
+    text: "Система автоматически активирует площадку к вашему приходу.",
   },
   {
     icon: Target,
     number: "04",
     title: "Тренируйтесь",
-    text: "Используйте готовые сценарии или создавайте собственные режимы подачи."
+    text: "Используйте готовые сценарии или собственные режимы подачи.",
   },
   {
     icon: BarChart3,
     number: "05",
-    title: "Анализируйте прогресс",
-    text: "История занятий, статистика и живые турниры между игроками помогают видеть реальные результаты."
-  }
+    title: "Отслеживайте прогресс",
+    text: "Анализируйте статистику и результаты каждой тренировки.",
+  },
+];
+
+const features = [
+  "Онлайн-бронирование",
+  "Автоматический доступ",
+  "Умный робот для тренировок",
+
+  "Индивидуальные режимы подачи",
+  "Автоматический сбор мячей",
+  "Парная игра и спарринги",
+
+  "Турниры выходного дня",
+  "Личная статистика",
+  "Поддержка тренера",
 ];
 
 export default function HowItWorksModal({
@@ -46,6 +68,7 @@ export default function HowItWorksModal({
   onClose,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
@@ -75,7 +98,17 @@ export default function HowItWorksModal({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4"
+      className="
+        fixed
+        inset-0
+        z-[9999]
+        bg-black/80
+        backdrop-blur-xl
+        flex
+        items-center
+        justify-center
+        p-4
+      "
       onClick={onClose}
     >
       <div
@@ -86,11 +119,14 @@ export default function HowItWorksModal({
           max-w-[1800px]
           max-h-[92vh]
           overflow-y-auto
-          rounded-[32px]
+          rounded-[36px]
+          border
+          border-white/10
           bg-[#0B0D18]
-          border border-white/10
           text-white
-          p-8 lg:p-14
+          p-8
+          lg:p-14
+          hide-scrollbar
         "
       >
         <button
@@ -115,7 +151,11 @@ export default function HowItWorksModal({
           <X size={20} />
         </button>
 
-        <div className="grid lg:grid-cols-2 gap-16 items-start">
+        {/* HERO */}
+
+        <div className="grid lg:grid-cols-[1fr_760px] gap-20 items-start">
+
+          {/* LEFT */}
 
           <div>
 
@@ -123,7 +163,6 @@ export default function HowItWorksModal({
               className="
                 inline-flex
                 items-center
-                gap-2
                 rounded-full
                 border
                 border-[#8F5BFF]/30
@@ -137,7 +176,15 @@ export default function HowItWorksModal({
               Как это работает
             </div>
 
-            <h2 className="mt-8 text-5xl lg:text-7xl font-black leading-[0.95]">
+            <h2
+              className="
+                mt-8
+                text-5xl
+                lg:text-7xl
+                font-black
+                leading-[0.95]
+              "
+            >
               Начать
               <br />
               тренироваться
@@ -147,229 +194,314 @@ export default function HowItWorksModal({
               </span>
             </h2>
 
-            <p className="mt-8 text-lg leading-8 text-white/60 max-w-[650px]">
+            <p
+              className="
+                mt-8
+                max-w-[720px]
+                text-lg
+                leading-8
+                text-white/60
+              "
+            >
               Мы полностью автоматизировали процесс записи,
               доступа и проведения тренировок, чтобы вы
-              сосредоточились только на игре и прогрессе.
+              сосредоточились исключительно на игре,
+              развитии техники и достижении результата.
             </p>
 
           </div>
 
-         <div className="relative -mt-10">
+          {/* VIDEO */}
 
-  <div
-    className="
-      absolute
-      -inset-10
-      rounded-full
-      bg-[#8F5BFF]/20
-      blur-[120px]
-      pointer-events-none
-    "
-  />
+          <div className="relative mt-12">
 
-  <div
-    className="
-      relative
-      overflow-hidden
-      rounded-[28px]
-      border
-      border-white/10
-      bg-white/5
-    "
-  >
-    <video
-      ref={videoRef}
-      className="
-        w-full
-        aspect-[16/10]
-        object-cover
-      "
-      controls={isPlaying}
-    >
-      <source src="/video/video.mp4" />
-    </video>
-
-    {!isPlaying && (
-      <button
-        onClick={handlePlay}
-        className="
-          absolute
-          inset-0
-          flex
-          items-center
-          justify-center
-          bg-black/40
-        "
-      >
-        <div
-          className="
-            h-24
-            w-24
-            rounded-full
-            bg-[#8F5BFF]
-            flex
-            items-center
-            justify-center
-            shadow-[0_0_60px_rgba(143,91,255,.8)]
-          "
-        >
-          <Play
-            size={38}
-            fill="white"
-          />
-        </div>
-      </button>
-    )}
-  </div>
-
-</div>
-<div className="mt-14">
-
-  <h3 className="text-center text-xl font-bold mb-8">
-    Всё, что нужно для роста в одном месте
-  </h3>
-
-  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-
-    {[
-      "Онлайн-бронирование",
-      "Автоматический доступ",
-      "Умный робот для тренировок",
-
-      "Индивидуальные режимы. Точность до точки",
-      "Автоматический сбор мячей",
-      "Парная игра и спарринги",
-
-      "Турниры выходного дня оффлайн",
-      "Личная статистика и история занятий",
-      "Поддержка тренера по желанию",
-    ].map((item) => (
-      <div
-        key={item}
-        className="
-          flex
-          items-center
-          gap-3
-          rounded-2xl
-          border
-          border-white/10
-          bg-white/5
-          px-5
-          py-4
-          backdrop-blur-xl
-          hover:border-[#8F5BFF]/40
-          hover:bg-white/[0.07]
-          transition-all
-        "
-      >
-        <div
-          className="
-            flex
-            h-7
-            w-7
-            items-center
-            justify-center
-            rounded-full
-            bg-[#8F5BFF]/15
-            border
-            border-[#8F5BFF]/30
-            shrink-0
-          "
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#8F5BFF"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </div>
-
-        <span className="text-white/85 text-[15px] font-medium">
-          {item}
-        </span>
-      </div>
-    ))}
-
-  </div>
-
-</div>
-</div>
-
-        <div className="mt-20 hidden xl:flex items-center justify-between">
-
-          {steps.map((step, i) => (
             <div
-              key={i}
-              className="flex items-center"
+              className="
+                absolute
+                -inset-12
+                rounded-full
+                bg-[#8F5BFF]/20
+                blur-[140px]
+                pointer-events-none
+              "
+            />
+
+            <div
+              className="
+                relative
+                overflow-hidden
+                rounded-[32px]
+                border
+                border-white/10
+                bg-white/5
+              "
+            >
+              <video
+                ref={videoRef}
+                className="
+                  w-full
+                  aspect-video
+                  object-cover
+                "
+                controls={isPlaying}
+              >
+                <source src="/video/how-it-works.mp4" />
+              </video>
+
+              {!isPlaying && (
+                <button
+                  onClick={handlePlay}
+                  className="
+                    absolute
+                    inset-0
+                    flex
+                    items-center
+                    justify-center
+                    bg-black/40
+                  "
+                >
+                  <div
+                    className="
+                      h-24
+                      w-24
+                      rounded-full
+                      bg-[#8F5BFF]
+                      flex
+                      items-center
+                      justify-center
+                      shadow-[0_0_80px_rgba(143,91,255,.9)]
+                    "
+                  >
+                    <Play
+                      size={38}
+                      fill="white"
+                    />
+                  </div>
+                </button>
+              )}
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* FEATURES */}
+
+        <div className="mt-20">
+
+          <h3
+            className="
+              text-2xl
+              font-bold
+              text-center
+              mb-10
+            "
+          >
+            Всё, что нужно для роста в одном месте
+          </h3>
+
+          <div className="grid md:grid-cols-3 gap-5">
+
+            {features.map((item) => (
+              <div
+                key={item}
+                className="
+                  flex
+                  items-center
+                  gap-3
+                  rounded-2xl
+                  border
+                  border-white/10
+                  bg-white/5
+                  px-5
+                  py-5
+                  backdrop-blur-xl
+                  hover:border-[#8F5BFF]/40
+                  transition-all
+                "
+              >
+                <div
+                  className="
+                    h-8
+                    w-8
+                    rounded-full
+                    border
+                    border-[#8F5BFF]/30
+                    bg-[#8F5BFF]/10
+                    flex
+                    items-center
+                    justify-center
+                    shrink-0
+                  "
+                >
+                  ✓
+                </div>
+
+                <span
+                  className="
+                    text-white/90
+                    font-medium
+                  "
+                >
+                  {item}
+                </span>
+              </div>
+            ))}
+          </div>
+
+        </div>
+                {/* TIMELINE */}
+
+        <div className="mt-24 hidden xl:flex items-center">
+
+          {steps.map((step, index) => (
+            <div
+              key={step.number}
+              className="flex items-center flex-1"
             >
               <div
                 className="
                   h-16
                   w-16
-                  rounded-2xl
-                  bg-[#8F5BFF]/10
+                  rounded-full
                   border
                   border-[#8F5BFF]/30
+                  bg-[#8F5BFF]/10
                   flex
                   items-center
                   justify-center
+                  shrink-0
                 "
               >
                 <step.icon
-                  size={28}
+                  size={26}
                   className="text-[#8F5BFF]"
                 />
               </div>
 
-              {i !== steps.length - 1 && (
-                <div
-                  className="
-                    w-24
-                    h-[2px]
-                    bg-gradient-to-r
-                    from-[#8F5BFF]
-                    to-transparent
-                  "
-                />
+              {index !== steps.length - 1 && (
+                <div className="flex-1 relative mx-4">
+
+                  <div
+                    className="
+                      absolute
+                      top-1/2
+                      left-0
+                      right-0
+                      h-[1px]
+                      -translate-y-1/2
+                      bg-gradient-to-r
+                      from-[#8F5BFF]/60
+                      via-white/10
+                      to-[#8F5BFF]/60
+                    "
+                  />
+
+                  <div
+                    className="
+                      absolute
+                      left-1/2
+                      top-1/2
+                      -translate-x-1/2
+                      -translate-y-1/2
+                      h-8
+                      w-8
+                      rounded-full
+                      bg-[#0B0D18]
+                      border
+                      border-[#8F5BFF]/20
+                      flex
+                      items-center
+                      justify-center
+                      text-[#8F5BFF]
+                      text-sm
+                    "
+                  >
+                    ✦
+                  </div>
+
+                </div>
               )}
             </div>
           ))}
+
         </div>
 
-        <div className="mt-16 grid md:grid-cols-2 xl:grid-cols-5 gap-6">
+        {/* STEPS */}
 
+        <div
+          className="
+            mt-14
+            grid
+            md:grid-cols-2
+            xl:grid-cols-5
+            gap-6
+          "
+        >
           {steps.map((step) => (
             <div
               key={step.number}
               className="
-                rounded-3xl
+                group
+                relative
+                overflow-hidden
+                rounded-[28px]
                 border
                 border-white/10
                 bg-white/5
-                p-6
                 backdrop-blur-xl
+                p-7
+                transition-all
                 hover:border-[#8F5BFF]/40
-                transition
+                hover:-translate-y-1
               "
             >
-              <div className="text-[#8F5BFF] font-black text-xl">
-                {step.number}
+              <div
+                className="
+                  absolute
+                  inset-0
+                  opacity-0
+                  group-hover:opacity-100
+                  transition
+                  bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
+                "
+              />
+
+              <div className="relative">
+
+                <div
+                  className="
+                    text-[#8F5BFF]
+                    text-lg
+                    font-black
+                  "
+                >
+                  {step.number}
+                </div>
+
+                <h3
+                  className="
+                    mt-4
+                    text-xl
+                    font-bold
+                    leading-tight
+                  "
+                >
+                  {step.title}
+                </h3>
+
+                <p
+                  className="
+                    mt-4
+                    text-white/60
+                    leading-7
+                  "
+                >
+                  {step.text}
+                </p>
+
               </div>
 
-              <h3 className="mt-4 text-xl font-bold">
-                {step.title}
-              </h3>
-
-              <p className="mt-4 text-white/60 leading-7">
-                {step.text}
-              </p>
             </div>
           ))}
         </div>
