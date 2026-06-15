@@ -115,7 +115,7 @@ export default function HowItWorksModal({
           <X size={20} />
         </button>
 
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid lg:grid-cols-2 gap-16 items-start">
 
           <div>
 
@@ -159,17 +159,21 @@ export default function HowItWorksModal({
     Всё, что нужно для роста в одном месте
   </h3>
 
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
     {[
-      "Онлайн-бронирование",
-      "Автоматический доступ",
-      "Умный робот для тренировок",
-      "Индивидуальные режимы подачи",
-      "Статистика и история занятий",
-      "Поддержка тренера при необходимости",
-      "Турниры и соревнования сообщества",
-    ].map((item) => (
+  "Онлайн-бронирование",
+  "Автоматический доступ",
+  "Умный робот для тренировок",
+
+  "Индивидуальные режимы подачи с точностью до точки",
+  "Автоматический сбор мячей",
+  "Возможность тренировки в паре либо против друг друга",
+
+  "Турниры выходного дня между живыми игроками",
+  "Статистика достижений и история занятий",
+  "Поддержка тренера при необходимости или по желанию",
+].map((item) => (
       <div
         key={item}
         className="
@@ -227,23 +231,75 @@ export default function HowItWorksModal({
 </div>
           </div>
 
-          <div>
+          <div className="relative">
 
-            <div
-              className="
-                relative
-                overflow-hidden
-                rounded-[28px]
-                border
-                border-white/10
-                bg-white/5
-              "
-            >
-              <video
-                ref={videoRef}
-                className="w-full aspect-video object-cover"
-                controls={isPlaying}
-              >
+  <div
+    className="
+      absolute
+      -inset-10
+      rounded-full
+      bg-[#8F5BFF]/20
+      blur-[120px]
+      pointer-events-none
+    "
+  />
+
+  <div
+    className="
+      relative
+      overflow-hidden
+      rounded-[28px]
+      border
+      border-white/10
+      bg-white/5
+    "
+  >
+    <video
+      ref={videoRef}
+      className="
+        w-full
+        aspect-[16/10]
+        object-cover
+      "
+      controls={isPlaying}
+    >
+      <source src="/video/how-it-works.mp4" />
+    </video>
+
+    {!isPlaying && (
+      <button
+        onClick={handlePlay}
+        className="
+          absolute
+          inset-0
+          flex
+          items-center
+          justify-center
+          bg-black/40
+        "
+      >
+        <div
+          className="
+            h-24
+            w-24
+            rounded-full
+            bg-[#8F5BFF]
+            flex
+            items-center
+            justify-center
+            shadow-[0_0_60px_rgba(143,91,255,.8)]
+          "
+        >
+          <Play
+            size={38}
+            fill="white"
+          />
+        </div>
+      </button>
+    )}
+  </div>
+
+</div>
                 <source src="/video.mp4" />
               </video>
 
