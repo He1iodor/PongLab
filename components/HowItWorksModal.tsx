@@ -78,8 +78,10 @@ if (open) {
 setVisible(true);
 setMounted(false);
 
-```
-raf1 = requestAnimationFrame(() => {
+```tsx id="fix"
+setMounted(false);
+
+let raf1 = requestAnimationFrame(() => {
   raf2 = requestAnimationFrame(() => {
     setMounted(true);
   });
