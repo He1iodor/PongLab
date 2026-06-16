@@ -67,101 +67,110 @@ export default function HowItWorksModal({
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-const [isPlaying, setIsPlaying] = useState(false);
-const [mounted, setMounted] = useState(false);
-const [visible, setVisible] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
 
-useEffect(() => {
-  let raf1 = 0;
-  let raf2 = 0;
+  useEffect(() => {
+    if (open) {
+      setVisible(true);
 
-  if (open) {
-    setVisible(true);
+      const timer = setTimeout(() => {
+        setMounted(true);
+      }, 30);
+
+      document.body.style.overflow = "hidden";
+
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          handleClose();
+        }
+      };
+
+      document.addEventListener("keydown", handleEsc);
+
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener("keydown", handleEsc);
+      };
+    }
+
     setMounted(false);
 
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        setMounted(true);
-      });
-    });
+    const closeTimer = setTimeout(() => {
+      setVisible(false);
+      document.body.style.overflow = "auto";
+    }, 700);
 
-    document.body.style.overflow = "hidden";
+    return () => clearTimeout(closeTimer);
+  }, [open]);
 
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleClose();
-      }
-    };
+  if (!visible) return null;
 
-  return () => clearTimeout(closeTimer);
-}, [open]);
-  
-if (!visible) return null;
+  const handleClose = () => {
+    setMounted(false);
 
-const handleClose = () => {
-  setMounted(false);
+    setTimeout(() => {
+      onClose();
+    }, 700);
+  };
 
-  setTimeout(() => {
-    onClose();
-  }, 700);
-};
+  const handlePlay = () => {
+    if (!videoRef.current) return;
 
-const handlePlay = () => {
-  if (!videoRef.current) return;
-
-  videoRef.current.play().catch(console.error);
-  setIsPlaying(true);
-};
+    videoRef.current.play().catch(console.error);
+    setIsPlaying(true);
+  };
 
   return (
-  <div
-    className={`
-      fixed
-      inset-0
-      z-[9999]
-      flex
-      items-center
-      justify-center
-      p-4
-      transition-all
-      duration-900
-      ease-[cubic-bezier(0.16,1,0.3,1)]
-      ${
-        mounted
-          ? "bg-black/80 backdrop-blur-xl"
-          : "bg-black/0 backdrop-blur-none"
-      }
-    `}
-    onClick={handleClose}
-  >
+    <div
+      className={`
+        fixed
+        inset-0
+        z-[9999]
+        flex
+        items-center
+        justify-center
+        p-4
+        transition-all
+        duration-700
+        ease-[cubic-bezier(0.22,1,0.36,1)]
+        ${
+          mounted
+            ? "bg-black/80 backdrop-blur-xl"
+            : "bg-black/0 backdrop-blur-none"
+        }
+      `}
+      onClick={handleClose}
+    >
       <div
         onClick={(e) => e.stopPropagation()}
         className={`
-  relative
-  w-[96%]
-  max-w-[1800px]
-  max-h-[92vh]
-  overflow-y-auto
-  rounded-[36px]
-  border
-  border-white/10
-  bg-[#0B0D18]
-  text-white
-  p-8
-  lg:p-14
-  hide-scrollbar
-  transition-all
-  duration-700
-  ease-[cubic-bezier(0.22,1,0.36,1)]
-  ${
-  mounted
-    ? "opacity-100 scale-100 translate-y-0"
-    : "opacity-0 scale-90 translate-y-20"
-}
-`}
+          relative
+          w-[96%]
+          max-w-[1800px]
+          max-h-[92vh]
+          overflow-y-auto
+          rounded-[36px]
+          border
+          border-white/10
+          bg-[#0B0D18]
+          text-white
+          p-8
+          lg:p-14
+          hide-scrollbar
+          transition-all
+          duration-700
+          ease-[cubic-bezier(0.22,1,0.36,1)]
+          ${
+            mounted
+              ? "opacity-100 scale-100 translate-y-0"
+              : "opacity-0 scale-[0.92] translate-y-16"
+          }
+        `}
       >
         <button
-  onClick={handleClose}
+          onClick={handleClose}
           className="
             group
             absolute
@@ -246,304 +255,234 @@ const handlePlay = () => {
             </p>
           </div>
 
-          <div className="relative mt-20">
+    {/* FEATURES */}
+
+    <div className="mt-14">
+      <h3
+        className="
+          text-3xl
+          lg:text-4xl
+          font-black
+          text-center
+          text-white
+          mb-8
+        "
+      >
+        Всё, что нужно для роста в одном месте
+      </h3>
+
+      <div className="grid md:grid-cols-3 gap-5">
+        {features.map((item) => (
+          <div
+            key={item}
+            className="
+              group
+              relative
+              overflow-hidden
+              flex
+              items-center
+              gap-3
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              px-5
+              py-5
+              backdrop-blur-xl
+              transition-all
+              hover:border-[#8F5BFF]/40
+              hover:-translate-y-1
+            "
+          >
             <div
               className="
                 absolute
-                -inset-12
-                rounded-full
-                bg-[#8F5BFF]/20
-                blur-[140px]
-                pointer-events-none
+                inset-0
+                opacity-0
+                group-hover:opacity-100
+                transition
+                bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
               "
             />
 
             <div
               className="
-                relative
-                overflow-hidden
-                rounded-[32px]
+                h-8
+                w-8
+                rounded-full
                 border
-                border-white/10
-                bg-white/5
+                border-[#8F5BFF]/30
+                bg-[#8F5BFF]/10
+                flex
+                items-center
+                justify-center
+                shrink-0
               "
             >
-              <video
-                ref={videoRef}
-                className="
-                  w-full
-                  max-w-full
-                  aspect-video
-                  object-cover
-                "
-                controls={isPlaying}
-              >
-                <source src="/video.mp4" />
-              </video>
-
-              {!isPlaying && (
-                <button
-                  onClick={handlePlay}
-                  className="
-                    absolute
-                    inset-0
-                    flex
-                    items-center
-                    justify-center
-                    bg-black/40
-                  "
-                >
-                  <div
-                    className="
-                      h-24
-                      w-24
-                      rounded-full
-                      bg-[#8F5BFF]
-                      flex
-                      items-center
-                      justify-center
-                      shadow-[0_0_80px_rgba(143,91,255,.9)]
-                    "
-                  >
-                    <Play
-                      size={38}
-                      fill="white"
-                    />
-                  </div>
-                </button>
-              )}
+              ✓
             </div>
+
+            <span
+              className="
+                text-white/90
+                font-medium
+              "
+            >
+              {item}
+            </span>
           </div>
-        </div>
+        ))}
+      </div>
+    </div>
+            {/* TIMELINE */}
 
-        {/* FEATURES */}
-
-        <div className="mt-14">
-          <h3
+    <div className="mt-24 hidden xl:flex items-center">
+      {steps.map((step, index) => (
+        <div
+          key={step.number}
+          className="flex items-center flex-1"
+        >
+          <div
             className="
-              text-3xl
-              lg:text-4xl
-              font-black
-              text-center
-              text-white
-              mb-8
+              h-16
+              w-16
+              rounded-full
+              border
+              border-[#8F5BFF]/30
+              bg-[#8F5BFF]/10
+              flex
+              items-center
+              justify-center
+              shrink-0
             "
           >
-            Всё, что нужно для роста в одном месте
-          </h3>
-
-          <div className="grid md:grid-cols-3 gap-5">
-            {features.map((item) => (
-              <div
-                key={item}
-                className="
-                  group
-                  relative
-                  overflow-hidden
-                  flex
-                  items-center
-                  gap-3
-                  rounded-2xl
-                  border
-                  border-white/10
-                  bg-white/5
-                  px-5
-                  py-5
-                  backdrop-blur-xl
-                  transition-all
-                  hover:border-[#8F5BFF]/40
-                  hover:-translate-y-1
-                "
-              >
-                <div
-                  className="
-                    absolute
-                    inset-0
-                    opacity-0
-                    group-hover:opacity-100
-                    transition
-                    bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
-                  "
-                />
-
-                <div
-                  className="
-                    h-8
-                    w-8
-                    rounded-full
-                    border
-                    border-[#8F5BFF]/30
-                    bg-[#8F5BFF]/10
-                    flex
-                    items-center
-                    justify-center
-                    shrink-0
-                  "
-                >
-                  ✓
-                </div>
-
-                <span
-                  className="
-                    text-white/90
-                    font-medium
-                  "
-                >
-                  {item}
-                </span>
-              </div>
-            ))}
+            <step.icon
+              size={26}
+              className="text-[#8F5BFF]"
+            />
           </div>
-        </div>
-                {/* TIMELINE */}
 
-        <div className="mt-24 hidden xl:flex items-center">
-          {steps.map((step, index) => (
-            <div
-              key={step.number}
-              className="flex items-center flex-1"
-            >
-              <div
-                className="
-                  h-16
-                  w-16
-                  rounded-full
-                  border
-                  border-[#8F5BFF]/30
-                  bg-[#8F5BFF]/10
-                  flex
-                  items-center
-                  justify-center
-                  shrink-0
-                "
-              >
-                <step.icon
-                  size={26}
-                  className="text-[#8F5BFF]"
-                />
-              </div>
-
-              {index !== steps.length - 1 && (
-                <div className="flex-1 relative mx-4">
-                  <div
-                    className="
-                      absolute
-                      top-1/2
-                      left-0
-                      right-0
-                      h-[1px]
-                      -translate-y-1/2
-                      bg-gradient-to-r
-                      from-[#8F5BFF]/60
-                      via-white/10
-                      to-[#8F5BFF]/60
-                    "
-                  />
-
-                  <div
-                    className="
-                      absolute
-                      left-1/2
-                      top-1/2
-                      -translate-x-1/2
-                      -translate-y-1/2
-                      h-8
-                      w-8
-                      rounded-full
-                      bg-[#0B0D18]
-                      border
-                      border-[#8F5BFF]/20
-                      flex
-                      items-center
-                      justify-center
-                      text-[#8F5BFF]
-                      text-sm
-                    "
-                  >
-                    ✦
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* STEPS */}
-
-        <div
-          className="
-            mt-14
-            grid
-            md:grid-cols-2
-            xl:grid-cols-5
-            gap-6
-          "
-        >
-          {steps.map((step) => (
-            <div
-              key={step.number}
-              className="
-                group
-                relative
-                overflow-hidden
-                rounded-[28px]
-                border
-                border-white/10
-                bg-white/5
-                backdrop-blur-xl
-                p-7
-                transition-all
-                hover:border-[#8F5BFF]/40
-                hover:-translate-y-1
-              "
-            >
+          {index !== steps.length - 1 && (
+            <div className="flex-1 relative mx-4">
               <div
                 className="
                   absolute
-                  inset-0
-                  opacity-0
-                  group-hover:opacity-100
-                  transition
-                  bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
+                  top-1/2
+                  left-0
+                  right-0
+                  h-[1px]
+                  -translate-y-1/2
+                  bg-gradient-to-r
+                  from-[#8F5BFF]/60
+                  via-white/10
+                  to-[#8F5BFF]/60
                 "
               />
 
-              <div className="relative">
-                <div
-                  className="
-                    text-[#8F5BFF]
-                    text-lg
-                    font-black
-                  "
-                >
-                  {step.number}
-                </div>
-
-                <h3
-                  className="
-                    mt-4
-                    text-xl
-                    font-bold
-                    leading-tight
-                  "
-                >
-                  {step.title}
-                </h3>
-
-                <p
-                  className="
-                    mt-4
-                    text-white/60
-                    leading-7
-                  "
-                >
-                  {step.text}
-                </p>
+              <div
+                className="
+                  absolute
+                  left-1/2
+                  top-1/2
+                  -translate-x-1/2
+                  -translate-y-1/2
+                  h-8
+                  w-8
+                  rounded-full
+                  bg-[#0B0D18]
+                  border
+                  border-[#8F5BFF]/20
+                  flex
+                  items-center
+                  justify-center
+                  text-[#8F5BFF]
+                  text-sm
+                "
+              >
+                ✦
               </div>
             </div>
-          ))}
+          )}
         </div>
-      </div>
+      ))}
     </div>
-  );
-}
+
+    {/* STEPS */}
+
+    <div
+      className="
+        mt-14
+        grid
+        md:grid-cols-2
+        xl:grid-cols-5
+        gap-6
+      "
+    >
+      {steps.map((step) => (
+        <div
+          key={step.number}
+          className="
+            group
+            relative
+            overflow-hidden
+            rounded-[28px]
+            border
+            border-white/10
+            bg-white/5
+            backdrop-blur-xl
+            p-7
+            transition-all
+            hover:border-[#8F5BFF]/40
+            hover:-translate-y-1
+          "
+        >
+          <div
+            className="
+              absolute
+              inset-0
+              opacity-0
+              group-hover:opacity-100
+              transition
+              bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
+            "
+          />
+
+          <div className="relative">
+            <div
+              className="
+                text-[#8F5BFF]
+                text-lg
+                font-black
+              "
+            >
+              {step.number}
+            </div>
+
+            <h3
+              className="
+                mt-4
+                text-xl
+                font-bold
+                leading-tight
+              "
+            >
+              {step.title}
+            </h3>
+
+            <p
+              className="
+                mt-4
+                text-white/60
+                leading-7
+              "
+            >
+              {step.text}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</div>
+
+);}
