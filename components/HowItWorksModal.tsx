@@ -128,30 +128,19 @@ ${
       onClick={onClose}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
-       className={`
-relative
-w-[96%]
-max-w-[1800px]
-max-h-[92vh]
-overflow-y-auto
-rounded-[36px]
-border
-border-white/10
-bg-[#0B0D18]
-text-white
-p-8
-lg:p-14
-hide-scrollbar
-transition-all
-duration-500
-${
-mounted
-  ? "opacity-100 scale-100 translate-y-0"
-  : "opacity-0 scale-95 translate-y-8"
-}
-`}
-      >
+  className="
+    fixed
+    inset-0
+    z-[9999]
+    bg-black/80
+    backdrop-blur-xl
+    flex
+    items-center
+    justify-center
+    p-4
+  "
+  onClick={onClose}
+>
         <button
           onClick={onClose}
           className="
@@ -269,16 +258,18 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
               "
             >
               <video
- className="
-w-full
-max-w-full
-aspect-video
-object-cover
- "
+  ref={videoRef}
+  className="
+    w-full
+    max-w-full
+    aspect-video
+    object-cover
+  "
+  controls={isPlaying}
 >
                 controls={isPlaying}
               >
-                <source src="/video/how-it-works.mp4" />
+                <source src="/video.mp4" />
               </video>
 
               {!isPlaying && (
@@ -319,16 +310,7 @@ object-cover
         </div>
 
         {/* FEATURES */}
-<div
-  className="
-    absolute
-    inset-0
-    opacity-0
-    group-hover:opacity-100
-    transition
-    bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
-  "
-/>
+
         <div className="mt-14">
 
           <h3
@@ -368,6 +350,16 @@ object-cover
   hover:-translate-y-1
 "
 >
+               <div
+  className="
+    absolute
+    inset-0
+    opacity-0
+    group-hover:opacity-100
+    transition
+    bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
+  "
+/>
                 <div
                   className="
                     h-8
