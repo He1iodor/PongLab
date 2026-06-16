@@ -70,9 +70,13 @@ export default function HowItWorksModal({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setTimeout(() => {
+  setMounted(true);
+}, 10);
 
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -82,6 +86,7 @@ export default function HowItWorksModal({
     document.addEventListener("keydown", handleEsc);
 
     return () => {
+      setMounted(false);
       document.body.style.overflow = "auto";
       document.removeEventListener("keydown", handleEsc);
     };
@@ -98,62 +103,89 @@ export default function HowItWorksModal({
 
   return (
     <div
-      className="
-        fixed
-        inset-0
-        z-[9999]
-        bg-black/80
-        backdrop-blur-xl
-        flex
-        items-center
-        justify-center
-        p-4
-      "
+     className={`
+relative
+w-[96%]
+max-w-[1800px]
+max-h-[92vh]
+overflow-y-auto
+rounded-[36px]
+border
+border-white/10
+bg-[#0B0D18]
+text-white
+p-8
+lg:p-14
+hide-scrollbar
+transition-all
+duration-500
+${
+  mounted
+    ? "opacity-100 scale-100 translate-y-0"
+    : "opacity-0 scale-95 translate-y-8"
+}
+`}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="
-          relative
-          w-[96%]
-          max-w-[1800px]
-          max-h-[92vh]
-          overflow-y-auto
-          rounded-[36px]
-          border
-          border-white/10
-          bg-[#0B0D18]
-          text-white
-          p-8
-          lg:p-14
-          hide-scrollbar
-        "
+       className={`
+relative
+w-[96%]
+max-w-[1800px]
+max-h-[92vh]
+overflow-y-auto
+rounded-[36px]
+border
+border-white/10
+bg-[#0B0D18]
+text-white
+p-8
+lg:p-14
+hide-scrollbar
+transition-all
+duration-500
+${
+mounted
+  ? "opacity-100 scale-100 translate-y-0"
+  : "opacity-0 scale-95 translate-y-8"
+}
+`}
       >
         <button
           onClick={onClose}
           className="
-            absolute
-            top-8
-            right-8
-            h-12
-            w-12
-            rounded-xl
-            border
-            border-white/10
-            bg-white/5
-            flex
-            items-center
-            justify-center
-            hover:bg-white/10
-            transition
-          "
+group
+absolute
+top-8
+right-8
+h-12
+w-12
+rounded-xl
+border
+border-white/10
+bg-white/5
+flex
+items-center
+justify-center
+transition-all
+hover:border-[#8F5BFF]/40
+hover:bg-white/10
+hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
+"
         >
-          <X size={20} />
+          <X
+  size={20}
+  className="
+    transition
+    group-hover:text-[#8F5BFF]
+  "
+/>
         </button>
 
         {/* HERO */}
 
-        <div className="grid lg:grid-cols-[1fr_760px] gap-20 items-start">
+        <div className="grid lg:grid-cols-[1fr_minmax(500px,700px)] gap-20 items-start">
 
           {/* LEFT */}
 
@@ -213,7 +245,7 @@ export default function HowItWorksModal({
 
           {/* VIDEO */}
 
-          <div className="relative mt-12">
+          <div className="relative mt-20">
 
             <div
               className="
@@ -237,12 +269,13 @@ export default function HowItWorksModal({
               "
             >
               <video
-                ref={videoRef}
-                className="
-                  w-full
-                  aspect-video
-                  object-cover
-                "
+ className="
+w-full
+max-w-full
+aspect-video
+object-cover
+ "
+>
                 controls={isPlaying}
               >
                 <source src="/video/how-it-works.mp4" />
@@ -296,43 +329,45 @@ export default function HowItWorksModal({
     bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
   "
 />
-        <div className="mt-20">
+        <div className="mt-14">
 
           <h3
-            className="
-              text-2xl
-              font-bold
-              text-center
-              mb-10
-            "
-          >
+ className="
+ text-3xl
+ lg:text-4xl
+ font-black
+ text-center
+ text-white
+ mb-8
+ "
+>
             Всё, что нужно для роста в одном месте
           </h3>
 
           <div className="grid md:grid-cols-3 gap-5">
 
             {features.map((item) => (
-              <div
-                key={item}
-                className="
-group
-relative
-overflow-hidden
-flex
-items-center
-gap-3
-rounded-2xl
-border
-border-white/10
-bg-white/5
-px-5
-py-5
-backdrop-blur-xl
-transition-all
-hover:border-[#8F5BFF]/40
-hover:-translate-y-1
+             <div
+  key={item}
+  className="
+  group
+  relative
+  overflow-hidden
+  flex
+  items-center
+  gap-3
+  rounded-2xl
+  border
+  border-white/10
+  bg-white/5
+  px-5
+  py-5
+  backdrop-blur-xl
+  transition-all
+  hover:border-[#8F5BFF]/40
+  hover:-translate-y-1
 "
-              >
+>
                 <div
                   className="
                     h-8
