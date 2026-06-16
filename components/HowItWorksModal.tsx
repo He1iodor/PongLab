@@ -65,15 +65,14 @@ export default function HowItWorksModal({
 open,
 onClose,
 }: Props) {
-const videoRef = useRef\<HTMLVideoElement | null>(null);
-
+const videoRef = useRef<HTMLVideoElement | null>(null);
 const [isPlaying, setIsPlaying] = useState(false);
 const [mounted, setMounted] = useState(false);
 const [visible, setVisible] = useState(false);
 
 useEffect(() => {
-let raf1 = 0;
-let raf2 = 0;
+let raf1: number = 0;
+let raf2: number = 0;
 
 if (open) {
 setVisible(true);
