@@ -33,12 +33,12 @@ export default function Hero() {
   return (
     <>
       <section
-  onMouseMove={(e) => {
-    mouse.current.x = e.clientX;
-    mouse.current.y = e.clientY;
-  }}
-  className="relative min-h-[100svh] pt-24 pb-16 overflow-x-hidden bg-[#090B18] text-white"
->
+        onMouseMove={(e) => {
+          mouse.current.x = e.clientX;
+          mouse.current.y = e.clientY;
+        }}
+        className="relative min-h-[100svh] pt-24 pb-16 overflow-hidden bg-[#090B18] text-white"
+      >
         {/* BACKGROUND PARTICLES */}
         <div className="absolute inset-0 pointer-events-none">
           <FloatingParticles />
