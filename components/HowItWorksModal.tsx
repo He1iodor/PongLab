@@ -67,82 +67,110 @@ export default function HowItWorksModal({
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [mounted, setMounted] = useState(false);
+const [isPlaying, setIsPlaying] = useState(false);
+const [mounted, setMounted] = useState(false);
+const [visible, setVisible] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
+useEffect(() => {
+  if (open) {
+    setVisible(true);
 
     const timer = setTimeout(() => {
       setMounted(true);
-    }, 10);
-
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
+    }, 30);
 
     document.body.style.overflow = "hidden";
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClose();
+      }
+    };
+
     document.addEventListener("keydown", handleEsc);
 
     return () => {
       clearTimeout(timer);
-      setMounted(false);
-      document.body.style.overflow = "auto";
       document.removeEventListener("keydown", handleEsc);
     };
-  }, [open, onClose]);
+  }
 
-  if (!open) return null;
+  setMounted(false);
 
-  const handlePlay = () => {
-    if (!videoRef.current) return;
+  const closeTimer = setTimeout(() => {
+    setVisible(false);
+    document.body.style.overflow = "auto";
+  }, 700);
 
-    videoRef.current.play().catch(console.error);
-    setIsPlaying(true);
-  };
+  return () => clearTimeout(closeTimer);
+}, [open]);
+
+if (!visible) return null;
+
+const handleClose = () => {
+  setMounted(false);
+
+  setTimeout(() => {
+    onClose();
+  }, 700);
+};
+
+const handlePlay = () => {
+  if (!videoRef.current) return;
+
+  videoRef.current.play().catch(console.error);
+  setIsPlaying(true);
+};
 
   return (
-    <div
-      className="
-        fixed
-        inset-0
-        z-[9999]
-        bg-black/80
-        backdrop-blur-xl
-        flex
-        items-center
-        justify-center
-        p-4
-      "
-      onClick={onClose}
-    >
+  <div
+    className={`
+      fixed
+      inset-0
+      z-[9999]
+      flex
+      items-center
+      justify-center
+      p-4
+      transition-all
+      duration-700
+      ease-[cubic-bezier(0.22,1,0.36,1)]
+      ${
+        mounted
+          ? "bg-black/80 backdrop-blur-xl"
+          : "bg-black/0 backdrop-blur-none"
+      }
+    `}
+    onClick={handleClose}
+  >
       <div
         onClick={(e) => e.stopPropagation()}
         className={`
-          relative
-          w-[96%]
-          max-w-[1800px]
-          max-h-[92vh]
-          overflow-y-auto
-          rounded-[36px]
-          border
-          border-white/10
-          bg-[#0B0D18]
-          text-white
-          p-8
-          lg:p-14
-          hide-scrollbar
-          transition-all
-          duration-500
-          ${
-            mounted
-              ? "opacity-100 scale-100 translate-y-0"
-              : "opacity-0 scale-95 translate-y-8"
-          }
-        `}
+  relative
+  w-[96%]
+  max-w-[1800px]
+  max-h-[92vh]
+  overflow-y-auto
+  rounded-[36px]
+  border
+  border-white/10
+  bg-[#0B0D18]
+  text-white
+  p-8
+  lg:p-14
+  hide-scrollbar
+  transition-all
+  duration-700
+  ease-[cubic-bezier(0.22,1,0.36,1)]
+  ${
+    mounted
+      ? "opacity-100 scale-100 translate-y-0"
+      : "opacity-0 scale-[0.92] translate-y-16"
+  }
+`}
       >
         <button
-          onClick={onClose}
+  onClick={handleClose}
           className="
             group
             absolute
