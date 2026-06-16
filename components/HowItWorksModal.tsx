@@ -77,8 +77,6 @@ let raf2: number = 0;
 if (open) {
 setVisible(true);
 setMounted(false);
-
-```tsx id="fix"
 setMounted(false);
 
 let raf1 = requestAnimationFrame(() => {
