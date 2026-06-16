@@ -24,10 +24,6 @@
 
 html {
   scroll-behavior: smooth;
-}
-
-html {
-  scroll-behavior: smooth;
 
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -47,7 +43,6 @@ body {
 
   cursor: url("/cursor.png") 6 6, auto;
 }
-
 /* =========================
    INTERACTIVE ELEMENTS
 ========================= */
