@@ -104,15 +104,12 @@ useEffect(() => {
 
   setMounted(false);
 
-  const closeTimer = setTimeout(() => {
-    setVisible(false);
-    document.body.style.overflow = "auto";
-  }, 700);
+const closeTimer = setTimeout(() => {
+  setVisible(false);
+  document.body.style.overflow = "auto";
+}, 700);
 
-  return () => clearTimeout(closeTimer);
-}, [open]);
-
-  return () => clearTimeout(closeTimer);
+return () => clearTimeout(closeTimer);
 }, [open]);
 
 if (!visible) return null;
