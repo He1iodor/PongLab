@@ -72,12 +72,15 @@ const [mounted, setMounted] = useState(false);
 const [visible, setVisible] = useState(false);
 
 useEffect(() => {
-  if (open) {
-    setVisible(true);
+ if (open) {
+  setVisible(true);
+  setMounted(false);
 
-    const timer = setTimeout(() => {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
       setMounted(true);
-    }, 30);
+    });
+  });
 
     document.body.style.overflow = "hidden";
 
@@ -165,7 +168,7 @@ const handlePlay = () => {
   ${
     mounted
       ? "opacity-100 scale-100 translate-y-0"
-      : "opacity-0 scale-[0.92] translate-y-16"
+      : "opacity-0 scale-[0.92] translate-y-24"
   }
 `}
       >
