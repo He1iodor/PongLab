@@ -100,7 +100,6 @@ return () => {
   cancelAnimationFrame(raf2);
   document.removeEventListener("keydown", handleEsc);
 };
-```
 
 }
 
@@ -133,7 +132,6 @@ setIsPlaying(true);
 
 return (
 
-```
     {/* HERO */}
 
     <div className="grid lg:grid-cols-[1fr_minmax(500px,700px)] gap-20 items-start">
