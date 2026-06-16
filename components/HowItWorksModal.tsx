@@ -93,8 +93,25 @@ useEffect(() => {
       }
     };
 
-if (!visible) return null;
+    document.addEventListener("keydown", handleEsc);
 
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }
+
+  setMounted(false);
+
+  const closeTimer = setTimeout(() => {
+    setVisible(false);
+    document.body.style.overflow = "auto";
+  }, 700);
+
+  return () => clearTimeout(closeTimer);
+}, [open]);
+  
 if (!visible) return null;
 
 const handleClose = () => {
@@ -123,8 +140,8 @@ const handlePlay = () => {
       justify-center
       p-4
       transition-all
-      duration-700
-      ease-[cubic-bezier(0.22,1,0.36,1)]
+      duration-900
+      ease-[cubic-bezier(0.16,1,0.3,1)]
       ${
         mounted
           ? "bg-black/80 backdrop-blur-xl"
@@ -150,9 +167,9 @@ const handlePlay = () => {
   lg:p-14
   hide-scrollbar
   transition-all
- duration-[900ms]
-ease-[cubic-bezier(0.16,1,0.3,1)]
- ${
+  duration-700
+  ease-[cubic-bezier(0.22,1,0.36,1)]
+  ${
   mounted
     ? "opacity-100 scale-100 translate-y-0"
     : "opacity-0 scale-90 translate-y-20"
