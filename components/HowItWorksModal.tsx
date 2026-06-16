@@ -93,22 +93,6 @@ useEffect(() => {
       }
     };
 
-    document.addEventListener("keydown", handleEsc);
-
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-      document.removeEventListener("keydown", handleEsc);
-    };
-  }
-
-  setMounted(false);
-
-  const closeTimer = setTimeout(() => {
-    setVisible(false);
-    document.body.style.overflow = "auto";
-  }, 700);
-
   return () => clearTimeout(closeTimer);
 }, [open]);
   
