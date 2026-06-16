@@ -72,15 +72,18 @@ const [mounted, setMounted] = useState(false);
 const [visible, setVisible] = useState(false);
 
 useEffect(() => {
- if (open) {
-  setVisible(true);
-  setMounted(false);
+  let raf1 = 0;
+  let raf2 = 0;
 
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      setMounted(true);
+  if (open) {
+    setVisible(true);
+    setMounted(false);
+
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setMounted(true);
+      });
     });
-  });
 
     document.body.style.overflow = "hidden";
 
@@ -89,6 +92,25 @@ useEffect(() => {
         handleClose();
       }
     };
+
+    document.addEventListener("keydown", handleEsc);
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }
+
+  setMounted(false);
+
+  const closeTimer = setTimeout(() => {
+    setVisible(false);
+    document.body.style.overflow = "auto";
+  }, 700);
+
+  return () => clearTimeout(closeTimer);
+}, [open]);
 
     document.addEventListener("keydown", handleEsc);
 
@@ -136,8 +158,8 @@ const handlePlay = () => {
       justify-center
       p-4
       transition-all
-      duration-700
-      ease-[cubic-bezier(0.22,1,0.36,1)]
+      duration-[900ms]
+ease-[cubic-bezier(0.16,1,0.3,1)]
       ${
         mounted
           ? "bg-black/80 backdrop-blur-xl"
@@ -163,13 +185,13 @@ const handlePlay = () => {
   lg:p-14
   hide-scrollbar
   transition-all
-  duration-700
-  ease-[cubic-bezier(0.22,1,0.36,1)]
+  duration-[900ms]
+ease-[cubic-bezier(0.16,1,0.3,1)]
   ${
-    mounted
-      ? "opacity-100 scale-100 translate-y-0"
-      : "opacity-0 scale-[0.92] translate-y-24"
-  }
+  mounted
+    ? "opacity-100 scale-100 translate-y-0"
+    : "opacity-0 scale-90 translate-y-20"
+}
 `}
       >
         <button
