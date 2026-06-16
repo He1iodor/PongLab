@@ -66,7 +66,6 @@ open,
 onClose,
 }: Props) {
 const videoRef = useRef\<HTMLVideoElement | null>(null);
-
 const [isPlaying, setIsPlaying] = useState(false);
 const [mounted, setMounted] = useState(false);
 const [visible, setVisible] = useState(false);
