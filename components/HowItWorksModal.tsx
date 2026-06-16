@@ -65,7 +65,8 @@ export default function HowItWorksModal({
 open,
 onClose,
 }: Props) {
-const videoRef = useRef<HTMLVideoElement | null>(null);
+const videoRef = useRef\<HTMLVideoElement | null>(null);
+
 const [isPlaying, setIsPlaying] = useState(false);
 const [mounted, setMounted] = useState(false);
 const [visible, setVisible] = useState(false);
@@ -78,10 +79,8 @@ if (open) {
 setVisible(true);
 setMounted(false);
 
-```tsx id="f7kq1a"
-setMounted(false);
-
-let raf1 = requestAnimationFrame(() => {
+```
+raf1 = requestAnimationFrame(() => {
   raf2 = requestAnimationFrame(() => {
     setMounted(true);
   });
