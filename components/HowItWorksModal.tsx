@@ -53,11 +53,9 @@ const features = [
   "Онлайн-бронирование",
   "Автоматический доступ",
   "Умный робот для тренировок",
-
   "Индивидуальные режимы подачи",
   "Автоматический сбор мячей",
   "Парная игра и спарринги",
-
   "Турниры выходного дня",
   "Личная статистика",
   "Поддержка тренера",
@@ -74,9 +72,10 @@ export default function HowItWorksModal({
 
   useEffect(() => {
     if (!open) return;
-    setTimeout(() => {
-  setMounted(true);
-}, 10);
+
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 10);
 
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -86,6 +85,7 @@ export default function HowItWorksModal({
     document.addEventListener("keydown", handleEsc);
 
     return () => {
+      clearTimeout(timer);
       setMounted(false);
       document.body.style.overflow = "auto";
       document.removeEventListener("keydown", handleEsc);
@@ -97,89 +97,85 @@ export default function HowItWorksModal({
   const handlePlay = () => {
     if (!videoRef.current) return;
 
-    videoRef.current.play();
+    videoRef.current.play().catch(console.error);
     setIsPlaying(true);
   };
 
   return (
     <div
-     className={`
-relative
-w-[96%]
-max-w-[1800px]
-max-h-[92vh]
-overflow-y-auto
-rounded-[36px]
-border
-border-white/10
-bg-[#0B0D18]
-text-white
-p-8
-lg:p-14
-hide-scrollbar
-transition-all
-duration-500
-${
-  mounted
-    ? "opacity-100 scale-100 translate-y-0"
-    : "opacity-0 scale-95 translate-y-8"
-}
-`}
+      className="
+        fixed
+        inset-0
+        z-[9999]
+        bg-black/80
+        backdrop-blur-xl
+        flex
+        items-center
+        justify-center
+        p-4
+      "
       onClick={onClose}
     >
       <div
-  className="
-    fixed
-    inset-0
-    z-[9999]
-    bg-black/80
-    backdrop-blur-xl
-    flex
-    items-center
-    justify-center
-    p-4
-  "
-  onClick={onClose}
->
+        onClick={(e) => e.stopPropagation()}
+        className={`
+          relative
+          w-[96%]
+          max-w-[1800px]
+          max-h-[92vh]
+          overflow-y-auto
+          rounded-[36px]
+          border
+          border-white/10
+          bg-[#0B0D18]
+          text-white
+          p-8
+          lg:p-14
+          hide-scrollbar
+          transition-all
+          duration-500
+          ${
+            mounted
+              ? "opacity-100 scale-100 translate-y-0"
+              : "opacity-0 scale-95 translate-y-8"
+          }
+        `}
+      >
         <button
           onClick={onClose}
           className="
-group
-absolute
-top-8
-right-8
-h-12
-w-12
-rounded-xl
-border
-border-white/10
-bg-white/5
-flex
-items-center
-justify-center
-transition-all
-hover:border-[#8F5BFF]/40
-hover:bg-white/10
-hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
-"
+            group
+            absolute
+            top-8
+            right-8
+            h-12
+            w-12
+            rounded-xl
+            border
+            border-white/10
+            bg-white/5
+            flex
+            items-center
+            justify-center
+            transition-all
+            hover:border-[#8F5BFF]/40
+            hover:bg-white/10
+            hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
+          "
         >
           <X
-  size={20}
-  className="
-    transition
-    group-hover:text-[#8F5BFF]
-  "
-/>
+            size={20}
+            className="
+              transition
+              group-hover:text-[#8F5BFF]
+            "
+          />
         </button>
 
         {/* HERO */}
 
         <div className="grid lg:grid-cols-[1fr_minmax(500px,700px)] gap-20 items-start">
-
-          {/* LEFT */}
-
           <div>
-
             <div
               className="
                 inline-flex
@@ -229,13 +225,9 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
               сосредоточились исключительно на игре,
               развитии техники и достижении результата.
             </p>
-
           </div>
 
-          {/* VIDEO */}
-
           <div className="relative mt-20">
-
             <div
               className="
                 absolute
@@ -258,15 +250,13 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
               "
             >
               <video
-  ref={videoRef}
-  className="
-    w-full
-    max-w-full
-    aspect-video
-    object-cover
-  "
-  controls={isPlaying}
->
+                ref={videoRef}
+                className="
+                  w-full
+                  max-w-full
+                  aspect-video
+                  object-cover
+                "
                 controls={isPlaying}
               >
                 <source src="/video.mp4" />
@@ -304,62 +294,59 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
                 </button>
               )}
             </div>
-
           </div>
-
         </div>
 
         {/* FEATURES */}
 
         <div className="mt-14">
-
           <h3
- className="
- text-3xl
- lg:text-4xl
- font-black
- text-center
- text-white
- mb-8
- "
->
+            className="
+              text-3xl
+              lg:text-4xl
+              font-black
+              text-center
+              text-white
+              mb-8
+            "
+          >
             Всё, что нужно для роста в одном месте
           </h3>
 
           <div className="grid md:grid-cols-3 gap-5">
-
             {features.map((item) => (
-             <div
-  key={item}
-  className="
-  group
-  relative
-  overflow-hidden
-  flex
-  items-center
-  gap-3
-  rounded-2xl
-  border
-  border-white/10
-  bg-white/5
-  px-5
-  py-5
-  backdrop-blur-xl
-  transition-all
-  hover:border-[#8F5BFF]/40
-  hover:-translate-y-1
-"
->
-               <div
-  className="
-    absolute
-    inset-0
-    opacity-0
-    group-hover:opacity-100
-    transition
-    bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
-  "
-/>
+              <div
+                key={item}
+                className="
+                  group
+                  relative
+                  overflow-hidden
+                  flex
+                  items-center
+                  gap-3
+                  rounded-2xl
+                  border
+                  border-white/10
+                  bg-white/5
+                  px-5
+                  py-5
+                  backdrop-blur-xl
+                  transition-all
+                  hover:border-[#8F5BFF]/40
+                  hover:-translate-y-1
+                "
+              >
+                <div
+                  className="
+                    absolute
+                    inset-0
+                    opacity-0
+                    group-hover:opacity-100
+                    transition
+                    bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
+                  "
+                />
+
                 <div
                   className="
                     h-8
@@ -388,12 +375,10 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
               </div>
             ))}
           </div>
-
         </div>
                 {/* TIMELINE */}
 
         <div className="mt-24 hidden xl:flex items-center">
-
           {steps.map((step, index) => (
             <div
               key={step.number}
@@ -421,7 +406,6 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
 
               {index !== steps.length - 1 && (
                 <div className="flex-1 relative mx-4">
-
                   <div
                     className="
                       absolute
@@ -459,12 +443,10 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
                   >
                     ✦
                   </div>
-
                 </div>
               )}
             </div>
           ))}
-
         </div>
 
         {/* STEPS */}
@@ -508,7 +490,6 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
               />
 
               <div className="relative">
-
                 <div
                   className="
                     text-[#8F5BFF]
@@ -539,13 +520,10 @@ hover:shadow-[0_0_25px_rgba(143,91,255,.25)]
                 >
                   {step.text}
                 </p>
-
               </div>
-
             </div>
           ))}
         </div>
-
       </div>
     </div>
   );
