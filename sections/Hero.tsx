@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from "react";
 export default function Hero() {
 const mouse = useRef({ x: 0, y: 0 });
 const [howItWorksOpen, setHowItWorksOpen] = useState(false);
-const glowRef = useRef\<HTMLDivElement | null>(null);
+const glowRef = useRef<HTMLDivElement | null>(null);
 
 useEffect(() => {
 let x = 0;
