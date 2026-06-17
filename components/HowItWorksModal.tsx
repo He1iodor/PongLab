@@ -71,27 +71,42 @@ const [isPlaying, setIsPlaying] = useState(false);
 const [mounted, setMounted] = useState(false);
 const [visible, setVisible] = useState(false);
 
+const handleClose = () => {
+  setMounted(false);
+
+  setTimeout(() => {
+    onClose();
+  }, 700);
+};
+
 useEffect(() => {
+  let raf1 = 0;
+  let raf2 = 0;
+
+  const handleEsc = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      handleClose();
+    }
+  };
+
   if (open) {
     setVisible(true);
+    setMounted(false);
 
-    const timer = setTimeout(() => {
-      setMounted(true);
-    }, 30);
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setMounted(true);
+      });
+    });
 
     document.body.style.overflow = "hidden";
-
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleClose();
-      }
-    };
-
     document.addEventListener("keydown", handleEsc);
 
     return () => {
-      clearTimeout(timer);
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
       document.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "auto";
     };
   }
 
@@ -106,7 +121,6 @@ useEffect(() => {
 }, [open]);
 
 if (!visible) return null;
-
 const handleClose = () => {
   setMounted(false);
 
@@ -506,16 +520,16 @@ return (
                 hover:-translate-y-1
               "
             >
-              <div
-                className="
-                  absolute
-                  inset-0
-                  opacity-0
-                  group-hover:opacity-100
-                  transition
-                  bg-[radial-gradient(circle_at_top,rgba(143,91,255,.12),transparent_70%)]
-                "
-              />
+            <div
+  className={`
+    transition-all duration-700 ease-out
+    ${
+      mounted
+        ? "translate-y-0 scale-100"
+        : "translate-y-10 scale-95"
+    }
+  `}
+>
 
               <div className="relative">
                 <div
