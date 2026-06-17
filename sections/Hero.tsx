@@ -34,14 +34,14 @@ animate();
 }, []);
 
 return (
-<>
-\<section
-onMouseMove={(e) => {
-mouse.current.x = e.clientX;
-mouse.current.y = e.clientY;
-}}
-className="relative min-h-[100svh] pt-24 pb-16 overflow-hidden bg-[#090B18] text-white"
-\>
+  <>
+    <section
+      onMouseMove={(e) => {
+        mouse.current.x = e.clientX;
+        mouse.current.y = e.clientY;
+      }}
+      className="relative min-h-[100svh] pt-24 pb-16 overflow-hidden bg-[#090B18] text-white"
+    >
 {/\* BACKGROUND PARTICLES \*/}
 
 
@@ -150,12 +150,10 @@ className="relative min-h-[100svh] pt-24 pb-16 overflow-hidden bg-[#090B18] text
     </div>
   </section>
 
-  <HowItWorksModal
-    open={howItWorksOpen}
-    onClose={() => setHowItWorksOpen(false)}
-  />
-</>
-```
-
+    <HowItWorksModal
+      open={howItWorksOpen}
+      onClose={() => setHowItWorksOpen(false)}
+    />
+  </>
 );
 } 
