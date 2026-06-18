@@ -16,7 +16,7 @@ export default function WhyPongLabModal({
 }: WhyPongLabModalProps) {
   const reduceMotion = useReducedMotion();
 
-  const backdropRef = useRef<HTMLDivElement | null>(null);
+ const backdropRef = useRef<HTMLDivElement | null>(null);;
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
