@@ -19,13 +19,13 @@ export default function WhyPongLabModal({
   const backdropRef = useRef<HTMLDivElement | null>(null);
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === backdropRef.current) {
+    if (e.target === e.currentTarget) {
       onClose();
     }
   };
 
   const handleEsc = useCallback(
-    (e: globalThis.KeyboardEvent) => {
+   (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
       }
