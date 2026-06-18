@@ -1062,6 +1062,5 @@ export default function WhyPongLabModal({
       />
 
     </div>
-
   </div>
 </section>
