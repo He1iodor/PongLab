@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import HowItWorksModal from "@/components/HowItWorksModal";
+import WhyPongLabModal from "@/components/WhyPongLabModal";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
@@ -17,6 +18,7 @@ const navItems = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -95,7 +97,36 @@ export default function Navbar() {
                   </button>
                 );
               }
+if (item.href === "/why-effective") {
+  return (
+    <button
+      key={item.href}
+      onClick={() => setWhyOpen(true)}
+      className="
+        relative group
+        text-sm text-white/70
+        transition-all duration-300
+        hover:text-white
+      "
+    >
+      {item.title}
 
+      <span
+        className="
+          absolute
+          left-0
+          -bottom-2
+          h-[2px]
+          w-0
+          bg-[#8F5BFF]
+          transition-all
+          duration-300
+          group-hover:w-full
+        "
+      />
+    </button>
+  );
+}
               return (
                 <Link
                   key={item.href}
@@ -180,7 +211,25 @@ export default function Navbar() {
                   </button>
                 );
               }
-
+if (item.href === "/why-effective") {
+  return (
+    <button
+      key={item.href}
+      onClick={() => {
+        setWhyOpen(true);
+        setMobileOpen(false);
+      }}
+      className="
+        text-left
+        text-white/70
+        hover:text-white
+        transition
+      "
+    >
+      {item.title}
+    </button>
+  );
+}
               return (
                 <Link
                   key={item.href}
@@ -201,6 +250,10 @@ export default function Navbar() {
         open={howItWorksOpen}
         onClose={() => setHowItWorksOpen(false)}
       />
+      <WhyPongLabModal
+  open={whyOpen}
+  onClose={() => setWhyOpen(false)}
+/>
     </>
   );
 }
