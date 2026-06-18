@@ -469,10 +469,10 @@ export default function WhyPongLabModal({
                     className="relative z-10 object-contain"
                   />
                 </div>
-              </section>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    );
+               </section>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
 }
