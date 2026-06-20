@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import { X, ArrowRight, Zap } from "lucide-react";
 import { useEffect, useCallback, useRef } from "react";
@@ -14,6 +14,8 @@ export default function WhyPongLabModal({
   open,
   onClose,
 }: WhyPongLabModalProps) {
+  const reduceMotion = useReducedMotion();
+
   const backdropRef = useRef<HTMLDivElement | null>(null);
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -62,7 +64,7 @@ export default function WhyPongLabModal({
             transition={{ duration: 0.45, ease: "easeOut" }}
             className="relative w-[96vw] h-[95vh] overflow-hidden rounded-[38px] border border-white/10 bg-[#090B18] shadow-[0_50px_120px_rgba(0,0,0,.75)]"
           >
-            {/* close */}
+            {/* close button */}
             <button
               onClick={onClose}
               className="absolute top-6 right-6 z-50 h-12 w-12 rounded-2xl border border-white/10 bg-white/5 backdrop-blur flex items-center justify-center hover:bg-white/10 transition"
@@ -70,18 +72,31 @@ export default function WhyPongLabModal({
               <X size={20} />
             </button>
 
-            {/* scroll */}
+            {/* scroll container */}
             <div className="h-full overflow-y-auto no-scrollbar scroll-smooth snap-y snap-mandatory">
+              
               {/* HERO */}
               <section className="relative min-h-[95vh] snap-start flex items-center px-8 md:px-20">
                 <div className="grid lg:grid-cols-2 gap-10 items-center w-full">
+
+                  {/* LEFT */}
                   <div>
-                    <div className="inline-flex items-center gap-2 px-5 py-3 rounded-full border border-[#8F5BFF]/30 bg-[#8F5BFF]/10 text-[#CDB8FF] mb-8">
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15 }}
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-full border border-[#8F5BFF]/30 bg-[#8F5BFF]/10 text-[#CDB8FF] mb-8"
+                    >
                       <Zap size={16} />
                       Почему игроки выбирают PongLab
-                    </div>
+                    </motion.div>
 
-                    <h1 className="text-6xl md:text-8xl font-black leading-[0.9] tracking-[-0.04em]">
+                    <motion.h1
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.25 }}
+                      className="text-6xl md:text-8xl font-black leading-[0.9] tracking-[-0.04em]"
+                    >
                       Тренируйся
                       <br />
                       эффективнее.
@@ -89,18 +104,31 @@ export default function WhyPongLabModal({
                       <span className="text-[#8F5BFF]">Прогрессируй</span>
                       <br />
                       быстрее.
-                    </h1>
+                    </motion.h1>
 
-                    <p className="mt-8 max-w-xl text-xl text-white/65 leading-relaxed">
+                    <motion.p
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.35 }}
+                      className="mt-8 max-w-xl text-xl text-white/65 leading-relaxed"
+                    >
                       До 10 раз больше игровых повторений за тренировку.
                       Максимум практики. Максимум контроля. Максимум прогресса.
-                    </p>
+                    </motion.p>
 
-                    <button className="mt-10 px-8 py-5 rounded-2xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] font-semibold hover:scale-105 transition-all">
-                      Узнать больше
-                    </button>
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.45 }}
+                      className="mt-10 flex items-center gap-4"
+                    >
+                      <button className="px-8 py-5 rounded-2xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] font-semibold hover:scale-105 transition-all">
+                        Узнать больше
+                      </button>
+                    </motion.div>
                   </div>
 
+                  {/* RIGHT */}
                   <div className="relative flex justify-center items-center">
                     <div className="absolute w-[600px] h-[600px] rounded-full bg-[#8F5BFF]/20 blur-[160px]" />
                     <Image
@@ -119,8 +147,7 @@ export default function WhyPongLabModal({
                 <div className="text-[140px] md:text-[320px] font-black leading-none tracking-[-0.08em] text-[#8F5BFF]">
                   10x
                 </div>
-
-                <h2 className="text-4xl md:text-7xl font-black mt-2">
+                <h2 className="text-4xl md:text-7xl font-black leading-[0.95] mt-2">
                   Больше игровых
                   <br />
                   повторений
@@ -129,26 +156,33 @@ export default function WhyPongLabModal({
 
               {/* SECTION 3 */}
               <section className="snap-start grid lg:grid-cols-2 gap-12 px-10 py-20">
-                <div className="rounded-[40px] border border-white/10 bg-white/[0.04] p-10">
-                  <Image src="/bot.png" alt="" width={700} height={700} />
+                <div className="relative">
+                  <div className="absolute inset-0 rounded-[40px] bg-[#8F5BFF]/10 blur-[100px]" />
+                  <div className="relative rounded-[40px] border border-white/10 bg-white/[0.04] overflow-hidden p-10">
+                    <Image src="/bot.png" alt="PongLab" width={700} height={700} />
+                  </div>
                 </div>
 
                 <div>
-                  <h2 className="text-5xl md:text-7xl font-black">
+                  <h2 className="text-5xl md:text-7xl font-black leading-[0.95]">
                     Отрабатывайте
                     <br />
-                    именно то, что хотите
+                    именно то,
+                    <br />
+                    что хотите
                   </h2>
                 </div>
               </section>
 
               {/* SECTION 4 */}
               <section className="snap-start text-center py-20">
-                <div className="text-[120px] md:text-[260px] font-black">
+                <div className="text-[120px] md:text-[260px] font-black leading-none tracking-[-0.08em] text-white">
                   1000+
                 </div>
                 <h2 className="text-4xl md:text-7xl font-black mt-4">
-                  ударов за тренировку
+                  ударов
+                  <br />
+                  за тренировку
                 </h2>
               </section>
 
@@ -176,9 +210,15 @@ export default function WhyPongLabModal({
 
               {/* SECTION 7 */}
               <section className="snap-start text-center py-20">
-                <Image src="/logo.png" alt="" width={140} height={140} className="mx-auto mb-10" />
+                <Image
+                  src="/logo.png"
+                  alt="PongLab"
+                  width={140}
+                  height={140}
+                  className="mx-auto mb-10"
+                />
 
-                <h2 className="text-5xl md:text-8xl font-black">
+                <h2 className="text-5xl md:text-8xl font-black leading-[0.9]">
                   Каждая тренировка приближает вас к новому уровню
                 </h2>
               </section>
@@ -186,8 +226,10 @@ export default function WhyPongLabModal({
               {/* SECTION 8 */}
               <section className="snap-start grid lg:grid-cols-2 gap-12 px-10 py-20">
                 <div>
-                  <h2 className="text-5xl md:text-7xl font-black">
-                    Готовы начать?
+                  <h2 className="text-5xl md:text-7xl font-black leading-[0.95]">
+                    Готовы
+                    <br />
+                    начать?
                   </h2>
 
                   <button
@@ -199,8 +241,12 @@ export default function WhyPongLabModal({
                   </button>
                 </div>
 
-                <div />
+                <div className="relative flex items-center justify-center">
+                  <div className="absolute w-[600px] h-[600px] rounded-full bg-[#8F5BFF]/20 blur-[180px]" />
+                  <Image src="/bot.png" alt="PongLab Robot" width={850} height={850} />
+                </div>
               </section>
+
             </div>
           </motion.div>
         )}
