@@ -27,9 +27,7 @@ export default function WhyPongLabModal({
   const backdropRef = useRef<HTMLDivElement | null>(null);
 
   const handleBackdropClick = (e: MouseEvent) => {
-    if (e.target === backdropRef.current) {
-      onClose();
-    }
+    if (e.target === backdropRef.current) onClose();
   };
 
   const handleEsc = useCallback(
@@ -60,20 +58,25 @@ export default function WhyPongLabModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-md flex items-center justify-center p-3 md:p-6"
+          className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 md:p-6"
         >
           <motion.div
             initial={{
               opacity: 0,
               scale: reduceMotion ? 1 : 0.96,
-              y: reduceMotion ? 0 : 20,
+              y: reduceMotion ? 0 : 30,
             }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-            className="relative w-full max-w-[1700px] h-[94vh] rounded-[32px] border border-white/10 bg-[#0B1020] overflow-hidden shadow-[0_40px_120px_rgba(0,0,0,0.6)]"
+            transition={{ duration: 0.35 }}
+            className="relative w-full max-w-[1700px] h-[94vh] rounded-[36px] border border-white/10 bg-[#070A14] overflow-hidden shadow-[0_60px_180px_rgba(0,0,0,0.8)]"
           >
+            {/* GLOW BACKGROUND */}
+            <div className="absolute inset-0">
+              <div className="absolute w-[700px] h-[700px] bg-[#8F5BFF]/20 blur-[180px] top-[-200px] left-[-200px]" />
+              <div className="absolute w-[600px] h-[600px] bg-green-400/10 blur-[180px] bottom-[-200px] right-[-200px]" />
+            </div>
+
             {/* CLOSE */}
             <button
               onClick={onClose}
@@ -83,163 +86,174 @@ export default function WhyPongLabModal({
             </button>
 
             {/* SCROLL */}
-            <div className="h-full overflow-y-auto snap-y snap-mandatory no-scrollbar scroll-smooth">
+            <div className="relative h-full overflow-y-auto snap-y snap-mandatory scroll-smooth no-scrollbar">
 
-              {/* SECTION 1 */}
-              <section className="min-h-[92vh] snap-start px-8 md:px-14 py-16 flex items-center">
-                <div className="grid lg:grid-cols-2 gap-16 items-center w-full">
+              {/* ========== SECTION 1 HERO ========== */}
+              <section className="min-h-[92vh] snap-start flex items-center px-10 md:px-20">
+                <div className="grid lg:grid-cols-2 gap-16 w-full items-center">
+
                   <div>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#8F5BFF]/30 bg-[#8F5BFF]/10 text-[#CDB8FF] text-sm mb-6">
+                    <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-[#8F5BFF]/10 border border-[#8F5BFF]/30 text-[#CDB8FF] mb-8">
                       <Zap size={16} />
-                      Почему игроки выбирают PongLab
+                      PongLab AI Training System
                     </div>
 
-                    <h2 className="text-5xl md:text-7xl font-black leading-[0.95] text-white">
+                    <h1 className="text-6xl md:text-8xl font-black leading-[0.9] text-white">
                       Тренируйся
                       <br />
-                      эффективнее.
+                      <span className="text-[#8F5BFF]">умнее</span>.
                       <br />
-                      <span className="text-[#8F5BFF]">Прогрессируй</span>
+                      Бей
                       <br />
                       быстрее.
-                    </h2>
+                    </h1>
 
-                    <p className="mt-8 text-lg md:text-xl text-white/70 max-w-xl">
-                      До 10 раз больше игровых повторений за тренировку.
-                      Максимум практики. Максимум контроля. Максимум прогресса.
+                    <p className="mt-8 text-xl text-white/70 max-w-xl">
+                      Робот, который превращает каждую тренировку в поток повторений без пауз и потерь времени.
                     </p>
+
+                    <div className="mt-10 flex gap-4">
+                      <div className="px-5 py-4 rounded-2xl bg-white/5 border border-white/10">
+                        <div className="text-3xl text-[#8F5BFF] font-black">10x</div>
+                        <div className="text-white/60 text-sm">больше ударов</div>
+                      </div>
+
+                      <div className="px-5 py-4 rounded-2xl bg-white/5 border border-white/10">
+                        <div className="text-3xl text-[#8F5BFF] font-black">24/7</div>
+                        <div className="text-white/60 text-sm">доступ</div>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="relative flex justify-center">
-                    <div className="absolute w-[450px] h-[450px] rounded-full bg-[#8F5BFF]/20 blur-[140px]" />
-                    <div className="relative bg-white/5 border border-white/10 rounded-[32px] p-10 backdrop-blur-xl">
-                      <Image src="/bot.png" alt="robot" width={520} height={520} />
+                    <div className="absolute w-[500px] h-[500px] bg-[#8F5BFF]/20 blur-[160px]" />
+                    <Image src="/bot.png" alt="robot" width={520} height={520} className="relative z-10" />
+                  </div>
+
+                </div>
+              </section>
+
+              {/* ========== SECTION 2 PROBLEM VS SOLUTION ========== */}
+              <section className="min-h-[88vh] snap-start px-10 md:px-20 flex items-center">
+                <div className="grid lg:grid-cols-2 gap-10 w-full">
+
+                  <div className="p-10 rounded-3xl border border-white/10 bg-white/5">
+                    <h3 className="text-2xl text-white mb-6">Обычная тренировка</h3>
+                    <div className="space-y-3 text-white/60">
+                      <div>Паузы</div>
+                      <div>Ожидание подачи</div>
+                      <div>Мало повторений</div>
                     </div>
                   </div>
-                </div>
-              </section>
 
-              {/* SECTION 2 */}
-              <section className="min-h-[88vh] snap-start px-8 md:px-14 py-16 flex items-center">
-                <div>
-                  <h3 className="text-4xl md:text-6xl font-black text-white">
-                    Больше практики.
-                    <br />
-                    Меньше ожидания.
-                  </h3>
-                </div>
-              </section>
-
-              {/* SECTION 3 */}
-              <section className="min-h-[88vh] snap-start px-8 md:px-14 py-16 flex items-center">
-                <div>
-                  <h3 className="text-4xl md:text-6xl font-black text-white">
-                    Отрабатывайте
-                    <br />
-                    именно то, что хотите
-                  </h3>
-                </div>
-              </section>
-
-              {/* SECTION 4 */}
-              <section className="min-h-[88vh] snap-start px-8 md:px-14 py-16 flex items-center justify-center">
-                <div className="text-center text-white">
-                  <div className="text-[110px] md:text-[220px] font-black text-[#8F5BFF]">
-                    1000+
+                  <div className="p-10 rounded-3xl border border-[#8F5BFF]/30 bg-[#8F5BFF]/10">
+                    <h3 className="text-2xl text-white mb-6">PongLab</h3>
+                    <div className="space-y-3 text-white">
+                      <div>Непрерывная подача</div>
+                      <div>Поток ударов</div>
+                      <div>Максимум повторений</div>
+                    </div>
                   </div>
-                  <h3 className="text-4xl md:text-6xl font-black">
-                    ударов за тренировку
-                  </h3>
+
                 </div>
               </section>
 
-              {/* SECTION 5 */}
-              <section className="min-h-[88vh] snap-start px-8 md:px-14 py-16 flex items-center justify-center">
-                <div className="text-center max-w-4xl">
-                  <Clock3 className="mx-auto mb-6 text-[#8F5BFF]" size={40} />
+              {/* ========== SECTION 3 PRECISION ========== */}
+              <section className="min-h-[88vh] snap-start px-10 md:px-20 flex items-center">
+                <div className="grid lg:grid-cols-2 gap-12 w-full">
 
-                  <h3 className="text-5xl md:text-6xl font-black text-white">
-                    Тренируйтесь когда удобно
-                  </h3>
-
-                  <p className="mt-6 text-white/70">
-                    Без расписаний. Без ожиданий. Полный контроль времени.
-                  </p>
-                </div>
-              </section>
-
-              {/* SECTION 6 */}
-              <section className="min-h-[88vh] snap-start px-8 md:px-14 py-16 flex items-center">
-                <div className="grid lg:grid-cols-2 gap-10 w-full">
-                  <div className="space-y-4">
-                    <h3 className="text-5xl font-black text-white">
-                      PongLab — больше чем робот
+                  <div>
+                    <h3 className="text-5xl font-black text-white leading-tight">
+                      Идеальная
+                      <br />
+                      повторяемость
                     </h3>
 
-                    <p className="text-white/70">
-                      Статистика, режимы и контроль прогресса.
+                    <p className="mt-6 text-white/70">
+                      Один сценарий можно повторить сотни раз без отклонений.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-white">
-                    <div className="bg-white/5 p-6 rounded-2xl">
-                      <BarChart3 className="text-[#8F5BFF]" />
-                      Статистика
-                    </div>
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-[#8F5BFF]/10 blur-[120px]" />
+                    <Image src="/bot.png" alt="robot" width={420} height={420} />
+                  </div>
 
-                    <div className="bg-white/5 p-6 rounded-2xl">
-                      <Brain className="text-[#8F5BFF]" />
-                      Режимы
-                    </div>
+                </div>
+              </section>
 
-                    <div className="bg-white/5 p-6 rounded-2xl">
-                      <Trophy className="text-[#8F5BFF]" />
-                      Турниры
-                    </div>
-
-                    <div className="bg-white/5 p-6 rounded-2xl">
-                      <Zap className="text-[#8F5BFF]" />
-                      Аналитика
-                    </div>
+              {/* ========== SECTION 4 IMPACT NUMBER ========== */}
+              <section className="min-h-[88vh] snap-start flex items-center justify-center text-center">
+                <div>
+                  <div className="text-[160px] md:text-[260px] font-black text-[#8F5BFF] leading-none">
+                    1000+
+                  </div>
+                  <div className="text-4xl md:text-6xl font-black text-white">
+                    ударов за тренировку
                   </div>
                 </div>
               </section>
 
-              {/* SECTION 7 */}
-              <section className="min-h-[88vh] snap-start px-8 md:px-14 py-16 flex items-center">
-                <div className="text-center max-w-4xl mx-auto">
+              {/* ========== SECTION 5 TIME CONTROL ========== */}
+              <section className="min-h-[88vh] snap-start flex items-center justify-center text-center px-10">
+                <div>
+                  <Clock3 className="mx-auto mb-6 text-[#8F5BFF]" size={48} />
                   <h3 className="text-5xl font-black text-white">
-                    PongLab + тренер = максимум прогресса
+                    Тренируйся когда хочешь
                   </h3>
+                </div>
+              </section>
 
+              {/* ========== SECTION 6 PLATFORM ========== */}
+              <section className="min-h-[88vh] snap-start px-10 md:px-20 flex items-center">
+                <div className="grid grid-cols-2 gap-6 w-full text-white">
+
+                  {[BarChart3, Brain, Trophy, Zap].map((Icon, i) => (
+                    <div key={i} className="p-8 rounded-2xl bg-white/5 border border-white/10">
+                      <Icon className="text-[#8F5BFF] mb-4" />
+                      Feature {i + 1}
+                    </div>
+                  ))}
+
+                </div>
+              </section>
+
+              {/* ========== SECTION 7 COMPARISON ========== */}
+              <section className="min-h-[88vh] snap-start flex items-center justify-center px-10">
+                <div className="text-center text-white max-w-3xl">
+                  <h3 className="text-5xl font-black">
+                    PongLab + тренер
+                  </h3>
                   <p className="mt-6 text-white/70">
-                    Самостоятельная практика усиливает работу тренера.
+                    Вместе дают максимальный результат.
                   </p>
                 </div>
               </section>
 
-              {/* SECTION 8 */}
-              <section className="min-h-[90vh] snap-start px-8 md:px-14 py-16 flex items-center">
-                <div className="w-full rounded-[40px] border border-[#8F5BFF]/20 bg-gradient-to-br from-[#8F5BFF]/15 to-transparent p-10 md:p-20">
-                  <div className="grid lg:grid-cols-2 gap-10 items-center">
-                    <div>
-                      <h3 className="text-5xl md:text-7xl font-black text-white leading-none">
-                        Готовы начать новый уровень?
-                      </h3>
-                    </div>
+              {/* ========== SECTION 8 CTA ========== */}
+              <section className="min-h-[90vh] snap-start flex items-center px-10 md:px-20">
+                <div className="w-full rounded-[40px] border border-[#8F5BFF]/20 bg-gradient-to-br from-[#8F5BFF]/15 to-transparent p-10 md:p-20 grid lg:grid-cols-2 gap-10 items-center">
 
-                    <div className="flex flex-col items-center">
-                      <Image src="/bot.png" alt="robot" width={420} height={420} />
-
-                      <button
-                        onClick={onClose}
-                        className="mt-8 inline-flex items-center gap-3 px-8 py-5 rounded-2xl bg-[#8F5BFF] text-white font-semibold"
-                      >
-                        Выбрать тариф
-                        <ArrowRight size={18} />
-                      </button>
-                    </div>
+                  <div>
+                    <h3 className="text-6xl font-black text-white leading-tight">
+                      Готов начать
+                      <br />
+                      новый уровень?
+                    </h3>
                   </div>
+
+                  <div className="flex flex-col items-center">
+                    <Image src="/bot.png" alt="robot" width={420} height={420} />
+
+                    <button
+                      onClick={onClose}
+                      className="mt-8 px-8 py-5 rounded-2xl bg-[#8F5BFF] text-white font-semibold flex items-center gap-3"
+                    >
+                      Выбрать тариф
+                      <ArrowRight size={18} />
+                    </button>
+                  </div>
+
                 </div>
               </section>
 
