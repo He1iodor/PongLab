@@ -1,4 +1,36 @@
-return (
+"use client";
+
+import { useEffect } from "react";
+import { X } from "lucide-react";
+
+type Props = {
+  open: boolean;
+  onClose: () => void;
+};
+
+export default function EffectivenessModal({
+  open,
+  onClose,
+}: Props) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleEsc);
+
+    return () => {
+      document.body.style.overflow = "auto";
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+  
+  return (
   <div
     className="
       fixed inset-0
