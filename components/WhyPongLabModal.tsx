@@ -65,9 +65,132 @@ export default function WhyEffectiveModal({
           <X size={20} />
         </button>
 
-        <div className="p-12">
-          TEST
+        <div className="p-0">
+
+  {/* HERO */}
+
+  <section className="relative overflow-hidden border-b border-white/10">
+
+    <div
+      className="
+        absolute
+        inset-0
+        bg-gradient-to-r
+        from-black/80
+        via-black/40
+        to-black/70
+        z-10
+      "
+    />
+
+    <div
+      className="
+        absolute
+        inset-0
+        bg-[radial-gradient(circle_at_center,rgba(140,255,0,0.08),transparent_60%)]
+        z-10
+      "
+    />
+
+    <img
+      src="/efficiency-hero.jpg"
+      alt=""
+      className="
+        absolute
+        inset-0
+        w-full
+        h-full
+        object-cover
+      "
+    />
+
+    <div
+      className="
+        relative
+        z-20
+        px-16
+        py-20
+      "
+    >
+
+      <div className="max-w-[900px]">
+
+        <div
+          className="
+            text-[#B9FF45]
+            font-black
+            text-6xl
+            leading-none
+          "
+        >
+          ДО 10 РАЗ БОЛЬШЕ
         </div>
+
+        <div
+          className="
+            mt-2
+            text-white
+            font-black
+            text-6xl
+            leading-tight
+          "
+        >
+          ИГРОВЫХ ПОВТОРЕНИЙ
+          <br />
+          ЗА ТРЕНИРОВКУ
+        </div>
+
+        <p
+          className="
+            mt-8
+            max-w-[700px]
+            text-xl
+            text-white/80
+            leading-9
+          "
+        >
+          Каждая подача превращается в возможность
+          отработать технику, скорость реакции
+          и стабильность без пауз и ожидания.
+        </p>
+
+      </div>
+
+    </div>
+
+  </section>
+
+  {/* SECTION 1 */}
+
+  <section className="min-h-[500px]">
+  </section>
+
+  {/* SECTION 2 */}
+
+  <section className="min-h-[500px]">
+  </section>
+
+  {/* SECTION 3 */}
+
+  <section className="min-h-[500px]">
+  </section>
+
+  {/* SECTION 4 */}
+
+  <section className="min-h-[500px]">
+  </section>
+
+  {/* SECTION 5 */}
+
+  <section className="min-h-[500px]">
+  </section>
+
+  {/* SECTION 6 */}
+
+  <section className="min-h-[500px]">
+  </section>
+
+</div>
       </div>
     </div>
   );
