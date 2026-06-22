@@ -42,19 +42,62 @@ export default function EffectivenessModal({
       "
     >
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="
-          relative
-          w-[98%]
-          max-w-[1700px]
-          h-[92vh]
-          overflow-y-auto
-          rounded-[32px]
-          border border-white/10
-          bg-[#090B18]
-          text-white
-        "
-      >
+  className="
+    relative
+        {/* PURPLE GLOW */}
+<div
+  className="
+    absolute
+    top-0
+    left-1/2
+    -translate-x-1/2
+
+    w-[900px]
+    h-[900px]
+
+    rounded-full
+    bg-[#8F5BFF]/15
+    blur-[180px]
+
+    pointer-events-none
+  "
+/>
+
+{/* BLUE GLOW */}
+<div
+  className="
+    absolute
+    bottom-0
+    right-0
+
+    w-[600px]
+    h-[600px]
+
+    rounded-full
+    bg-[#4A7DFF]/10
+    blur-[150px]
+
+    pointer-events-none
+  "
+/>
+    w-[96%]
+    max-w-[1800px]
+    max-h-[92vh]
+    overflow-y-auto
+    rounded-[32px]
+    bg-[#0B0D18]
+    border border-white/10
+    text-white
+
+    pt-20
+    px-8
+    pb-10
+
+    lg:pt-24
+    lg:px-14
+    lg:pb-14
+  "
+>
         {/* Фиолетовое свечение как в Hero */}
         <div
           className="
@@ -97,7 +140,7 @@ export default function EffectivenessModal({
         </button>
 
         {/* Контент будем добавлять позже */}
-        <div className="relative z-10 p-8 lg:p-14">
+        <div className="relative z-10 grid lg:grid-cols-2 gap-16 items-start">
 
           <div
             className="
