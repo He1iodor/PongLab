@@ -168,7 +168,7 @@ export default function Hero() {
             />
 
             <Image
-              src="/robot.png"
+              src="/why-ponglab/hero-bg.png"
               alt="Robot"
               width={620}
               height={760}
