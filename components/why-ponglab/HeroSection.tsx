@@ -50,12 +50,20 @@ export default function HeroSection() {
 
           {/* LEFT */}
 
-          <motion.div
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            className="flex flex-col justify-center px-14 py-20 xl:px-24"
-          >
+        <motion.div
+  initial={{
+    opacity: 0,
+    y: 40,
+  }}
+  animate={{
+    opacity: 1,
+    y: 0,
+  }}
+  transition={{
+    duration: 0.8,
+  }}
+  className="flex flex-col justify-center px-14 py-20 xl:px-24"
+>
 
             <span className="inline-flex w-fit rounded-full border border-[#6B30CE]/40 bg-[#6B30CE]/10 px-5 py-2 text-sm tracking-[0.18em] uppercase text-[#C9AEFF]">
 
