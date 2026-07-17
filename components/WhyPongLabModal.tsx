@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { X } from "lucide-react";
-import HeroSection from "./why-ponglab/HeroSection";
 
 type Props = {
   open: boolean;
@@ -139,9 +138,9 @@ export default function EffectivenessModal({
         </button>
 
         {/* Content */}
-        <div className="relative z-10">
-          <HeroSection />
-        </div>
+       <div className="relative z-10">
+    <WhyPongLab />
+</div>
       </div>
     </div>
   );
