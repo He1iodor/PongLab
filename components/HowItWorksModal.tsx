@@ -70,62 +70,55 @@ export default function HowItWorksModal({
 
   const [isPlaying, setIsPlaying] = useState(false);
   useEffect(() => {
-    if (!open) return;
+  if (!open) return;
 
-
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleEsc);
-
-    return () => {
-      document.body.style.overflow = "auto";
-      document.removeEventListener("keydown", handleEsc);
-    };
-  }, [open, onClose]);
-
-
-  const handlePlay = () => {
-    if (!videoRef.current) return;
-
-    videoRef.current.play().catch(console.error);
-    setIsPlaying(true);
+  const handleEsc = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      onClose();
+    }
   };
 
+  document.body.style.overflow = "hidden";
+  document.addEventListener("keydown", handleEsc);
+
+  return () => {
+    document.body.style.overflow = "auto";
+    document.removeEventListener("keydown", handleEsc);
+  };
+}, [open, onClose]);
+
+const handlePlay = () => {
+  if (!videoRef.current) return;
+
+  videoRef.current.play().catch(console.error);
+  setIsPlaying(true);
+};
 return (
   <AnimatePresence>
     {open && (
       <motion.div
-  key="how-it-works-modal"
-  initial={{
-    opacity: 0,
-  }}
-  animate={{
-    opacity: 1,
-  }}
-  exit={{
-    opacity: 0,
-  }}
-  transition={{
-    duration: 0.35,
-    ease: "easeInOut",
-  }}
-      className="
-        fixed
-        inset-0
-        z-[9999]
-        bg-black/80
-        backdrop-blur-xl
-        flex
-        items-center
-        justify-center
-        p-4
-      "
-      onClick={onClose}
-    >
-     <motion.div
+        key="how-it-works-modal"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{
+          duration: 0.35,
+          ease: "easeInOut",
+        }}
+        className="
+          fixed
+          inset-0
+          z-[9999]
+          bg-black/80
+          backdrop-blur-xl
+          flex
+          items-center
+          justify-center
+          p-4
+        "
+        onClick={onClose}
+      >
+   <motion.div
   onClick={(e) => e.stopPropagation()}
   initial={{
     opacity: 0,
@@ -146,24 +139,22 @@ return (
     duration: 0.4,
     ease: "easeOut",
   }}
-        className={`
-          relative
-          w-[96%]
-          max-w-[1800px]
-          max-h-[92vh]
-          overflow-y-auto
-          rounded-[36px]
-          border
-          border-white/10
-          bg-[#0B0D18]
-          text-white
-          p-8
-          lg:p-14
-          hide-scrollbar
-          transition-all
-          duration-500
-        `}
-      >
+  className="
+    relative
+    w-[96%]
+    max-w-[1800px]
+    max-h-[92vh]
+    overflow-y-auto
+    rounded-[36px]
+    border
+    border-white/10
+    bg-[#0B0D18]
+    text-white
+    p-8
+    lg:p-14
+    hide-scrollbar
+  "
+>
         <button
           onClick={onClose}
           className="
@@ -548,7 +539,7 @@ return (
           ))}
         </div>
       </div>
-    </motion.div>
+      </motion.div>
     )}
   </AnimatePresence>
 );
