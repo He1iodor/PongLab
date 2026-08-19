@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   X,
   Play,
@@ -68,14 +69,9 @@ export default function HowItWorksModal({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
     if (!open) return;
 
-    const timer = setTimeout(() => {
-      setMounted(true);
-    }, 10);
 
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -85,14 +81,11 @@ export default function HowItWorksModal({
     document.addEventListener("keydown", handleEsc);
 
     return () => {
-      clearTimeout(timer);
-      setMounted(false);
       document.body.style.overflow = "auto";
       document.removeEventListener("keydown", handleEsc);
     };
   }, [open, onClose]);
 
-  if (!open) return null;
 
   const handlePlay = () => {
     if (!videoRef.current) return;
@@ -101,8 +94,24 @@ export default function HowItWorksModal({
     setIsPlaying(true);
   };
 
-  return (
-    <div
+return (
+  <AnimatePresence>
+    {open && (
+      <motion.div
+  key="how-it-works-modal"
+  initial={{
+    opacity: 0,
+  }}
+  animate={{
+    opacity: 1,
+  }}
+  exit={{
+    opacity: 0,
+  }}
+  transition={{
+    duration: 0.35,
+    ease: "easeInOut",
+  }}
       className="
         fixed
         inset-0
@@ -116,8 +125,27 @@ export default function HowItWorksModal({
       "
       onClick={onClose}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
+     <motion.div
+  onClick={(e) => e.stopPropagation()}
+  initial={{
+    opacity: 0,
+    scale: 0.94,
+    y: 30,
+  }}
+  animate={{
+    opacity: 1,
+    scale: 1,
+    y: 0,
+  }}
+  exit={{
+    opacity: 0,
+    scale: 0.96,
+    y: 20,
+  }}
+  transition={{
+    duration: 0.4,
+    ease: "easeOut",
+  }}
         className={`
           relative
           w-[96%]
@@ -134,11 +162,6 @@ export default function HowItWorksModal({
           hide-scrollbar
           transition-all
           duration-500
-          ${
-            mounted
-              ? "opacity-100 scale-100 translate-y-0"
-              : "opacity-0 scale-95 translate-y-8"
-          }
         `}
       >
         <button
@@ -525,6 +548,8 @@ export default function HowItWorksModal({
           ))}
         </div>
       </div>
-    </div>
-  );
+    </motion.div>
+    )}
+  </AnimatePresence>
+);
 }
