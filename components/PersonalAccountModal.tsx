@@ -78,19 +78,17 @@ export default function PersonalAccountModal({
   // Только 10 цифр после фиксированного +7.
 
 
+
 const handlePhoneChange = (value: string) => {
   const trimmed = value.trim();
   let digits = value.replace(/\D/g, "");
 
-  if (trimmed.startsWith("+")) {
-    // Например: +79991555822 → 9991555822
-    digits = digits.slice(2);
+  if (trimmed.startsWith("+7")) {
+    digits = digits.slice(1);
   } else if (trimmed.startsWith("8")) {
-    // Например: 89991555822 → 9991555822
     digits = digits.slice(1);
   }
 
-  // Ограничиваем длину после удаления префикса.
   setPhoneDigits(digits.slice(0, 10));
 };
 
