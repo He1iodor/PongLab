@@ -149,6 +149,13 @@ export async function POST(request: NextRequest) {
     }
 
     const smsResult = await smsResponse.json();
+    console.log("SMS.RU callcheck/add diagnostic:", {
+  status: smsResult.status,
+  status_code: smsResult.status_code,
+  check_id: smsResult.check_id,
+  call_phone: smsResult.call_phone,
+  status_text: smsResult.status_text,
+});
 
     if (
       smsResult.status !== "OK" ||
