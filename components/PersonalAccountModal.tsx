@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { X, Phone } from "lucide-react";
 
 type PersonalAccountModalProps = {
   open: boolean;
@@ -18,7 +19,7 @@ export default function PersonalAccountModal({
   const [visible, setVisible] = useState(false);
   const [phoneDigits, setPhoneDigits] = useState("");
 
-  // Плавное появление и схлопывание окна.
+  // Плавное открытие и закрытие.
   useEffect(() => {
     let frame1 = 0;
     let frame2 = 0;
@@ -43,14 +44,11 @@ export default function PersonalAccountModal({
     return () => {
       cancelAnimationFrame(frame1);
       cancelAnimationFrame(frame2);
-
-      if (timer) {
-        clearTimeout(timer);
-      }
+      if (timer) clearTimeout(timer);
     };
   }, [open]);
 
-  // Запрет прокрутки страницы, пока окно открыто.
+  // Блокируем прокрутку страницы, пока модальное окно открыто.
   useEffect(() => {
     if (!mounted) return;
 
@@ -77,12 +75,11 @@ export default function PersonalAccountModal({
     };
   }, [mounted, onClose]);
 
-  // Разрешаем вводить только 10 цифр.
-  // Если пользователь вставил номер целиком с +7 или 8,
-  // автоматически убираем код страны/первую цифру.
+  // Только 10 цифр после фиксированного +7.
   const handlePhoneChange = (value: string) => {
     let digits = value.replace(/\D/g, "");
 
+    // Обрабатываем вставку российского номера целиком.
     if (
       digits.length > 10 &&
       (digits.startsWith("7") || digits.startsWith("8"))
@@ -99,47 +96,32 @@ export default function PersonalAccountModal({
 
   return (
     <div
-      className={[
-        "fixed inset-0 z-[100] flex items-center justify-center",
-        "p-4",
-        "transition-[visibility] duration-500",
-        visible ? "visible" : "invisible",
-      ].join(" ")}
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-[visibility] duration-500 ${
+        visible ? "visible" : "invisible"
+      }`}
       aria-hidden={!visible}
     >
-      {/* Затемнение фона */}
+      {/* Затемнённый фон */}
       <button
         type="button"
         aria-label="Закрыть окно"
         tabIndex={visible ? 0 : -1}
         onClick={onClose}
-        className={[
-          "absolute inset-0 h-full w-full cursor-default",
-          "bg-black/60 backdrop-blur-[3px]",
-          "transition-opacity duration-500",
-          "[transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
-          "motion-reduce:transition-none",
-          visible ? "opacity-100" : "opacity-0",
-        ].join(" ")}
+        className={`absolute inset-0 h-full w-full cursor-default bg-black/60 backdrop-blur-sm transition-opacity duration-500 motion-reduce:transition-none ${
+          visible ? "opacity-100" : "opacity-0"
+        }`}
       />
 
-      {/* Само окно */}
-      <section
+      {/* Модальное окно */}
+      <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="personal-account-title"
-        className={[
-          "relative z-10 w-full max-w-md",
-          "rounded-2xl border border-white/10",
-          "bg-[#111111] p-7 text-white shadow-2xl sm:p-9",
-          "transform-gpu will-change-[opacity,transform]",
-          "transition-[opacity,transform] duration-500",
-          "[transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
-          "motion-reduce:transition-none",
+        className={`relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-[#0D1022] p-7 text-white shadow-2xl transition-[opacity,transform] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:p-9 ${
           visible
             ? "translate-y-0 scale-100 opacity-100"
-            : "translate-y-6 scale-[0.94] opacity-0",
-        ].join(" ")}
+            : "translate-y-8 scale-[0.88] opacity-0"
+        }`}
       >
         {/* Кнопка закрытия */}
         <button
@@ -147,25 +129,31 @@ export default function PersonalAccountModal({
           onClick={onClose}
           aria-label="Закрыть"
           tabIndex={visible ? 0 : -1}
-          className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/60 transition-colors duration-200 hover:bg-white/10 hover:text-white"
+          className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
         >
-          ×
+          <X size={20} />
         </button>
 
+        {/* Иконка телефона */}
+        <div className="mb-7 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#6B30CE]/20 text-[#A77BFF]">
+          <Phone size={25} strokeWidth={1.8} />
+        </div>
+
         <div className="mb-8">
-          <div className="mb-6 text-xs font-semibold tracking-[0.3em] text-white/50">
+          <div className="mb-3 text-xs font-semibold tracking-[0.25em] text-[#A77BFF]">
             PONGLAB
           </div>
 
           <h2
             id="personal-account-title"
-            className="text-3xl font-semibold tracking-tight sm:text-4xl"
+            className="text-3xl font-semibold tracking-tight"
           >
             Личный кабинет
           </h2>
 
           <p className="mt-3 text-sm leading-6 text-white/60">
-            Введите номер телефона, чтобы войти или зарегистрироваться.
+            Введите номер телефона, чтобы войти или создать аккаунт.
+            Подтверждение будет выполнено звонком.
           </p>
         </div>
 
@@ -175,20 +163,20 @@ export default function PersonalAccountModal({
 
             if (!isPhoneValid) return;
 
-            // Следующий шаг — подключение проверки через звонок SMS.RU.
-            console.log("Телефон:", `+7${phoneDigits}`);
+            // Подключим отправку номера на сервер на следующем этапе.
+            console.log("Телефон для авторизации:", `+7${phoneDigits}`);
           }}
         >
           <label
             htmlFor="account-phone"
-            className="mb-3 block text-lg font-medium text-white"
+            className="mb-2 block text-sm font-medium text-white/90"
           >
             Номер телефона
           </label>
 
-          <div className="flex h-14 items-center overflow-hidden rounded-xl border border-white/20 bg-white/[0.04] transition-colors duration-200 focus-within:border-white/60">
+          <div className="flex h-14 items-center overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] transition-colors focus-within:border-[#8F5BFF]">
             <span
-              className="flex h-full items-center border-r border-white/10 px-4 text-base text-white"
+              className="flex h-full items-center border-r border-white/10 px-4 text-base text-white/80"
               aria-hidden="true"
             >
               +7
@@ -206,44 +194,38 @@ export default function PersonalAccountModal({
               maxLength={10}
               required
               aria-describedby="phone-hint"
-              className="h-full min-w-0 flex-1 bg-transparent px-4 text-base tracking-wide text-white outline-none placeholder:text-white/30"
+              className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-white/30"
             />
           </div>
 
-          <div
+          <p
             id="phone-hint"
-            className="mt-2 min-h-5 text-sm text-white/50"
             aria-live="polite"
+            className="mt-2 min-h-5 text-xs text-white/50"
           >
             {phoneDigits.length === 0
               ? "Введите 10 цифр номера"
               : phoneDigits.length < 10
-                ? `Осталось цифр: ${10 - phoneDigits.length}`
+                ? `Введено ${phoneDigits.length} из 10 цифр`
                 : "Номер введён полностью"}
-          </div>
+          </p>
 
           <button
             type="submit"
             disabled={!isPhoneValid}
-            className={[
-              "mt-5 flex h-14 w-full items-center justify-center rounded-xl",
-              "text-base font-semibold",
-              "transition-[background-color,opacity,transform] duration-300",
-              "active:scale-[0.99]",
-              "disabled:cursor-not-allowed disabled:opacity-35",
-              isPhoneValid
-                ? "bg-white text-black hover:bg-white/85"
-                : "bg-white text-black",
-            ].join(" ")}
+            className={`mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-base font-semibold text-white transition-[opacity,transform,filter] duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
+              isPhoneValid ? "hover:brightness-110" : ""
+            }`}
           >
             Продолжить
           </button>
 
           <p className="mt-5 text-center text-xs leading-5 text-white/40">
-            Подтверждение номера подключим следующим шагом.
+            Продолжая, вы соглашаетесь с условиями использования сервиса и
+            обработкой персональных данных.
           </p>
         </form>
-      </section>
+      </div>
     </div>
   );
 }
