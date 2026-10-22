@@ -10,6 +10,7 @@ type PersonalAccountModalProps = {
 };
 
 const ANIMATION_DURATION = 500;
+const POLL_INTERVAL = 3000;
 
 export default function PersonalAccountModal({
   open,
@@ -19,12 +20,12 @@ export default function PersonalAccountModal({
   const [visible, setVisible] = useState(false);
   const [phoneDigits, setPhoneDigits] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-const [authError, setAuthError] = useState("");
-const [callPhone, setCallPhone] = useState("");
-const [challengeId, setChallengeId] = useState("");
-const [expiresAt, setExpiresAt] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState(false);
+  const [callPhone, setCallPhone] = useState("");
+  const [challengeId, setChallengeId] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
 
-  // Плавное открытие и закрытие.
   useEffect(() => {
     let frame1 = 0;
     let frame2 = 0;
@@ -34,16 +35,11 @@ const [expiresAt, setExpiresAt] = useState("");
       setMounted(true);
 
       frame1 = requestAnimationFrame(() => {
-        frame2 = requestAnimationFrame(() => {
-          setVisible(true);
-        });
+        frame2 = requestAnimationFrame(() => setVisible(true));
       });
     } else {
       setVisible(false);
-
-      timer = setTimeout(() => {
-        setMounted(false);
-      }, ANIMATION_DURATION);
+      timer = setTimeout(() => setMounted(false), ANIMATION_DURATION);
     }
 
     return () => {
@@ -53,7 +49,6 @@ const [expiresAt, setExpiresAt] = useState("");
     };
   }, [open]);
 
-  // Блокируем прокрутку страницы, пока модальное окно открыто.
   useEffect(() => {
     if (!mounted) return;
 
@@ -65,7 +60,6 @@ const [expiresAt, setExpiresAt] = useState("");
     };
   }, [mounted]);
 
-  // Закрытие по Escape.
   useEffect(() => {
     if (!mounted) return;
 
@@ -75,71 +69,161 @@ const [expiresAt, setExpiresAt] = useState("");
 
     window.addEventListener("keydown", handleKeyDown);
 
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mounted, onClose]);
 
-  // Только 10 цифр после фиксированного +7.
+  // Автоматически проверяем звонок каждые 3 секунды.
+  useEffect(() => {
+    if (!challengeId || !expiresAt || authSuccess) return;
 
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
+    const checkStatus = async () => {
+      if (cancelled) return;
 
-const handlePhoneChange = (value: string) => {
-  const trimmed = value.trim();
-  let digits = value.replace(/\D/g, "");
+      if (Date.now() >= new Date(expiresAt).getTime()) {
+        setAuthError("Время проверки истекло. Запросите новый звонок.");
+        setCallPhone("");
+        setChallengeId("");
+        setExpiresAt("");
+        return;
+      }
 
-  if (trimmed.startsWith("+7")) {
-    digits = digits.slice(1);
-  } else if (trimmed.startsWith("8")) {
-    digits = digits.slice(1);
-  }
+      try {
+        const response = await fetch("/api/auth/call/status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "same-origin",
+          cache: "no-store",
+          body: JSON.stringify({ challengeId }),
+        });
 
-  setPhoneDigits(digits.slice(0, 10));
-};
+        const result = await response.json().catch(() => ({}));
 
-  
-const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
+        if (cancelled) return;
 
-  if (!isPhoneValid || isSubmitting) return;
+        if (response.ok && result.verified === true) {
+          setAuthSuccess(true);
+          setCallPhone("");
+          setChallengeId("");
+          setExpiresAt("");
+          setAuthError("");
+          return;
+        }
 
-  setIsSubmitting(true);
-  setAuthError("");
-  setCallPhone("");
-  setChallengeId("");
+        if (response.ok && result.status === "pending") {
+          timer = setTimeout(checkStatus, POLL_INTERVAL);
+          return;
+        }
 
-  try {
-    const response = await fetch("/api/auth/call/start", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        phone: `+7${phoneDigits}`,
-      }),
-    });
+        if (
+          response.status === 403 ||
+          response.status === 409 ||
+          response.status === 410
+        ) {
+          setAuthError(
+            result.error || "Проверка завершена. Запросите новый звонок.",
+          );
+          setCallPhone("");
+          setChallengeId("");
+          setExpiresAt("");
+          return;
+        }
 
-    const result = await response.json();
+        // При временной ошибке сервера повторяем проверку,
+        // пока не истекли пять минут.
+        setAuthError("Проверяем статус звонка. Подождите...");
+        timer = setTimeout(checkStatus, POLL_INTERVAL);
+      } catch {
+        if (!cancelled) {
+          setAuthError(
+            "Связь временно недоступна. Повторяем проверку...",
+          );
+          timer = setTimeout(checkStatus, POLL_INTERVAL);
+        }
+      }
+    };
 
-    if (!response.ok) {
-      setAuthError(
-        result.error || "Не удалось начать проверку. Попробуйте ещё раз."
-      );
-      return;
+    void checkStatus();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [challengeId, expiresAt, authSuccess]);
+
+  const handlePhoneChange = (value: string) => {
+    const trimmed = value.trim();
+    let digits = value.replace(/\D/g, "");
+
+    if (trimmed.startsWith("+7")) {
+      digits = digits.slice(1);
+    } else if (trimmed.startsWith("8")) {
+      digits = digits.slice(1);
     }
 
-    setCallPhone(result.callPhone);
-    setChallengeId(result.challengeId);
-    setExpiresAt(result.expiresAt);
-  } catch {
-    setAuthError("Не удалось связаться с сервером. Попробуйте ещё раз.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
-
+    setPhoneDigits(digits.slice(0, 10));
+  };
 
   const isPhoneValid = phoneDigits.length === 10;
+
+  const handleContinue = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    if (!isPhoneValid || isSubmitting || callPhone || authSuccess) return;
+
+    setIsSubmitting(true);
+    setAuthError("");
+    setAuthSuccess(false);
+    setCallPhone("");
+    setChallengeId("");
+    setExpiresAt("");
+
+    try {
+      const response = await fetch("/api/auth/call/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({
+          phone: `+7${phoneDigits}`,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setAuthError(
+          result.error || "Не удалось начать проверку. Попробуйте ещё раз.",
+        );
+        return;
+      }
+
+      if (
+        typeof result.challengeId !== "string" ||
+        typeof result.callPhone !== "string" ||
+        typeof result.expiresAt !== "string"
+      ) {
+        setAuthError("Сервер вернул некорректный ответ. Попробуйте позже.");
+        return;
+      }
+
+      setCallPhone(result.callPhone);
+      setChallengeId(result.challengeId);
+      setExpiresAt(result.expiresAt);
+    } catch {
+      setAuthError("Не удалось связаться с сервером. Попробуйте ещё раз.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (!mounted) return null;
 
@@ -150,7 +234,6 @@ const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
       }`}
       aria-hidden={!visible}
     >
-      {/* Затемнённый фон */}
       <button
         type="button"
         aria-label="Закрыть окно"
@@ -161,7 +244,6 @@ const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
         }`}
       />
 
-      {/* Модальное окно */}
       <div
         role="dialog"
         aria-modal="true"
@@ -172,7 +254,6 @@ const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
             : "translate-y-8 scale-[0.88] opacity-0"
         }`}
       >
-        {/* Кнопка закрытия */}
         <button
           type="button"
           onClick={onClose}
@@ -183,7 +264,6 @@ const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
           <X size={20} />
         </button>
 
-        {/* Иконка телефона */}
         <div className="mb-7 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#6B30CE]/20 text-[#A77BFF]">
           <Phone size={27} strokeWidth={1.8} />
         </div>
@@ -206,7 +286,7 @@ const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
           </p>
         </div>
 
-       <form onSubmit={handleContinue}>
+        <form onSubmit={handleContinue}>
           <label
             htmlFor="account-phone"
             className="mb-2 block text-sm font-medium text-white/90"
@@ -233,8 +313,9 @@ const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
               onChange={(event) => handlePhoneChange(event.target.value)}
               maxLength={15}
               required
+              disabled={Boolean(callPhone) || authSuccess}
               aria-describedby="phone-hint"
-              className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-white/30"
+              className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-white/30 disabled:opacity-60"
             />
           </div>
 
@@ -250,37 +331,62 @@ const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
                 : "Номер введён полностью"}
           </p>
 
-{authError && (
-  <p role="alert" className="mt-3 text-sm text-red-400">
-    {authError}
-  </p>
-)}
+          {authError && (
+            <p role="alert" aria-live="polite" className="mt-3 text-sm text-red-400">
+              {authError}
+            </p>
+          )}
 
-{callPhone && (
-  <div className="mt-4 rounded-xl border border-[#8F5BFF]/30 bg-[#6B30CE]/10 p-4">
-    <p className="text-sm leading-6 text-white/80">
-      Позвоните на указанный номер в течение 5 минут. Звонок будет
-      автоматически сброшен после проверки.
-    </p>
+          {callPhone && (
+            <div className="mt-4 rounded-xl border border-[#8F5BFF]/30 bg-[#6B30CE]/10 p-4">
+              <p className="text-sm leading-6 text-white/80">
+                Позвоните на указанный номер в течение 5 минут. Звонок будет
+                автоматически сброшен после проверки.
+              </p>
 
-    <p className="mt-3 break-all text-xl font-semibold text-[#A77BFF]">
-      {callPhone}
-    </p>
+              <p className="mt-3 break-all text-xl font-semibold text-[#A77BFF]">
+                {callPhone}
+              </p>
 
-    <p className="mt-2 text-xs text-white/50">
-      Не закрывайте это окно. Подтверждение номера подключим следующим шагом.
-    </p>
-  </div>
-)}
+              <p className="mt-2 text-xs text-white/50">
+                Ожидаем подтверждения звонка...
+              </p>
+            </div>
+          )}
+
+          {authSuccess && (
+            <div
+              role="status"
+              className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4"
+            >
+              <p className="text-sm leading-6 text-white">
+                Номер подтверждён. Авторизация выполнена.
+              </p>
+              <p className="mt-2 text-xs leading-5 text-white/60">
+                Сессия создана. Интерфейс бронирования подключим следующим шагом.
+              </p>
+            </div>
+          )}
 
           <button
             type="submit"
-          disabled={!isPhoneValid || isSubmitting || Boolean(callPhone)}
+            disabled={
+              !isPhoneValid ||
+              isSubmitting ||
+              Boolean(callPhone) ||
+              authSuccess
+            }
             className={`mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-base font-semibold text-white transition-[opacity,transform,filter] duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
               isPhoneValid ? "hover:brightness-110" : ""
             }`}
           >
-         {isSubmitting ? "Отправка запроса..." : callPhone ? "Запрос отправлен" : "Продолжить"}
+            {isSubmitting
+              ? "Отправка запроса..."
+              : authSuccess
+                ? "Вход выполнен"
+                : callPhone
+                  ? "Ожидаем звонок..."
+                  : "Продолжить"}
           </button>
 
           <p className="mt-5 text-center text-xs leading-5 text-white/40">
