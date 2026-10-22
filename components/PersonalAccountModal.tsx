@@ -18,6 +18,11 @@ export default function PersonalAccountModal({
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
   const [phoneDigits, setPhoneDigits] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+const [authError, setAuthError] = useState("");
+const [callPhone, setCallPhone] = useState("");
+const [challengeId, setChallengeId] = useState("");
+const [expiresAt, setExpiresAt] = useState("");
 
   // Плавное открытие и закрытие.
   useEffect(() => {
@@ -92,6 +97,47 @@ const handlePhoneChange = (value: string) => {
   setPhoneDigits(digits.slice(0, 10));
 };
 
+  
+const handleContinue = async (event: React.FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
+
+  if (!isPhoneValid || isSubmitting) return;
+
+  setIsSubmitting(true);
+  setAuthError("");
+  setCallPhone("");
+  setChallengeId("");
+
+  try {
+    const response = await fetch("/api/auth/call/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        phone: `+7${phoneDigits}`,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      setAuthError(
+        result.error || "Не удалось начать проверку. Попробуйте ещё раз."
+      );
+      return;
+    }
+
+    setCallPhone(result.callPhone);
+    setChallengeId(result.challengeId);
+    setExpiresAt(result.expiresAt);
+  } catch {
+    setAuthError("Не удалось связаться с сервером. Попробуйте ещё раз.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
 
   const isPhoneValid = phoneDigits.length === 10;
 
@@ -160,16 +206,7 @@ const handlePhoneChange = (value: string) => {
           </p>
         </div>
 
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-
-            if (!isPhoneValid) return;
-
-            // Подключим отправку номера на сервер на следующем этапе.
-            console.log("Телефон для авторизации:", `+7${phoneDigits}`);
-          }}
-        >
+       <form onSubmit={handleContinue}>
           <label
             htmlFor="account-phone"
             className="mb-2 block text-sm font-medium text-white/90"
@@ -213,14 +250,37 @@ const handlePhoneChange = (value: string) => {
                 : "Номер введён полностью"}
           </p>
 
+{authError && (
+  <p role="alert" className="mt-3 text-sm text-red-400">
+    {authError}
+  </p>
+)}
+
+{callPhone && (
+  <div className="mt-4 rounded-xl border border-[#8F5BFF]/30 bg-[#6B30CE]/10 p-4">
+    <p className="text-sm leading-6 text-white/80">
+      Позвоните на указанный номер в течение 5 минут. Звонок будет
+      автоматически сброшен после проверки.
+    </p>
+
+    <p className="mt-3 break-all text-xl font-semibold text-[#A77BFF]">
+      {callPhone}
+    </p>
+
+    <p className="mt-2 text-xs text-white/50">
+      Не закрывайте это окно. Подтверждение номера подключим следующим шагом.
+    </p>
+  </div>
+)}
+
           <button
             type="submit"
-            disabled={!isPhoneValid}
+          disabled={!isPhoneValid || isSubmitting || Boolean(callPhone)}
             className={`mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-base font-semibold text-white transition-[opacity,transform,filter] duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
               isPhoneValid ? "hover:brightness-110" : ""
             }`}
           >
-            Продолжить
+         {isSubmitting ? "Отправка запроса..." : callPhone ? "Запрос отправлен" : "Продолжить"}
           </button>
 
           <p className="mt-5 text-center text-xs leading-5 text-white/40">
