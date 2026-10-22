@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import PersonalAccountModal from "@/components/PersonalAccountModal";
 import Image from "next/image";
 import HowItWorksModal from "@/components/HowItWorksModal";
 import WhyPongLabModal from "@/components/WhyPongLabModal";
@@ -17,6 +18,7 @@ const navItems = [
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -153,6 +155,7 @@ if (item.href === "/why-effective") {
             </div>
 
             <button
+              onClick={() => setAccountOpen(true)}
               className="
                 hidden md:flex
                 relative overflow-hidden
@@ -249,6 +252,10 @@ if (item.href === "/why-effective") {
       <HowItWorksModal
         open={howItWorksOpen}
         onClose={() => setHowItWorksOpen(false)}
+      />
+       <PersonalAccountModal
+        open={accountOpen}
+        onClose={() => setAccountOpen(false)}
       />
       <WhyPongLabModal
   open={whyOpen}
