@@ -76,19 +76,20 @@ export default function PersonalAccountModal({
   }, [mounted, onClose]);
 
   // Только 10 цифр после фиксированного +7.
-  const handlePhoneChange = (value: string) => {
-    let digits = value.replace(/\D/g, "");
+ const handlePhoneChange = (value: string) => {
+  let digits = value.replace(/\D/g, "");
 
-    // Обрабатываем вставку российского номера целиком.
-    if (
-      digits.length > 10 &&
-      (digits.startsWith("7") || digits.startsWith("8"))
-    ) {
-      digits = digits.slice(1);
-    }
+  // Если вставили номер с кодом страны +7 или 8,
+  // убираем первую цифру кода страны.
+  if (
+    digits.length >= 11 &&
+    (digits.startsWith("7") || digits.startsWith("8"))
+  ) {
+    digits = digits.slice(1);
+  }
 
-    setPhoneDigits(digits.slice(0, 10));
-  };
+  setPhoneDigits(digits.slice(0, 10));
+};
 
   const isPhoneValid = phoneDigits.length === 10;
 
@@ -141,7 +142,7 @@ export default function PersonalAccountModal({
 
         <div className="mb-8">
           <div className="mb-3 text-xs font-semibold tracking-[0.25em] text-[#A77BFF]">
-            PONGLAB
+            PongLab®
           </div>
 
           <h2
@@ -152,8 +153,8 @@ export default function PersonalAccountModal({
           </h2>
 
           <p className="mt-3 text-sm leading-6 text-white/60">
-            Введите номер телефона, чтобы войти или создать аккаунт.
-            Подтверждение будет выполнено звонком.
+            Введите собственный номер телефона, чтобы войти или создать аккаунт.
+            Подтверждение будет выполнено посредством звонка.
           </p>
         </div>
 
@@ -171,7 +172,7 @@ export default function PersonalAccountModal({
             htmlFor="account-phone"
             className="mb-2 block text-sm font-medium text-white/90"
           >
-            Номер телефона
+            Номер:
           </label>
 
           <div className="flex h-14 items-center overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] transition-colors focus-within:border-[#8F5BFF]">
@@ -221,8 +222,7 @@ export default function PersonalAccountModal({
           </button>
 
           <p className="mt-5 text-center text-xs leading-5 text-white/40">
-            Продолжая, вы соглашаетесь с условиями использования сервиса и
-            обработкой персональных данных.
+            Продолжая, вы соглашаетесь с обработкой персональных данных.
           </p>
         </form>
       </div>
