@@ -77,21 +77,20 @@ export default function PersonalAccountModal({
 
   // Только 10 цифр после фиксированного +7.
 
+
 const handlePhoneChange = (value: string) => {
+  const trimmed = value.trim();
   let digits = value.replace(/\D/g, "");
 
-  if (value.trim().startsWith("+")) {
-    // Если вставили номер с +, отсекаем две цифры слева.
+  if (trimmed.startsWith("+")) {
     digits = digits.slice(2);
-  } else if (value.trim().startsWith("8")) {
-    // Если номер начинается с 8, отсекаем одну цифру слева.
+  } else if (trimmed.startsWith("8")) {
     digits = digits.slice(1);
   }
 
-  // В остальных случаях оставляем цифры как есть,
-  // ограничивая ввод десятью цифрами.
-  setPhoneDigits(digits.slice(0, 10));
+  setPhoneDigits(digits);
 };
+
 
   const isPhoneValid = phoneDigits.length === 10;
 
