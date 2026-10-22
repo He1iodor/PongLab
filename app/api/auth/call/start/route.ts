@@ -192,21 +192,31 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    if (!insertResponse.ok) {
-      console.error(
-        "Supabase challenge insert failed:",
-        await insertResponse.text(),
-      );
-      return errorResponse("Не удалось сохранить проверку. Попробуйте позже.", 503);
-    }
+   if (!insertResponse.ok) {
+  const errorText = await insertResponse.text();
 
-    const savedRows = await insertResponse.json();
-    const savedChallenge = savedRows[0];
+  if (
+    insertResponse.status === 409 ||
+    errorText.includes("phone_auth_challenges_provider_check_id_key") ||
+    errorText.includes("duplicate key value")
+  ) {
+    console.error(
+      "SMS.RU returned a duplicate check_id. New challenge was not saved.",
+    );
 
-    if (!savedChallenge?.id) {
-      return errorResponse("Не удалось сохранить проверку.", 503);
-    }
+    return errorResponse(
+      "Сервис проверки временно вернул повторный идентификатор. Подождите минуту и попробуйте снова.",
+      503,
+    );
+  }
 
+  console.error("Supabase challenge insert failed:", errorText);
+
+  return errorResponse(
+    "Не удалось сохранить проверку. Попробуйте позже.",
+    503,
+  );
+}
     const response = NextResponse.json(
       {
         challengeId: savedChallenge.id,
