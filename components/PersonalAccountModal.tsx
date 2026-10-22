@@ -76,19 +76,16 @@ export default function PersonalAccountModal({
   }, [mounted, onClose]);
 
   // Только 10 цифр после фиксированного +7.
- const handlePhoneChange = (value: string) => {
+const handlePhoneChange = (value: string) => {
   let digits = value.replace(/\D/g, "");
 
-  // Если вставили номер с кодом страны +7 или 8,
-  // убираем первую цифру кода страны.
-  if (
-    digits.length >= 11 &&
-    (digits.startsWith("7") || digits.startsWith("8"))
-  ) {
-    digits = digits.slice(1);
+  // Удаляем код страны только у номера, который вставили целиком.
+  if (digits.length > 10) {
+    if (digits.startsWith("7") || digits.startsWith("8")) {
+      digits = digits.slice(1);
+    }
   }
-
-  setPhoneDigits(digits.slice(0, 10));
+  setPhoneDigits(digits.slice(-10));
 };
 
   const isPhoneValid = phoneDigits.length === 10;
@@ -137,11 +134,11 @@ export default function PersonalAccountModal({
 
         {/* Иконка телефона */}
         <div className="mb-7 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#6B30CE]/20 text-[#A77BFF]">
-          <Phone size={25} strokeWidth={1.8} />
+          <Phone size={27} strokeWidth={1.8} />
         </div>
 
         <div className="mb-8">
-          <div className="mb-3 text-xs font-semibold tracking-[0.25em] text-[#A77BFF]">
+          <div className="mb-3 text-sm font-bold tracking-[0.25em] text-[#A77BFF]">
             PongLab®
           </div>
 
