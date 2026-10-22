@@ -14,9 +14,37 @@ export default function PersonalAccountModal({
   onClose,
 }: Props) {
   const [phone, setPhone] = useState("");
+  const [visible, setVisible] = useState(open);
+  const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      setMounted(true);
+
+      // Даём браузеру отрисовать начальное состояние
+      // перед запуском анимации появления.
+      const frame = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
+
+      return () => cancelAnimationFrame(frame);
+    }
+
+    setVisible(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (visible || !mounted) return;
+
+    const timeout = window.setTimeout(() => {
+      setMounted(false);
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [visible, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -24,14 +52,32 @@ export default function PersonalAccountModal({
 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [open, onClose]);
+  }, [mounted, onClose]);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (!mounted) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mounted]);
+
+  if (!mounted) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center
-                 bg-black/75 px-4 backdrop-blur-md"
+      aria-hidden={!visible}
+      className={`
+        fixed inset-0 z-[200] flex items-center justify-center
+        bg-black/75 px-4 backdrop-blur-md
+        transition-opacity duration-300 ease-out
+        motion-reduce:transition-none
+        ${visible ? "opacity-100" : "opacity-0"}
+        ${visible ? "pointer-events-auto" : "pointer-events-none"}
+      `}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -40,9 +86,19 @@ export default function PersonalAccountModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="account-title"
-        className="relative w-full max-w-md rounded-3xl
-                   border border-white/10 bg-[#0D1022]
-                   p-7 text-white shadow-2xl sm:p-9"
+        className={`
+          relative w-full max-w-md rounded-3xl
+          border border-white/10 bg-[#0D1022]
+          p-7 text-white shadow-2xl sm:p-9
+          transform-gpu
+          transition-[opacity,transform] duration-300 ease-out
+          motion-reduce:transition-none
+          ${
+            visible
+              ? "translate-y-0 scale-100 opacity-100"
+              : "translate-y-4 scale-[0.97] opacity-0"
+          }
+        `}
       >
         <button
           type="button"
@@ -55,9 +111,11 @@ export default function PersonalAccountModal({
           <X size={21} />
         </button>
 
-        <div className="mb-6 flex h-14 w-14 items-center justify-center
-                        rounded-2xl border border-purple-400/20
-                        bg-purple-500/15 text-purple-300">
+        <div
+          className="mb-6 flex h-14 w-14 items-center justify-center
+                     rounded-2xl border border-purple-400/20
+                     bg-purple-500/15 text-purple-300"
+        >
           <Phone size={26} />
         </div>
 
