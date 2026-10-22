@@ -83,12 +83,15 @@ const handlePhoneChange = (value: string) => {
   let digits = value.replace(/\D/g, "");
 
   if (trimmed.startsWith("+")) {
+    // Например: +79991555822 → 9991555822
     digits = digits.slice(2);
   } else if (trimmed.startsWith("8")) {
+    // Например: 89991555822 → 9991555822
     digits = digits.slice(1);
   }
 
-  setPhoneDigits(digits);
+  // Ограничиваем длину после удаления префикса.
+  setPhoneDigits(digits.slice(0, 10));
 };
 
 
@@ -193,7 +196,7 @@ const handlePhoneChange = (value: string) => {
               placeholder="999 123-45-67"
               value={phoneDigits}
               onChange={(event) => handlePhoneChange(event.target.value)}
-              maxLength={10}
+              maxLength={15}
               required
               aria-describedby="phone-hint"
               className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-white/30"
