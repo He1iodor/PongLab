@@ -217,6 +217,12 @@ export async function POST(request: NextRequest) {
     503,
   );
 }
+      const savedRows = await insertResponse.json();
+    const savedChallenge = savedRows[0];
+
+    if (!savedChallenge?.id) {
+      return errorResponse("Не удалось сохранить проверку.", 503);
+    }
     const response = NextResponse.json(
       {
         challengeId: savedChallenge.id,
