@@ -77,21 +77,17 @@ export default function PersonalAccountModal({
 
   // Только 10 цифр после фиксированного +7.
 
+
 const handlePhoneChange = (value: string) => {
-  const digits = value.replace(/\D/g, "");
-  // Если вставлен полный российский номер:
-  // +7XXXXXXXXXX или 8XXXXXXXXXX — удаляем код страны.
-  // Если введены только 10 цифр — оставляем их без изменений.
-  let localNumber = digits;
-  if (digits.length === 11 && digits.startsWith("7")) {
-    localNumber = digits.slice(1);
-  } else if (digits.length === 11 && digits.startsWith("8")) {
-    localNumber = digits.slice(1);
-  } else if (digits.length > 11) {
-    // Вставка с лишними символами: используем последние 10 цифр.
-    localNumber = digits.slice(-10);
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("7") && digits.length === 11) {
+    digits = digits.substring(1);
+  } else if (digits.startsWith("8") && digits.length === 11) {
+    digits = digits.substring(1);
   }
-  setPhoneDigits(localNumber.slice(0, 10));
+
+  setPhoneDigits(digits.slice(0, 10));
 };
 
 
@@ -145,7 +141,7 @@ const handlePhoneChange = (value: string) => {
         </div>
 
         <div className="mb-8">
-          <div className="mb-3 text-sm font-bold tracking-[0.25em] text-[#A77BFF]">
+          <div className="mb-3 text-sm font-semibold tracking-[0.25em] text-[#A77BFF]">
             PongLab®
           </div>
 
