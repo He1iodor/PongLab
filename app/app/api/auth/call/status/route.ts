@@ -143,8 +143,25 @@ export async function POST(request: NextRequest) {
       return errorResponse("Не удалось проверить статус звонка.", 502);
     }
 
-    const smsResult = await smsResponse.json();
-    const providerCode = Number(smsResult.status_code);
+const smsResult = await smsResponse.json();
+
+if (
+  smsResult.status !== "OK" ||
+  Number(smsResult.status_code) !== 100
+) {
+  console.error("SMS.RU status request failed:", {
+    status: smsResult.status,
+    status_code: smsResult.status_code,
+    status_text: smsResult.status_text,
+  });
+
+  return errorResponse(
+    "Не удалось получить статус звонка. Попробуйте позже.",
+    502,
+  );
+}
+
+const providerCode = Number(smsResult.check_status);
 
     if (providerCode === 400) {
       return NextResponse.json({
