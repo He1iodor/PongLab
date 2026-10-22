@@ -38,7 +38,7 @@ export default function PersonalAccountModal({
 
     const timeout = window.setTimeout(() => {
       setMounted(false);
-    }, 300);
+    }, 500);
 
     return () => window.clearTimeout(timeout);
   }, [visible, mounted]);
@@ -120,7 +120,7 @@ export default function PersonalAccountModal({
         </div>
 
         <p className="mb-2 text-sm font-medium text-purple-300">
-          PONGLAB
+          PongLab®
         </p>
 
         <h2
@@ -131,7 +131,7 @@ export default function PersonalAccountModal({
         </h2>
 
         <p className="mb-7 text-sm leading-6 text-white/60">
-          Введите номер телефона, чтобы войти или создать аккаунт.
+          Введите собственный номер телефона, чтобы войти или создать аккаунт.
           Подтверждение будет выполнено звонком.
         </p>
 
@@ -145,7 +145,7 @@ export default function PersonalAccountModal({
             htmlFor="account-phone"
             className="mb-2 block text-sm text-white/80"
           >
-            Номер телефона
+            Номер:
           </label>
 
           <input
@@ -175,8 +175,7 @@ export default function PersonalAccountModal({
         </form>
 
         <p className="mt-5 text-center text-xs leading-5 text-white/40">
-          Продолжая, вы соглашаетесь с условиями использования
-          сервиса и обработкой персональных данных.
+          Продолжая, вы соглашаетесь с обработкой персональных данных.
         </p>
       </div>
     </div>
