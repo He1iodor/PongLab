@@ -76,17 +76,24 @@ export default function PersonalAccountModal({
   }, [mounted, onClose]);
 
   // Только 10 цифр после фиксированного +7.
-const handlePhoneChange = (value: string) => {
-  let digits = value.replace(/\D/g, "");
 
-  // Удаляем код страны только у номера, который вставили целиком.
-  if (digits.length > 10) {
-    if (digits.startsWith("7") || digits.startsWith("8")) {
-      digits = digits.slice(1);
-    }
+const handlePhoneChange = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  // Если вставлен полный российский номер:
+  // +7XXXXXXXXXX или 8XXXXXXXXXX — удаляем код страны.
+  // Если введены только 10 цифр — оставляем их без изменений.
+  let localNumber = digits;
+  if (digits.length === 11 && digits.startsWith("7")) {
+    localNumber = digits.slice(1);
+  } else if (digits.length === 11 && digits.startsWith("8")) {
+    localNumber = digits.slice(1);
+  } else if (digits.length > 11) {
+    // Вставка с лишними символами: используем последние 10 цифр.
+    localNumber = digits.slice(-10);
   }
-  setPhoneDigits(digits.slice(-10));
+  setPhoneDigits(localNumber.slice(0, 10));
 };
+
 
   const isPhoneValid = phoneDigits.length === 10;
 
