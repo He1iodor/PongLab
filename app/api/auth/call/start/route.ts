@@ -1,5 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
+import { createHash, randomBytes } from "node:crypto";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,6 @@ function normalizePhone(value: unknown): string | null {
   if (typeof value !== "string") return null;
 
   const digits = value.replace(/\D/g, "");
-
   let phone: string;
 
   if (digits.length === 10) {
@@ -28,10 +28,11 @@ function normalizePhone(value: unknown): string | null {
     return null;
   }
 
-  // Российский мобильный номер: 7 + 10 цифр.
-  if (!/^79\d{9}$/.test(phone)) return null;
+  return /^79\d{9}$/.test(phone) ? phone : null;
+}
 
-  return phone;
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 async function supabaseRequest(
@@ -50,6 +51,7 @@ async function supabaseRequest(
     cache: "no-store",
     headers: {
       apikey: secret,
+      Authorization: `Bearer ${secret}`,
       ...init.headers,
     },
   });
@@ -80,16 +82,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Ограничиваем количество попыток для одного номера:
-    // не более 3 запросов за 30 минут.
-    const cutoff = new Date(
-      Date.now() - 30 * 60 * 1000,
-    ).toISOString();
-
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     const recentQuery = new URLSearchParams({
       select: "id",
       phone: `eq.${phone}`,
       created_at: `gte.${cutoff}`,
+      limit: "3",
     });
 
     const recentResponse = await supabaseRequest(
@@ -101,27 +99,24 @@ export async function POST(request: NextRequest) {
         "Supabase rate-limit query failed:",
         await recentResponse.text(),
       );
-
       return errorResponse("Не удалось проверить запрос. Попробуйте позже.", 503);
     }
 
     const recentAttempts = await recentResponse.json();
 
-    if (
-      !Array.isArray(recentAttempts) ||
-      recentAttempts.length >= 3
-    ) {
-      if (!Array.isArray(recentAttempts)) {
-        return errorResponse("Временная ошибка сервиса.", 503);
-      }
+    if (!Array.isArray(recentAttempts)) {
+      return errorResponse("Временная ошибка сервиса.", 503);
+    }
 
+    if (recentAttempts.length >= 3) {
       return errorResponse(
         "Слишком много попыток для этого номера. Попробуйте позже.",
         429,
       );
     }
 
-    // Передаём SMS.RU номер пользователя и его IP, если он доступен.
+    // IP из заголовка используется только как дополнительная информация.
+    // Доверять ему для защиты от атак можно лишь при корректной настройке прокси.
     const forwardedFor = request.headers.get("x-forwarded-for");
     const userIp = forwardedFor?.split(",")[0]?.trim();
 
@@ -135,22 +130,18 @@ export async function POST(request: NextRequest) {
       smsParams.set("ip", userIp);
     }
 
-    const smsResponse = await fetch(
-      "https://sms.ru/callcheck/add",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: smsParams.toString(),
-        cache: "no-store",
-        signal: AbortSignal.timeout(15000),
+    const smsResponse = await fetch("https://sms.ru/callcheck/add", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-    );
+      body: smsParams.toString(),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    });
 
     if (!smsResponse.ok) {
       console.error("SMS.RU HTTP error:", smsResponse.status);
-
       return errorResponse(
         "Не удалось связаться с сервисом проверки. Попробуйте позже.",
         502,
@@ -172,14 +163,16 @@ export async function POST(request: NextRequest) {
       });
 
       return errorResponse(
-        "SMS.RU не смог начать проверку. Проверьте настройки сервиса и попробуйте позже.",
+        "SMS.RU не смог начать проверку. Попробуйте позже.",
         502,
       );
     }
 
-    const expiresAt = new Date(
-      Date.now() + 5 * 60 * 1000,
-    ).toISOString();
+    // Секрет уникален для каждой попытки. В базе хранится только его хеш.
+    const browserToken = randomBytes(32).toString("hex");
+    const browserTokenHash = hashToken(browserToken);
+
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
     const insertResponse = await supabaseRequest(
       "phone_auth_challenges",
@@ -192,6 +185,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           phone,
           provider_check_id: String(smsResult.check_id),
+          browser_token_hash: browserTokenHash,
           status: "pending",
           expires_at: expiresAt,
         }),
@@ -203,11 +197,7 @@ export async function POST(request: NextRequest) {
         "Supabase challenge insert failed:",
         await insertResponse.text(),
       );
-
-      return errorResponse(
-        "Не удалось сохранить проверку. Попробуйте позже.",
-        503,
-      );
+      return errorResponse("Не удалось сохранить проверку. Попробуйте позже.", 503);
     }
 
     const savedRows = await insertResponse.json();
@@ -217,7 +207,7 @@ export async function POST(request: NextRequest) {
       return errorResponse("Не удалось сохранить проверку.", 503);
     }
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         challengeId: savedChallenge.id,
         callPhone: smsResult.call_phone_pretty || smsResult.call_phone,
@@ -226,12 +216,22 @@ export async function POST(request: NextRequest) {
       },
       { headers: jsonHeaders },
     );
+
+    response.cookies.set(
+      `ponglab_auth_${savedChallenge.id}`,
+      browserToken,
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+        expires: new Date(expiresAt),
+      },
+    );
+
+    return response;
   } catch (error) {
     console.error("Call authorization start failed:", error);
-
-    return errorResponse(
-      "Временная ошибка сервера. Попробуйте ещё раз.",
-      500,
-    );
+    return errorResponse("Временная ошибка сервера. Попробуйте ещё раз.", 500);
   }
 }
