@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const sessionToken = request.cookies.get("ponglab_session")?.value;
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
   if (!sessionToken || !/^[a-f0-9]{64}$/i.test(sessionToken)) {
     return NextResponse.json(
       { authenticated: false },
-      { status: 401 }
+      { status: 401, headers: { "Cache-Control": "no-store" } }
     );
   }
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       { error: "Сервис временно недоступен." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 
@@ -30,20 +31,25 @@ export async function GET(request: NextRequest) {
     .update(sessionToken)
     .digest("hex");
 
+  const headers = {
+    apikey: supabaseKey,
+    Authorization: `Bearer ${supabaseKey}`,
+  };
+
   try {
-    // Проверяем сессию на сервере и получаем ID пользователя.
-    const sessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_sessions?select=user_id&token_hash=eq.${tokenHash}&expires_at=gt.${encodeURIComponent(
-        new Date().toISOString()
-      )}&limit=1`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-        cache: "no-store",
-      }
+    const sessionUrl = new URL(`${supabaseUrl}/rest/v1/user_sessions`);
+    sessionUrl.searchParams.set("select", "user_id");
+    sessionUrl.searchParams.set("token_hash", `eq.${tokenHash}`);
+    sessionUrl.searchParams.set(
+      "expires_at",
+      `gt.${new Date().toISOString()}`
     );
+    sessionUrl.searchParams.set("limit", "1");
+
+    const sessionResponse = await fetch(sessionUrl, {
+      headers,
+      cache: "no-store",
+    });
 
     if (!sessionResponse.ok) {
       console.error(
@@ -62,7 +68,7 @@ export async function GET(request: NextRequest) {
     if (!Array.isArray(sessions) || sessions.length === 0) {
       const response = NextResponse.json(
         { authenticated: false },
-        { status: 401 }
+        { status: 401, headers: { "Cache-Control": "no-store" } }
       );
 
       response.cookies.set("ponglab_session", "", {
@@ -73,24 +79,28 @@ export async function GET(request: NextRequest) {
         maxAge: 0,
       });
 
+      response.cookies.set("ponglab_owner", "", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+        maxAge: 0,
+      });
+
       return response;
     }
 
     const userId = sessions[0].user_id;
 
-    // Получаем профиль только для пользователя из действующей сессии.
-    const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/users?select=id,phone,created_at&id=eq.${encodeURIComponent(
-        userId
-      )}&limit=1`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-        cache: "no-store",
-      }
-    );
+    const userUrl = new URL(`${supabaseUrl}/rest/v1/users`);
+    userUrl.searchParams.set("select", "id,phone,role,created_at");
+    userUrl.searchParams.set("id", `eq.${userId}`);
+    userUrl.searchParams.set("limit", "1");
+
+    const userResponse = await fetch(userUrl, {
+      headers,
+      cache: "no-store",
+    });
 
     if (!userResponse.ok) {
       console.error(
@@ -109,31 +119,30 @@ export async function GET(request: NextRequest) {
     if (!Array.isArray(users) || users.length === 0) {
       return NextResponse.json(
         { error: "Профиль пользователя не найден." },
-        { status: 404 }
+        { status: 404, headers: { "Cache-Control": "no-store" } }
       );
     }
+
+    const user = users[0];
 
     return NextResponse.json(
       {
         authenticated: true,
         profile: {
-          id: users[0].id,
-          phone: users[0].phone,
-          createdAt: users[0].created_at,
+          id: user.id,
+          phone: user.phone,
+          role: user.role,
+          createdAt: user.created_at,
         },
       },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
+      { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
     console.error("Profile API error:", error);
 
     return NextResponse.json(
       { error: "Ошибка при загрузке профиля." },
-      { status: 503 }
+      { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
