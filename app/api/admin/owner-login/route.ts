@@ -9,19 +9,14 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SESSION_COOKIE = "ponglab_session";
 const OWNER_COOKIE = "ponglab_owner";
 const OWNER_SESSION_SECONDS = 30 * 60;
 
 function safeEqual(a: string, b: string): boolean {
-  const aBuffer = Buffer.from(a, "utf8");
-  const bBuffer = Buffer.from(b, "utf8");
+  const left = Buffer.from(a, "utf8");
+  const right = Buffer.from(b, "utf8");
 
-  if (aBuffer.length !== bBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(aBuffer, bBuffer);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 function signOwnerSession(payload: string, secret: string): string {
@@ -30,24 +25,27 @@ function signOwnerSession(payload: string, secret: string): string {
     .digest("base64url");
 }
 
+function errorResponse(message: string, status: number) {
+  return NextResponse.json(
+    { error: message },
+    {
+      status,
+      headers: { "Cache-Control": "no-store" },
+    }
+  );
+}
+
 export async function POST(request: NextRequest) {
-  // Принимаем запрос только с того же origin.
   const origin = request.headers.get("origin");
 
   if (!origin || origin !== new URL(request.url).origin) {
-    return NextResponse.json(
-      { error: "Недопустимый запрос." },
-      { status: 403 }
-    );
+    return errorResponse("Недопустимый запрос.", 403);
   }
 
-  const sessionToken = request.cookies.get(SESSION_COOKIE)?.value;
+  const sessionToken = request.cookies.get("ponglab_session")?.value;
 
   if (!sessionToken || !/^[a-f0-9]{64}$/i.test(sessionToken)) {
-    return NextResponse.json(
-      { error: "Сначала войдите по номеру телефона." },
-      { status: 401 }
-    );
+    return errorResponse("Сначала войдите по номеру телефона.", 401);
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -55,18 +53,9 @@ export async function POST(request: NextRequest) {
   const ownerPassword = process.env.OWNER_PASSWORD;
   const ownerSessionSecret = process.env.OWNER_SESSION_SECRET;
 
-  if (
-    !supabaseUrl ||
-    !supabaseKey ||
-    !ownerPassword ||
-    !ownerSessionSecret
-  ) {
+  if (!supabaseUrl || !supabaseKey || !ownerPassword || !ownerSessionSecret) {
     console.error("Owner login: required environment variables are missing.");
-
-    return NextResponse.json(
-      { error: "Сервис временно недоступен." },
-      { status: 503 }
-    );
+    return errorResponse("Сервис временно недоступен.", 503);
   }
 
   let body: unknown;
@@ -74,10 +63,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Некорректный запрос." },
-      { status: 400 }
-    );
+    return errorResponse("Некорректный запрос.", 400);
   }
 
   if (
@@ -88,96 +74,138 @@ export async function POST(request: NextRequest) {
     body.password.length === 0 ||
     body.password.length > 1024
   ) {
-    return NextResponse.json(
-      { error: "Введите пароль." },
-      { status: 400 }
-    );
+    return errorResponse("Введите пароль.", 400);
   }
 
-  const tokenHash = createHash("sha256")
-    .update(sessionToken)
-    .digest("hex");
+  const headers = {
+    apikey: supabaseKey,
+    Authorization: `Bearer ${supabaseKey}`,
+    "Content-Type": "application/json",
+  };
 
   try {
-    const sessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_sessions?select=user_id&token_hash=eq.${tokenHash}&expires_at=gt.${encodeURIComponent(
-        new Date().toISOString()
-      )}&limit=1`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-        cache: "no-store",
-      }
+    // Проверяем действующую сессию телефона.
+    const tokenHash = createHash("sha256")
+      .update(sessionToken)
+      .digest("hex");
+
+    const sessionUrl = new URL(`${supabaseUrl}/rest/v1/user_sessions`);
+    sessionUrl.searchParams.set("select", "user_id");
+    sessionUrl.searchParams.set("token_hash", `eq.${tokenHash}`);
+    sessionUrl.searchParams.set(
+      "expires_at",
+      `gt.${new Date().toISOString()}`
     );
+    sessionUrl.searchParams.set("limit", "1");
+
+    const sessionResponse = await fetch(sessionUrl, {
+      headers,
+      cache: "no-store",
+    });
 
     if (!sessionResponse.ok) {
-      console.error(
-        "Owner login: session lookup failed:",
-        sessionResponse.status
-      );
-
-      return NextResponse.json(
-        { error: "Не удалось проверить авторизацию." },
-        { status: 503 }
-      );
+      console.error("Owner login: session lookup failed:", sessionResponse.status);
+      return errorResponse("Не удалось проверить авторизацию.", 503);
     }
 
     const sessions = await sessionResponse.json();
 
     if (!Array.isArray(sessions) || sessions.length === 0) {
-      return NextResponse.json(
-        { error: "Сессия истекла. Войдите по телефону повторно." },
-        { status: 401 }
-      );
+      return errorResponse("Сессия истекла. Войдите по телефону повторно.", 401);
     }
 
     const userId = sessions[0].user_id;
 
-    const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/users?select=id,role&id=eq.${encodeURIComponent(
-        userId
-      )}&limit=1`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-        cache: "no-store",
-      }
-    );
+    // Проверяем роль пользователя в базе, а не в браузере.
+    const userUrl = new URL(`${supabaseUrl}/rest/v1/users`);
+    userUrl.searchParams.set("select", "id,role");
+    userUrl.searchParams.set("id", `eq.${userId}`);
+    userUrl.searchParams.set("limit", "1");
+
+    const userResponse = await fetch(userUrl, {
+      headers,
+      cache: "no-store",
+    });
 
     if (!userResponse.ok) {
-      console.error(
-        "Owner login: user lookup failed:",
-        userResponse.status
-      );
-
-      return NextResponse.json(
-        { error: "Не удалось проверить права пользователя." },
-        { status: 503 }
-      );
+      console.error("Owner login: user lookup failed:", userResponse.status);
+      return errorResponse("Не удалось проверить права пользователя.", 503);
     }
 
     const users = await userResponse.json();
 
-    if (
-      !Array.isArray(users) ||
-      users.length === 0 ||
-      users[0].role !== "owner"
-    ) {
-      return NextResponse.json(
-        { error: "Недостаточно прав для доступа." },
-        { status: 403 }
-      );
+    if (!Array.isArray(users) || users.length === 0 || users[0].role !== "owner") {
+      return errorResponse("Недостаточно прав для доступа.", 403);
     }
 
-    if (!safeEqual(body.password, ownerPassword)) {
-      return NextResponse.json(
-        { error: "Неверный пароль." },
-        { status: 401 }
+    // Проверяем, не заблокированы ли попытки входа.
+    const beginResponse = await fetch(
+      `${supabaseUrl}/rest/v1/rpc/owner_login_begin`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ p_user_id: userId }),
+        cache: "no-store",
+      }
+    );
+
+    if (!beginResponse.ok) {
+      console.error("Owner login: rate-limit check failed:", beginResponse.status);
+      return errorResponse("Не удалось проверить ограничение попыток.", 503);
+    }
+
+    const limits = await beginResponse.json();
+    const limit = Array.isArray(limits) ? limits[0] : null;
+
+    if (!limit || typeof limit.allowed !== "boolean") {
+      console.error("Owner login: unexpected rate-limit response.");
+      return errorResponse("Не удалось проверить ограничение попыток.", 503);
+    }
+
+    if (!limit.allowed) {
+      const retryAfter = Number(limit.retry_after_seconds) || 900;
+      const response = errorResponse(
+        `Слишком много попыток. Повторите через ${Math.ceil(retryAfter / 60)} мин.`,
+        429
       );
+      response.headers.set("Retry-After", String(retryAfter));
+      return response;
+    }
+
+    // Сравниваем пароль только на сервере.
+    if (!safeEqual(body.password, ownerPassword)) {
+      const failResponse = await fetch(
+        `${supabaseUrl}/rest/v1/rpc/owner_login_fail`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ p_user_id: userId }),
+          cache: "no-store",
+        }
+      );
+
+      if (!failResponse.ok) {
+        console.error("Owner login: failed-attempt recording failed:", failResponse.status);
+        return errorResponse("Не удалось проверить пароль. Попробуйте позже.", 503);
+      }
+
+      return errorResponse("Неверный пароль.", 401);
+    }
+
+    // Сбрасываем счётчик после успешной проверки.
+    const resetResponse = await fetch(
+      `${supabaseUrl}/rest/v1/rpc/owner_login_reset`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ p_user_id: userId }),
+        cache: "no-store",
+      }
+    );
+
+    if (!resetResponse.ok) {
+      console.error("Owner login: failed to reset rate limit:", resetResponse.status);
+      return errorResponse("Не удалось завершить вход. Попробуйте позже.", 503);
     }
 
     const expiresAt = Math.floor(Date.now() / 1000) + OWNER_SESSION_SECONDS;
@@ -198,11 +226,7 @@ export async function POST(request: NextRequest) {
         success: true,
         expiresAt: new Date(expiresAt * 1000).toISOString(),
       },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
+      { headers: { "Cache-Control": "no-store" } }
     );
 
     response.cookies.set(OWNER_COOKIE, ownerToken, {
@@ -216,11 +240,6 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Owner login error:", error);
-
-    return NextResponse.json(
-      { error: "Не удалось выполнить вход." },
-      { status: 503 }
-    );
+    return errorResponse("Не удалось выполнить вход.", 503);
   }
 }
-
