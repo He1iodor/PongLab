@@ -2,7 +2,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Phone, UserRound, CalendarDays, LogOut, RefreshCw } from "lucide-react";
+import {
+  X,
+  Phone,
+  UserRound,
+  CalendarDays,
+  LogOut,
+  RefreshCw,
+} from "lucide-react";
 
 type PersonalAccountModalProps = {
   open: boolean;
@@ -31,10 +38,11 @@ export default function PersonalAccountModal({
   const [callPhone, setCallPhone] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
-
   const [sessionStatus, setSessionStatus] =
     useState<SessionStatus>("checking");
   const [sessionRetryCount, setSessionRetryCount] = useState(0);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
 
   // Анимация открытия и закрытия окна.
   useEffect(() => {
@@ -44,7 +52,6 @@ export default function PersonalAccountModal({
 
     if (open) {
       setMounted(true);
-
       frame1 = requestAnimationFrame(() => {
         frame2 = requestAnimationFrame(() => setVisible(true));
       });
@@ -84,7 +91,6 @@ export default function PersonalAccountModal({
     };
 
     window.addEventListener("keydown", handleKeyDown);
-
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mounted, onClose]);
 
@@ -219,6 +225,47 @@ export default function PersonalAccountModal({
       if (timer) clearTimeout(timer);
     };
   }, [challengeId, expiresAt, authSuccess]);
+
+  // Выход из аккаунта.
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    setLogoutError("");
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      // Серверный маршрут очищает cookie даже при ошибке
+      // удаления записи сессии в Supabase.
+      setSessionStatus("unauthenticated");
+      setAuthSuccess(false);
+      setPhoneDigits("");
+      setAuthError("");
+      setCallPhone("");
+      setChallengeId("");
+      setExpiresAt("");
+
+      if (!response.ok || result.success !== true) {
+        setLogoutError(
+          result.error ||
+            "Вы вышли из аккаунта на этом устройстве, но сервер не подтвердил завершение сессии.",
+        );
+      }
+    } catch {
+      setLogoutError(
+        "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.",
+      );
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   const handlePhoneChange = (value: string) => {
     const trimmed = value.trim();
@@ -417,6 +464,7 @@ export default function PersonalAccountModal({
               <p className="text-base font-semibold text-white">
                 Вы вошли в PongLab
               </p>
+
               <p className="mt-2 text-sm leading-6 text-white/65">
                 Авторизация активна. Повторный звонок не требуется.
               </p>
@@ -428,10 +476,12 @@ export default function PersonalAccountModal({
                   size={21}
                   className="mt-0.5 text-[#A77BFF]"
                 />
+
                 <div>
                   <p className="font-medium text-white">
                     Мои бронирования
                   </p>
+
                   <p className="mt-1 text-sm leading-5 text-white/55">
                     Здесь будут отображаться ваши тренировки,
                     забронированные столы и время посещения.
@@ -439,6 +489,31 @@ export default function PersonalAccountModal({
                 </div>
               </div>
             </div>
+
+            {logoutError && (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-400/30 bg-red-400/10 p-3"
+              >
+                <p className="text-sm leading-5 text-red-200">
+                  {logoutError}
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-white/75 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoggingOut ? (
+                <RefreshCw size={17} className="animate-spin" />
+              ) : (
+                <LogOut size={17} />
+              )}
+              {isLoggingOut ? "Выходим..." : "Выйти из аккаунта"}
+            </button>
 
             <button
               type="button"
