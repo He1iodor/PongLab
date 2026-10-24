@@ -2,12 +2,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Phone } from "lucide-react";
+import { X, Phone, UserRound, CalendarDays, LogOut, RefreshCw } from "lucide-react";
 
 type PersonalAccountModalProps = {
   open: boolean;
   onClose: () => void;
 };
+
+type SessionStatus =
+  | "checking"
+  | "authenticated"
+  | "unauthenticated"
+  | "error";
 
 const ANIMATION_DURATION = 500;
 const POLL_INTERVAL = 3000;
@@ -26,6 +32,11 @@ export default function PersonalAccountModal({
   const [challengeId, setChallengeId] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
 
+  const [sessionStatus, setSessionStatus] =
+    useState<SessionStatus>("checking");
+  const [sessionRetryCount, setSessionRetryCount] = useState(0);
+
+  // Анимация открытия и закрытия окна.
   useEffect(() => {
     let frame1 = 0;
     let frame2 = 0;
@@ -39,7 +50,10 @@ export default function PersonalAccountModal({
       });
     } else {
       setVisible(false);
-      timer = setTimeout(() => setMounted(false), ANIMATION_DURATION);
+      timer = setTimeout(
+        () => setMounted(false),
+        ANIMATION_DURATION,
+      );
     }
 
     return () => {
@@ -49,6 +63,7 @@ export default function PersonalAccountModal({
     };
   }, [open]);
 
+  // Блокируем прокрутку страницы, пока окно открыто.
   useEffect(() => {
     if (!mounted) return;
 
@@ -60,6 +75,7 @@ export default function PersonalAccountModal({
     };
   }, [mounted]);
 
+  // Закрытие по Escape.
   useEffect(() => {
     if (!mounted) return;
 
@@ -72,6 +88,53 @@ export default function PersonalAccountModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mounted, onClose]);
 
+  // Проверяем существующую сессию при каждом открытии окна.
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    const checkSession = async () => {
+      setSessionStatus("checking");
+
+      try {
+        const response = await fetch("/api/auth/session", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (cancelled) return;
+
+        if (!response.ok) {
+          setSessionStatus("error");
+          return;
+        }
+
+        if (result.authenticated === true) {
+          setSessionStatus("authenticated");
+          setAuthSuccess(true);
+          setAuthError("");
+        } else {
+          setSessionStatus("unauthenticated");
+          setAuthSuccess(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setSessionStatus("error");
+        }
+      }
+    };
+
+    void checkSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionRetryCount]);
+
   // Автоматически проверяем звонок каждые 3 секунды.
   useEffect(() => {
     if (!challengeId || !expiresAt || authSuccess) return;
@@ -83,7 +146,9 @@ export default function PersonalAccountModal({
       if (cancelled) return;
 
       if (Date.now() >= new Date(expiresAt).getTime()) {
-        setAuthError("Время проверки истекло. Запросите новый звонок.");
+        setAuthError(
+          "Время проверки истекло. Запросите новый звонок.",
+        );
         setCallPhone("");
         setChallengeId("");
         setExpiresAt("");
@@ -107,6 +172,7 @@ export default function PersonalAccountModal({
 
         if (response.ok && result.verified === true) {
           setAuthSuccess(true);
+          setSessionStatus("authenticated");
           setCallPhone("");
           setChallengeId("");
           setExpiresAt("");
@@ -125,7 +191,8 @@ export default function PersonalAccountModal({
           response.status === 410
         ) {
           setAuthError(
-            result.error || "Проверка завершена. Запросите новый звонок.",
+            result.error ||
+              "Проверка завершена. Запросите новый звонок.",
           );
           setCallPhone("");
           setChallengeId("");
@@ -133,8 +200,6 @@ export default function PersonalAccountModal({
           return;
         }
 
-        // При временной ошибке сервера повторяем проверку,
-        // пока не истекли пять минут.
         setAuthError("Проверяем статус звонка. Подождите...");
         timer = setTimeout(checkStatus, POLL_INTERVAL);
       } catch {
@@ -175,7 +240,14 @@ export default function PersonalAccountModal({
   ) => {
     event.preventDefault();
 
-    if (!isPhoneValid || isSubmitting || callPhone || authSuccess) return;
+    if (
+      !isPhoneValid ||
+      isSubmitting ||
+      callPhone ||
+      authSuccess
+    ) {
+      return;
+    }
 
     setIsSubmitting(true);
     setAuthError("");
@@ -201,7 +273,8 @@ export default function PersonalAccountModal({
 
       if (!response.ok) {
         setAuthError(
-          result.error || "Не удалось начать проверку. Попробуйте ещё раз.",
+          result.error ||
+            "Не удалось начать проверку. Попробуйте ещё раз.",
         );
         return;
       }
@@ -211,7 +284,9 @@ export default function PersonalAccountModal({
         typeof result.callPhone !== "string" ||
         typeof result.expiresAt !== "string"
       ) {
-        setAuthError("Сервер вернул некорректный ответ. Попробуйте позже.");
+        setAuthError(
+          "Сервер вернул некорректный ответ. Попробуйте позже.",
+        );
         return;
       }
 
@@ -219,13 +294,18 @@ export default function PersonalAccountModal({
       setChallengeId(result.challengeId);
       setExpiresAt(result.expiresAt);
     } catch {
-      setAuthError("Не удалось связаться с сервером. Попробуйте ещё раз.");
+      setAuthError(
+        "Не удалось связаться с сервером. Попробуйте ещё раз.",
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   if (!mounted) return null;
+
+  const isAuthenticated =
+    sessionStatus === "authenticated" || authSuccess;
 
   return (
     <div
@@ -265,7 +345,11 @@ export default function PersonalAccountModal({
         </button>
 
         <div className="mb-7 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#6B30CE]/20 text-[#A77BFF]">
-          <Phone size={27} strokeWidth={1.8} />
+          {isAuthenticated ? (
+            <UserRound size={27} strokeWidth={1.8} />
+          ) : (
+            <Phone size={27} strokeWidth={1.8} />
+          )}
         </div>
 
         <div className="mb-8">
@@ -281,118 +365,191 @@ export default function PersonalAccountModal({
           </h2>
 
           <p className="mt-3 text-sm leading-6 text-white/60">
-            Введите собственный номер телефона, чтобы войти или создать аккаунт.
-            Подтверждение будет выполнено посредством звонка.
+            {isAuthenticated
+              ? "Управляйте своими тренировками и бронированиями."
+              : "Введите собственный номер телефона, чтобы войти или создать аккаунт. Подтверждение будет выполнено посредством звонка."}
           </p>
         </div>
 
-        <form onSubmit={handleContinue}>
-          <label
-            htmlFor="account-phone"
-            className="mb-2 block text-sm font-medium text-white/90"
+        {sessionStatus === "checking" && !authSuccess && (
+          <div
+            role="status"
+            className="rounded-xl border border-white/10 bg-white/[0.04] p-5"
           >
-            Номер:
-          </label>
-
-          <div className="flex h-14 items-center overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] transition-colors focus-within:border-[#8F5BFF]">
-            <span
-              className="flex h-full items-center border-r border-white/10 px-4 text-base text-white/80"
-              aria-hidden="true"
-            >
-              +7
-            </span>
-
-            <input
-              id="account-phone"
-              name="phone"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              placeholder="999 123-45-67"
-              value={phoneDigits}
-              onChange={(event) => handlePhoneChange(event.target.value)}
-              maxLength={15}
-              required
-              disabled={Boolean(callPhone) || authSuccess}
-              aria-describedby="phone-hint"
-              className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-white/30 disabled:opacity-60"
-            />
-          </div>
-
-          <p
-            id="phone-hint"
-            aria-live="polite"
-            className="mt-2 min-h-5 text-xs text-white/50"
-          >
-            {phoneDigits.length === 0
-              ? "Введите 10 цифр номера"
-              : phoneDigits.length < 10
-                ? `Введено ${phoneDigits.length} из 10 цифр`
-                : "Номер введён полностью"}
-          </p>
-
-          {authError && (
-            <p role="alert" aria-live="polite" className="mt-3 text-sm text-red-400">
-              {authError}
-            </p>
-          )}
-
-          {callPhone && (
-            <div className="mt-4 rounded-xl border border-[#8F5BFF]/30 bg-[#6B30CE]/10 p-4">
-              <p className="text-sm leading-6 text-white/80">
-                Позвоните на указанный номер в течение 5 минут. Звонок будет
-                автоматически сброшен после проверки.
-              </p>
-
-              <p className="mt-3 break-all text-xl font-semibold text-[#A77BFF]">
-                {callPhone}
-              </p>
-
-              <p className="mt-2 text-xs text-white/50">
-                Ожидаем подтверждения звонка...
+            <div className="flex items-center gap-3">
+              <RefreshCw
+                size={20}
+                className="animate-spin text-[#A77BFF]"
+              />
+              <p className="text-sm text-white/80">
+                Проверяем авторизацию...
               </p>
             </div>
-          )}
+          </div>
+        )}
 
-          {authSuccess && (
+        {sessionStatus === "error" && !authSuccess && (
+          <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-4">
+            <p className="text-sm leading-6 text-white">
+              Не удалось проверить сессию. Проверьте подключение и
+              повторите попытку.
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSessionRetryCount((count) => count + 1)
+              }
+              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white/10 text-sm font-semibold text-white transition-colors hover:bg-white/15"
+            >
+              <RefreshCw size={16} />
+              Повторить проверку
+            </button>
+          </div>
+        )}
+
+        {isAuthenticated && (
+          <div className="space-y-4">
             <div
               role="status"
-              className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4"
+              className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4"
             >
-              <p className="text-sm leading-6 text-white">
-                Номер подтверждён. Авторизация выполнена.
+              <p className="text-base font-semibold text-white">
+                Вы вошли в PongLab
               </p>
-              <p className="mt-2 text-xs leading-5 text-white/60">
-                Сессия создана. Интерфейс бронирования подключим следующим шагом.
+              <p className="mt-2 text-sm leading-6 text-white/65">
+                Авторизация активна. Повторный звонок не требуется.
               </p>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={
-              !isPhoneValid ||
-              isSubmitting ||
-              Boolean(callPhone) ||
-              authSuccess
-            }
-            className={`mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-base font-semibold text-white transition-[opacity,transform,filter] duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
-              isPhoneValid ? "hover:brightness-110" : ""
-            }`}
-          >
-            {isSubmitting
-              ? "Отправка запроса..."
-              : authSuccess
-                ? "Вход выполнен"
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="flex items-start gap-3">
+                <CalendarDays
+                  size={21}
+                  className="mt-0.5 text-[#A77BFF]"
+                />
+                <div>
+                  <p className="font-medium text-white">
+                    Мои бронирования
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-white/55">
+                    Здесь будут отображаться ваши тренировки,
+                    забронированные столы и время посещения.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-base font-semibold text-white transition-[opacity,transform] duration-200 hover:brightness-110 active:scale-[0.99]"
+            >
+              Продолжить
+            </button>
+          </div>
+        )}
+
+        {sessionStatus === "unauthenticated" && !authSuccess && (
+          <form onSubmit={handleContinue}>
+            <label
+              htmlFor="account-phone"
+              className="mb-2 block text-sm font-medium text-white/90"
+            >
+              Номер:
+            </label>
+
+            <div className="flex h-14 items-center overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] transition-colors focus-within:border-[#8F5BFF]">
+              <span
+                className="flex h-full items-center border-r border-white/10 px-4 text-base text-white/80"
+                aria-hidden="true"
+              >
+                +7
+              </span>
+
+              <input
+                id="account-phone"
+                name="phone"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                placeholder="999 123-45-67"
+                value={phoneDigits}
+                onChange={(event) =>
+                  handlePhoneChange(event.target.value)
+                }
+                maxLength={15}
+                required
+                disabled={Boolean(callPhone) || authSuccess}
+                aria-describedby="phone-hint"
+                className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-white/30 disabled:opacity-60"
+              />
+            </div>
+
+            <p
+              id="phone-hint"
+              aria-live="polite"
+              className="mt-2 min-h-5 text-xs text-white/50"
+            >
+              {phoneDigits.length === 0
+                ? "Введите 10 цифр номера"
+                : phoneDigits.length < 10
+                  ? `Введено ${phoneDigits.length} из 10 цифр`
+                  : "Номер введён полностью"}
+            </p>
+
+            {authError && (
+              <p
+                role="alert"
+                aria-live="polite"
+                className="mt-3 text-sm text-red-400"
+              >
+                {authError}
+              </p>
+            )}
+
+            {callPhone && (
+              <div className="mt-4 rounded-xl border border-[#8F5BFF]/30 bg-[#6B30CE]/10 p-4">
+                <p className="text-sm leading-6 text-white/80">
+                  Позвоните на указанный номер в течение 5 минут.
+                  Звонок будет автоматически сброшен после проверки.
+                </p>
+
+                <p className="mt-3 break-all text-xl font-semibold text-[#A77BFF]">
+                  {callPhone}
+                </p>
+
+                <p className="mt-2 text-xs text-white/50">
+                  Ожидаем подтверждения звонка...
+                </p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={
+                !isPhoneValid ||
+                isSubmitting ||
+                Boolean(callPhone) ||
+                authSuccess
+              }
+              className={`mt-4 flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-base font-semibold text-white transition-[opacity,transform,filter] duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
+                isPhoneValid ? "hover:brightness-110" : ""
+              }`}
+            >
+              {isSubmitting
+                ? "Отправка запроса..."
                 : callPhone
                   ? "Ожидаем звонок..."
                   : "Продолжить"}
-          </button>
+            </button>
 
-          <p className="mt-5 text-center text-xs leading-5 text-white/40">
-            Продолжая, вы соглашаетесь с обработкой персональных данных.
-          </p>
-        </form>
+            <p className="mt-5 text-center text-xs leading-5 text-white/40">
+              Продолжая, вы соглашаетесь с обработкой персональных
+              данных.
+            </p>
+          </form>
+        )}
       </div>
     </div>
   );
