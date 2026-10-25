@@ -29,13 +29,21 @@ type SessionStatus =
 
 const ANIMATION_DURATION = 500;
 const POLL_INTERVAL = 3000;
+const ROLE_REQUEST_TIMEOUT = 8000;
 
 async function fetchAccountRole(): Promise<AccountRole> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    ROLE_REQUEST_TIMEOUT,
+  );
+
   try {
     const response = await fetch("/api/account/profile", {
       method: "GET",
       credentials: "same-origin",
       cache: "no-store",
+      signal: controller.signal,
     });
 
     if (!response.ok) return null;
@@ -54,6 +62,8 @@ async function fetchAccountRole(): Promise<AccountRole> {
     return null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -166,12 +176,17 @@ export default function PersonalAccountModal({
           setAuthError("");
           setIsLoadingRole(true);
 
-          const role = await fetchAccountRole();
+          try {
+            const role = await fetchAccountRole();
 
-          if (cancelled) return;
+            if (cancelled) return;
 
-          setAccountRole(role);
-          setIsLoadingRole(false);
+            setAccountRole(role);
+          } finally {
+            if (!cancelled) {
+              setIsLoadingRole(false);
+            }
+          }
         } else {
           setSessionStatus("unauthenticated");
           setAuthSuccess(false);
@@ -182,6 +197,7 @@ export default function PersonalAccountModal({
       } catch {
         if (!cancelled) {
           setSessionStatus("error");
+          setIsLoadingRole(false);
         }
       }
     };
@@ -237,11 +253,19 @@ export default function PersonalAccountModal({
           setAuthError("");
           setIsLoadingRole(true);
 
-          void fetchAccountRole().then((role) => {
-            if (cancelled) return;
-            setAccountRole(role);
-            setIsLoadingRole(false);
-          });
+          // Не проверяем флаг cancelled здесь:
+          // при смене authSuccess эффект очищается,
+          // иначе индикатор мог остаться навсегда.
+          void fetchAccountRole()
+            .then((role) => {
+              setAccountRole(role);
+            })
+            .catch(() => {
+              setAccountRole(null);
+            })
+            .finally(() => {
+              setIsLoadingRole(false);
+            });
 
           return;
         }
