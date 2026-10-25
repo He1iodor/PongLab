@@ -41,7 +41,11 @@ async function fetchAccountRole(): Promise<AccountRole> {
     const result = await response.json();
     const role = result?.profile?.role;
 
-    if (role === "owner" || role === "staff" || role === "customer") {
+    if (
+      role === "owner" ||
+      role === "staff" ||
+      role === "customer"
+    ) {
       return role;
     }
 
@@ -152,8 +156,11 @@ export default function PersonalAccountModal({
           setAuthSuccess(true);
           setAuthError("");
           setIsLoadingRole(true);
+
           const role = await fetchAccountRole();
+
           if (cancelled) return;
+
           setAccountRole(role);
           setIsLoadingRole(false);
         } else {
@@ -219,10 +226,12 @@ export default function PersonalAccountModal({
           setExpiresAt("");
           setAuthError("");
           setIsLoadingRole(true);
+
           void fetchAccountRole().then((role) => {
             setAccountRole(role);
             setIsLoadingRole(false);
           });
+
           return;
         }
 
@@ -519,7 +528,9 @@ export default function PersonalAccountModal({
                 href="/admin"
                 className="flex h-14 w-full items-center justify-center rounded-xl border border-[#8F5BFF]/40 bg-[#6B30CE]/15 px-4 text-center text-base font-semibold text-white transition-colors hover:bg-[#6B30CE]/25"
               >
-                {accountRole === "owner" ? "Панель владельца" : "Панель сотрудника"}
+                {accountRole === "owner"
+                  ? "Панель владельца"
+                  : "Панель сотрудника"}
               </a>
             )}
 
@@ -534,11 +545,15 @@ export default function PersonalAccountModal({
               <div className="flex items-start gap-3">
                 <CalendarDays
                   size={21}
-                  className="mt-0.5 text-[#A77BFF]"
+                  className="mt-0.5 shrink-0 text-[#A77BFF]"
                 />
 
-                <div>
+                <div className="min-w-0 flex-1">
                   <BookingCalendar />
+                </div>
+              </div>
+            </div>
+
             {logoutError && (
               <div
                 role="alert"
