@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -390,7 +389,7 @@ export default function BookingCalendar() {
                 max={maxDate}
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
-                className="h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
+                className="h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF] [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
             </div>
 
