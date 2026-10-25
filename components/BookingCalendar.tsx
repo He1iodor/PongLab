@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -36,6 +37,22 @@ type Slot = {
   duration_minutes: number;
   price_rub: number;
   available_tables: AvailableTable[];
+};
+
+type SelectedSlot = {
+  key: string;
+  tableId: string;
+};
+
+type BookingGroup = {
+  slots: Slot[];
+  tableId: string;
+  start_at: string;
+  end_at: string;
+  starts_at: string;
+  ends_at: string;
+  duration_minutes: number;
+  price_rub: number;
 };
 
 function dateInTimezone(timezone: string, offsetDays = 0) {
@@ -96,8 +113,8 @@ export default function BookingCalendar() {
   const [date, setDate] = useState("");
   const [duration, setDuration] = useState(60);
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [selectedKey, setSelectedKey] = useState("");
-  const [selectedTableId, setSelectedTableId] = useState("");
+  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
+  const [selectionError, setSelectionError] = useState("");
   const [loadingStudios, setLoadingStudios] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [error, setError] = useState("");
@@ -111,16 +128,62 @@ export default function BookingCalendar() {
   const availableDurations =
     selectedStudio?.settings.allowed_durations_minutes ?? [];
 
-  const selectedSlot = useMemo(
+  const resolvedSelectedSlots = useMemo(
     () =>
-      slots.find(
-        (slot) =>
-          `${slot.start_at}|${slot.duration_minutes}` === selectedKey,
-      ) ?? null,
-    [slots, selectedKey],
+      selectedSlots
+        .map((selection) => ({
+          selection,
+          slot: slots.find(
+            (slot) =>
+              `${slot.start_at}|${slot.duration_minutes}` === selection.key,
+          ),
+        }))
+        .filter(
+          (item): item is { selection: SelectedSlot; slot: Slot } =>
+            Boolean(item.slot),
+        )
+        .sort((a, b) => a.slot.start_at.localeCompare(b.slot.start_at)),
+    [slots, selectedSlots],
   );
 
-  const availableTables = selectedSlot?.available_tables ?? [];
+  // Объединяем соседние выбранные слоты только при совпадении стола.
+  const bookingGroups = useMemo(() => {
+    const groups: BookingGroup[] = [];
+
+    for (const { selection, slot } of resolvedSelectedSlots) {
+      const previous = groups[groups.length - 1];
+
+      if (
+        previous &&
+        previous.end_at === slot.start_at &&
+        previous.tableId === selection.tableId
+      ) {
+        previous.slots.push(slot);
+        previous.end_at = slot.end_at;
+        previous.ends_at = slot.ends_at;
+        previous.duration_minutes += slot.duration_minutes;
+        previous.price_rub += slot.price_rub;
+      } else {
+        groups.push({
+          slots: [slot],
+          tableId: selection.tableId,
+          start_at: slot.start_at,
+          end_at: slot.end_at,
+          starts_at: slot.starts_at,
+          ends_at: slot.ends_at,
+          duration_minutes: slot.duration_minutes,
+          price_rub: slot.price_rub,
+        });
+      }
+    }
+
+    return groups;
+  }, [resolvedSelectedSlots]);
+
+  const totalPrice = bookingGroups.reduce(
+    (total, group) => total + group.price_rub,
+    0,
+  );
 
   const maxDate = selectedStudio
     ? dateInTimezone(
@@ -225,8 +288,8 @@ export default function BookingCalendar() {
 
     setLoadingSlots(true);
     setError("");
-    setSelectedKey("");
-    setSelectedTableId("");
+    setSelectedSlots([]);
+    setSelectionError("");
 
     try {
       const params = new URLSearchParams({
@@ -267,9 +330,57 @@ export default function BookingCalendar() {
 
   const selectSlot = (slot: Slot) => {
     const key = `${slot.start_at}|${slot.duration_minutes}`;
+    const alreadySelected = selectedSlots.some(
+      (selection) => selection.key === key,
+    );
 
-    setSelectedKey(key);
-    setSelectedTableId(slot.available_tables[0]?.id ?? "");
+    setSelectionError("");
+
+    if (alreadySelected) {
+      setSelectedSlots((current) =>
+        current.filter((selection) => selection.key !== key),
+      );
+      return;
+    }
+
+    const overlaps = selectedSlots.some((selection) => {
+      const selected = slots.find(
+        (item) =>
+          `${item.start_at}|${item.duration_minutes}` === selection.key,
+      );
+
+      return Boolean(
+        selected &&
+          new Date(selected.start_at).getTime() <
+            new Date(slot.end_at).getTime() &&
+          new Date(selected.end_at).getTime() >
+            new Date(slot.start_at).getTime(),
+      );
+    });
+
+    if (overlaps) {
+      setSelectionError(
+        "Этот слот пересекается с уже выбранным временем. Снимите пересекающийся выбор или выберите другое время.",
+      );
+      return;
+    }
+
+    const defaultTableId = slot.available_tables[0]?.id;
+    if (!defaultTableId) return;
+
+    setSelectedSlots((current) => [
+      ...current,
+      { key, tableId: defaultTableId },
+    ]);
+  };
+
+  const selectTableForSlot = (key: string, tableId: string) => {
+    setSelectedSlots((current) =>
+      current.map((selection) =>
+        selection.key === key ? { ...selection, tableId } : selection,
+      ),
+    );
+    setSelectionError("");
   };
 
   if (loadingStudios) {
@@ -351,8 +462,8 @@ export default function BookingCalendar() {
                 onChange={(event) => {
                   setStudioId(event.target.value);
                   setDate("");
-                  setSelectedKey("");
-                  setSelectedTableId("");
+                  setSelectedSlots([]);
+                  setSelectionError("");
                 }}
                 className="h-12 w-full rounded-xl border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
               >
@@ -382,15 +493,23 @@ export default function BookingCalendar() {
                 Дата
               </label>
 
-              <input
-                id="booking-date"
-                type="date"
-                min={minDate}
-                max={maxDate}
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                className="h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF] [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-              />
+              <div className="relative">
+                <input
+                  id="booking-date"
+                  type="date"
+                  min={minDate}
+                  max={maxDate}
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
+                  className="h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#101326] px-3 pr-11 text-sm text-white outline-none focus:border-[#8F5BFF] [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-11 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                />
+
+                <CalendarDays
+                  size={18}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white"
+                />
+              </div>
             </div>
 
             <div className="min-w-0 space-y-2">
@@ -456,7 +575,9 @@ export default function BookingCalendar() {
                 {slots.map((slot) => {
                   const key = `${slot.start_at}|${slot.duration_minutes}`;
                   const disabled = slot.available_tables.length === 0;
-                  const active = key === selectedKey;
+                  const active = selectedSlots.some(
+                    (selection) => selection.key === key,
+                  );
 
                   return (
                     <button
@@ -492,57 +613,134 @@ export default function BookingCalendar() {
             )}
           </div>
 
-          {selectedSlot && availableTables.length > 0 && (
-            <div className="space-y-4 rounded-xl border border-[#8F5BFF]/25 bg-[#6B30CE]/10 p-4 sm:p-5">
+          {selectionError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-5 text-amber-100"
+            >
+              {selectionError}
+            </div>
+          )}
+
+          {resolvedSelectedSlots.length > 0 && (
+            <div className="space-y-5 rounded-xl border border-[#8F5BFF]/25 bg-[#6B30CE]/10 p-4 sm:p-5">
               <div className="flex items-start gap-3">
                 <Table2
                   size={20}
                   className="mt-0.5 shrink-0 text-[#A77BFF]"
                 />
-
                 <div>
                   <p className="text-sm font-semibold text-white">
-                    Выберите стол
+                    Выбранные слоты
                   </p>
-
                   <p className="mt-1 text-xs leading-5 text-white/50">
-                    Наличие будет повторно проверено сервером при
-                    создании брони.
+                    Можно выбрать несколько периодов. Пересекающиеся слоты
+                    нельзя добавить одновременно. Для каждого периода можно
+                    назначить стол.
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {availableTables.map((table) => (
-                  <button
-                    key={table.id}
-                    type="button"
-                    onClick={() => setSelectedTableId(table.id)}
-                    className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
-                      selectedTableId === table.id
-                        ? "border-[#A77BFF] bg-[#6B30CE]/30 text-white"
-                        : "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]"
-                    }`}
+              <div className="space-y-3">
+                {resolvedSelectedSlots.map(({ selection, slot }) => (
+                  <div
+                    key={selection.key}
+                    className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(150px,220px)_auto] sm:items-center"
                   >
-                    {table.name}
-                  </button>
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        {slot.starts_at}–{slot.ends_at}
+                      </p>
+                      <p className="mt-1 text-xs text-white/50">
+                        {durationLabel(slot.duration_minutes)} · {money(slot.price_rub)}
+                      </p>
+                    </div>
+
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-white/50">
+                        Стол
+                      </span>
+                      <select
+                        value={selection.tableId}
+                        onChange={(event) =>
+                          selectTableForSlot(selection.key, event.target.value)
+                        }
+                        className="h-10 w-full rounded-lg border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
+                      >
+                        {slot.available_tables.map((table) => (
+                          <option key={table.id} value={table.id}>
+                            {table.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => selectSlot(slot)}
+                      className="h-10 rounded-lg border border-white/10 px-3 text-sm text-white/70 transition hover:border-red-300/40 hover:bg-red-400/10 hover:text-white"
+                    >
+                      Убрать
+                    </button>
+                  </div>
                 ))}
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
-                <span className="text-sm text-white/60">
-                  Итого за сеанс
-                </span>
+              <div className="space-y-3 border-t border-white/10 pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-white">
+                    Итоговая разбивка бронирований
+                  </h4>
+                  <span className="text-xs text-white/50">
+                    Броней: {bookingGroups.length}
+                  </span>
+                </div>
 
+                {bookingGroups.map((group, index) => {
+                  const tableName =
+                    group.slots[0]?.available_tables.find(
+                      (table) => table.id === group.tableId,
+                    )?.name ?? "Выбранный стол";
+
+                  return (
+                    <div
+                      key={`${group.start_at}|${group.tableId}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          Бронь {index + 1}: {group.starts_at}–{group.ends_at}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-white/50">
+                          {durationLabel(group.duration_minutes)} · {tableName}
+                          {group.slots.length > 1
+                            ? ` · объединено слотов: ${group.slots.length}`
+                            : ""}
+                        </p>
+                      </div>
+                      <p className="text-base font-semibold text-[#C8B2FF]">
+                        {money(group.price_rub)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                <div>
+                  <p className="text-sm text-white/60">Общая стоимость</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Сумма цен выбранных слотов
+                  </p>
+                </div>
                 <span className="text-xl font-semibold text-white">
-                  {money(selectedSlot.price_rub)}
+                  {money(totalPrice)}
                 </span>
               </div>
 
               <p className="text-xs leading-5 text-white/45">
-                Выбор пока не создаёт бронь и не списывает деньги.
-                Подтверждение бронирования и платёжный модуль подключим
-                отдельным этапом.
+                Выбор пока не создаёт бронь, не резервирует время и не списывает
+                деньги. Серверный резерв на 10 минут и платёж подключим отдельно.
               </p>
             </div>
           )}
