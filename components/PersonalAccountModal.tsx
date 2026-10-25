@@ -16,6 +16,8 @@ type PersonalAccountModalProps = {
   onClose: () => void;
 };
 
+type AccountRole = "owner" | "staff" | "customer" | null;
+
 type SessionStatus =
   | "checking"
   | "authenticated"
@@ -24,6 +26,29 @@ type SessionStatus =
 
 const ANIMATION_DURATION = 500;
 const POLL_INTERVAL = 3000;
+
+async function fetchAccountRole(): Promise<AccountRole> {
+  try {
+    const response = await fetch("/api/account/profile", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+
+    const result = await response.json();
+    const role = result?.profile?.role;
+
+    if (role === "owner" || role === "staff" || role === "customer") {
+      return role;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export default function PersonalAccountModal({
   open,
@@ -43,6 +68,8 @@ export default function PersonalAccountModal({
   const [sessionRetryCount, setSessionRetryCount] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [accountRole, setAccountRole] = useState<AccountRole>(null);
+  const [isLoadingRole, setIsLoadingRole] = useState(false);
 
   // Анимация открытия и закрытия окна.
   useEffect(() => {
@@ -123,9 +150,16 @@ export default function PersonalAccountModal({
           setSessionStatus("authenticated");
           setAuthSuccess(true);
           setAuthError("");
+          setIsLoadingRole(true);
+          const role = await fetchAccountRole();
+          if (cancelled) return;
+          setAccountRole(role);
+          setIsLoadingRole(false);
         } else {
           setSessionStatus("unauthenticated");
           setAuthSuccess(false);
+          setAccountRole(null);
+          setIsLoadingRole(false);
         }
       } catch {
         if (!cancelled) {
@@ -183,6 +217,11 @@ export default function PersonalAccountModal({
           setChallengeId("");
           setExpiresAt("");
           setAuthError("");
+          setIsLoadingRole(true);
+          void fetchAccountRole().then((role) => {
+            setAccountRole(role);
+            setIsLoadingRole(false);
+          });
           return;
         }
 
@@ -246,6 +285,8 @@ export default function PersonalAccountModal({
       // удаления записи сессии в Supabase.
       setSessionStatus("unauthenticated");
       setAuthSuccess(false);
+      setAccountRole(null);
+      setIsLoadingRole(false);
       setPhoneDigits("");
       setAuthError("");
       setCallPhone("");
@@ -299,6 +340,8 @@ export default function PersonalAccountModal({
     setIsSubmitting(true);
     setAuthError("");
     setAuthSuccess(false);
+    setAccountRole(null);
+    setIsLoadingRole(false);
     setCallPhone("");
     setChallengeId("");
     setExpiresAt("");
@@ -469,6 +512,22 @@ export default function PersonalAccountModal({
                 Авторизация активна. Повторный звонок не требуется.
               </p>
             </div>
+
+            {(accountRole === "owner" || accountRole === "staff") && (
+              <a
+                href="/admin"
+                className="flex h-14 w-full items-center justify-center rounded-xl border border-[#8F5BFF]/40 bg-[#6B30CE]/15 px-4 text-center text-base font-semibold text-white transition-colors hover:bg-[#6B30CE]/25"
+              >
+                {accountRole === "owner" ? "Панель владельца" : "Панель сотрудника"}
+              </a>
+            )}
+
+            {isLoadingRole && (
+              <div className="flex items-center justify-center gap-2 text-sm text-white/50">
+                <RefreshCw size={15} className="animate-spin" />
+                Проверяем права доступа...
+              </div>
+            )}
 
             <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
               <div className="flex items-start gap-3">
