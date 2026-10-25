@@ -10,6 +10,8 @@ import {
   CalendarDays,
   LogOut,
   RefreshCw,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 
 type PersonalAccountModalProps = {
@@ -61,6 +63,8 @@ export default function PersonalAccountModal({
 }: PersonalAccountModalProps) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
+  const [showBooking, setShowBooking] = useState(false);
+
   const [phoneDigits, setPhoneDigits] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -68,15 +72,17 @@ export default function PersonalAccountModal({
   const [callPhone, setCallPhone] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+
   const [sessionStatus, setSessionStatus] =
     useState<SessionStatus>("checking");
   const [sessionRetryCount, setSessionRetryCount] = useState(0);
+
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const [accountRole, setAccountRole] = useState<AccountRole>(null);
   const [isLoadingRole, setIsLoadingRole] = useState(false);
 
-  // Анимация открытия и закрытия окна.
+  // Анимация открытия и закрытия модального окна.
   useEffect(() => {
     let frame1 = 0;
     let frame2 = 0;
@@ -89,10 +95,10 @@ export default function PersonalAccountModal({
       });
     } else {
       setVisible(false);
-      timer = setTimeout(
-        () => setMounted(false),
-        ANIMATION_DURATION,
-      );
+      setShowBooking(false);
+      timer = setTimeout(() => {
+        setMounted(false);
+      }, ANIMATION_DURATION);
     }
 
     return () => {
@@ -102,7 +108,7 @@ export default function PersonalAccountModal({
     };
   }, [open]);
 
-  // Блокируем прокрутку страницы, пока окно открыто.
+  // Блокируем прокрутку страницы, пока модальное окно открыто.
   useEffect(() => {
     if (!mounted) return;
 
@@ -114,7 +120,7 @@ export default function PersonalAccountModal({
     };
   }, [mounted]);
 
-  // Закрытие по Escape.
+  // Закрытие окна по Escape.
   useEffect(() => {
     if (!mounted) return;
 
@@ -123,10 +129,13 @@ export default function PersonalAccountModal({
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [mounted, onClose]);
 
-  // Проверяем существующую сессию при каждом открытии окна.
+  // Проверяем существующую сессию при открытии окна.
   useEffect(() => {
     if (!open) return;
 
@@ -168,6 +177,7 @@ export default function PersonalAccountModal({
           setAuthSuccess(false);
           setAccountRole(null);
           setIsLoadingRole(false);
+          setShowBooking(false);
         }
       } catch {
         if (!cancelled) {
@@ -183,7 +193,7 @@ export default function PersonalAccountModal({
     };
   }, [open, sessionRetryCount]);
 
-  // Автоматически проверяем звонок каждые 3 секунды.
+  // Проверяем подтверждение звонка каждые 3 секунды.
   useEffect(() => {
     if (!challengeId || !expiresAt || authSuccess) return;
 
@@ -228,6 +238,7 @@ export default function PersonalAccountModal({
           setIsLoadingRole(true);
 
           void fetchAccountRole().then((role) => {
+            if (cancelled) return;
             setAccountRole(role);
             setIsLoadingRole(false);
           });
@@ -291,8 +302,6 @@ export default function PersonalAccountModal({
 
       const result = await response.json().catch(() => ({}));
 
-      // Серверный маршрут очищает cookie даже при ошибке
-      // удаления записи сессии в Supabase.
       setSessionStatus("unauthenticated");
       setAuthSuccess(false);
       setAccountRole(null);
@@ -302,6 +311,7 @@ export default function PersonalAccountModal({
       setCallPhone("");
       setChallengeId("");
       setExpiresAt("");
+      setShowBooking(false);
 
       if (!response.ok || result.success !== true) {
         setLogoutError(
@@ -409,7 +419,7 @@ export default function PersonalAccountModal({
 
   return (
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-[visibility] duration-500 ${
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-2 transition-[visibility] duration-500 sm:p-4 ${
         visible ? "visible" : "invisible"
       }`}
       aria-hidden={!visible}
@@ -419,7 +429,7 @@ export default function PersonalAccountModal({
         aria-label="Закрыть окно"
         tabIndex={visible ? 0 : -1}
         onClick={onClose}
-        className={`absolute inset-0 h-full w-full cursor-default bg-black/60 backdrop-blur-sm transition-opacity duration-500 motion-reduce:transition-none ${
+        className={`absolute inset-0 h-full w-full cursor-default bg-black/70 backdrop-blur-sm transition-opacity duration-500 motion-reduce:transition-none ${
           visible ? "opacity-100" : "opacity-0"
         }`}
       />
@@ -428,10 +438,14 @@ export default function PersonalAccountModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="personal-account-title"
-        className={`relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-[#0D1022] p-7 text-white shadow-2xl transition-[opacity,transform] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:p-9 ${
+        className={`relative z-10 ${
+          showBooking
+            ? "max-h-[94dvh] w-full max-w-6xl overflow-y-auto overscroll-contain"
+            : "max-h-[92dvh] w-full max-w-md overflow-y-auto"
+        } rounded-3xl border border-white/10 bg-[#0D1022] p-5 text-white shadow-2xl transition-[max-width,opacity,transform] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:p-7 ${
           visible
             ? "translate-y-0 scale-100 opacity-100"
-            : "translate-y-8 scale-[0.88] opacity-0"
+            : "translate-y-5 scale-[0.97] opacity-0"
         }`}
       >
         <button
@@ -439,37 +453,64 @@ export default function PersonalAccountModal({
           onClick={onClose}
           aria-label="Закрыть"
           tabIndex={visible ? 0 : -1}
-          className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+          className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
         >
           <X size={20} />
         </button>
 
-        <div className="mb-7 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#6B30CE]/20 text-[#A77BFF]">
-          {isAuthenticated ? (
-            <UserRound size={27} strokeWidth={1.8} />
-          ) : (
-            <Phone size={27} strokeWidth={1.8} />
-          )}
-        </div>
-
-        <div className="mb-8">
-          <div className="mb-3 text-sm font-semibold tracking-[0.25em] text-[#A77BFF]">
-            PongLab®
+        <div className="mb-5 flex items-center gap-3 pr-10">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#6B30CE]/20 text-[#A77BFF]">
+            {isAuthenticated ? (
+              showBooking ? (
+                <CalendarDays size={25} strokeWidth={1.8} />
+              ) : (
+                <UserRound size={25} strokeWidth={1.8} />
+              )
+            ) : (
+              <Phone size={25} strokeWidth={1.8} />
+            )}
           </div>
 
-          <h2
-            id="personal-account-title"
-            className="text-3xl font-semibold tracking-tight"
-          >
-            Личный кабинет
-          </h2>
+          <div className="min-w-0">
+            <div className="mb-1 text-xs font-semibold tracking-[0.25em] text-[#A77BFF]">
+              PongLab®
+            </div>
 
-          <p className="mt-3 text-sm leading-6 text-white/60">
+            <h2
+              id="personal-account-title"
+              className="text-xl font-semibold tracking-tight sm:text-2xl"
+            >
+              {showBooking
+                ? "Выберите подходящий слот:"
+                : "Личный кабинет"}
+            </h2>
+          </div>
+        </div>
+
+        {!showBooking && (
+          <p className="mb-6 text-sm leading-6 text-white/60">
             {isAuthenticated
               ? "Управляйте своими тренировками и бронированиями."
               : "Введите собственный номер телефона, чтобы войти или создать аккаунт. Подтверждение будет выполнено посредством звонка."}
           </p>
-        </div>
+        )}
+
+        {showBooking && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm leading-5 text-white/55">
+              Выберите клуб, дату, длительность и свободное время.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowBooking(false)}
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-semibold text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+            >
+              <ArrowLeft size={16} />
+              В личный кабинет
+            </button>
+          </div>
+        )}
 
         {sessionStatus === "checking" && !authSuccess && (
           <div
@@ -510,82 +551,108 @@ export default function PersonalAccountModal({
 
         {isAuthenticated && (
           <div className="space-y-4">
-            <div
-              role="status"
-              className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4"
-            >
-              <p className="text-base font-semibold text-white">
-                Вы вошли в PongLab
-              </p>
+            {showBooking ? (
+              <BookingCalendar />
+            ) : (
+              <>
+                <div
+                  role="status"
+                  className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4"
+                >
+                  <p className="text-base font-semibold text-white">
+                    Вы вошли в PongLab
+                  </p>
 
-              <p className="mt-2 text-sm leading-6 text-white/65">
-                Авторизация активна. Повторный звонок не требуется.
-              </p>
-            </div>
-
-            {(accountRole === "owner" || accountRole === "staff") && (
-              <a
-                href="/admin"
-                className="flex h-14 w-full items-center justify-center rounded-xl border border-[#8F5BFF]/40 bg-[#6B30CE]/15 px-4 text-center text-base font-semibold text-white transition-colors hover:bg-[#6B30CE]/25"
-              >
-                {accountRole === "owner"
-                  ? "Панель владельца"
-                  : "Панель сотрудника"}
-              </a>
-            )}
-
-            {isLoadingRole && (
-              <div className="flex items-center justify-center gap-2 text-sm text-white/50">
-                <RefreshCw size={15} className="animate-spin" />
-                Проверяем права доступа...
-              </div>
-            )}
-
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-              <div className="flex items-start gap-3">
-                <CalendarDays
-                  size={21}
-                  className="mt-0.5 shrink-0 text-[#A77BFF]"
-                />
-
-                <div className="min-w-0 flex-1">
-                  <BookingCalendar />
+                  <p className="mt-2 text-sm leading-6 text-white/65">
+                    Авторизация активна. Повторный звонок не требуется.
+                  </p>
                 </div>
-              </div>
-            </div>
 
-            {logoutError && (
-              <div
-                role="alert"
-                className="rounded-xl border border-red-400/30 bg-red-400/10 p-3"
-              >
-                <p className="text-sm leading-5 text-red-200">
-                  {logoutError}
-                </p>
-              </div>
+                {(accountRole === "owner" ||
+                  accountRole === "staff") && (
+                  <a
+                    href="/admin"
+                    className="flex h-14 w-full items-center justify-center rounded-xl border border-[#8F5BFF]/40 bg-[#6B30CE]/15 px-4 text-center text-base font-semibold text-white transition-colors hover:bg-[#6B30CE]/25"
+                  >
+                    {accountRole === "owner"
+                      ? "Панель владельца"
+                      : "Панель сотрудника"}
+                  </a>
+                )}
+
+                {isLoadingRole && (
+                  <div className="flex items-center justify-center gap-2 text-sm text-white/50">
+                    <RefreshCw
+                      size={15}
+                      className="animate-spin"
+                    />
+                    Проверяем права доступа...
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowBooking(true)}
+                  className="group flex min-h-[88px] w-full items-center gap-4 rounded-2xl border border-[#8F5BFF]/40 bg-gradient-to-r from-[#6B30CE]/25 to-[#8F5BFF]/10 p-4 text-left transition-colors hover:border-[#A77BFF] hover:from-[#6B30CE]/35 hover:to-[#8F5BFF]/20"
+                >
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#6B30CE]/30 text-[#C8B2FF]">
+                    <CalendarDays size={24} />
+                  </span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-semibold text-white">
+                      Создать бронь сессии
+                    </span>
+                    <span className="mt-1 block text-sm leading-5 text-white/55">
+                      Выбрать клуб, дату, время и стол
+                    </span>
+                  </span>
+
+                  <ArrowRight
+                    size={20}
+                    className="shrink-0 text-[#C8B2FF] transition-transform group-hover:translate-x-1"
+                  />
+                </button>
+
+                {logoutError && (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-red-400/30 bg-red-400/10 p-3"
+                  >
+                    <p className="text-sm leading-5 text-red-200">
+                      {logoutError}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-white/75 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isLoggingOut ? (
+                    <RefreshCw
+                      size={17}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <LogOut size={17} />
+                  )}
+                  {isLoggingOut
+                    ? "Выходим..."
+                    : "Выйти из аккаунта"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-sm font-semibold text-white transition-[opacity,transform] duration-200 hover:brightness-110 active:scale-[0.99]"
+                >
+                  Продолжить
+                </button>
+              </>
             )}
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-white/75 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLoggingOut ? (
-                <RefreshCw size={17} className="animate-spin" />
-              ) : (
-                <LogOut size={17} />
-              )}
-              {isLoggingOut ? "Выходим..." : "Выйти из аккаунта"}
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-base font-semibold text-white transition-[opacity,transform] duration-200 hover:brightness-110 active:scale-[0.99]"
-            >
-              Продолжить
-            </button>
           </div>
         )}
 
@@ -650,7 +717,7 @@ export default function PersonalAccountModal({
             {callPhone && (
               <div className="mt-4 rounded-xl border border-[#8F5BFF]/30 bg-[#6B30CE]/10 p-4">
                 <p className="text-sm leading-6 text-white/80">
-                  Позвоните на указанный номер в течение 5 минут.
+                  Позвоните на бесплатный номер в течение 5 минут.
                   Звонок будет автоматически сброшен после проверки.
                 </p>
 
