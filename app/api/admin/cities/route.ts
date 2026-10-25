@@ -44,10 +44,15 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    if (!response.ok) {
-      console.error("Cities GET failed:", response.status);
-      return errorResponse("Не удалось загрузить города.", 503);
-    }
+   if (!response.ok) {
+  const details = await response.text();
+  console.error(
+    "Cities GET failed:",
+    response.status,
+    details
+  );
+  return errorResponse("Не удалось загрузить города.", 503);
+}
 
     const cities = await response.json();
 
