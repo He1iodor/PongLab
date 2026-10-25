@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BookingCalendar from "@/components/BookingCalendar";
 import {
   X,
   Phone,
@@ -537,18 +538,7 @@ export default function PersonalAccountModal({
                 />
 
                 <div>
-                  <p className="font-medium text-white">
-                    Мои бронирования
-                  </p>
-
-                  <p className="mt-1 text-sm leading-5 text-white/55">
-                    Здесь будут отображаться ваши тренировки,
-                    забронированные столы и время посещения.
-                  </p>
-                </div>
-              </div>
-            </div>
-
+                  <BookingCalendar />
             {logoutError && (
               <div
                 role="alert"
