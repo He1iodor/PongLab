@@ -667,14 +667,6 @@ export default function PersonalAccountModal({
                     ? "Выходим..."
                     : "Выйти из аккаунта"}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] text-sm font-semibold text-white transition-[opacity,transform] duration-200 hover:brightness-110 active:scale-[0.99]"
-                >
-                  Продолжить
-                </button>
               </>
             )}
           </div>
