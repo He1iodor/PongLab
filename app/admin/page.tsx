@@ -1,4 +1,3 @@
-
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -18,6 +17,7 @@ type Screen =
   | "password"
   | "checking"
   | "dashboard"
+  | "staff-dashboard"
   | "error";
 
 export default function AdminPage() {
@@ -56,16 +56,14 @@ export default function AdminPage() {
         if (cancelled) return;
         setProfile(currentProfile);
 
-        if (
-          currentProfile.role !== "owner" &&
-          currentProfile.role !== "staff"
-        ) {
-          setScreen("forbidden");
+        if (currentProfile.role === "staff") {
+          // Сотрудник не проходит пароль владельца.
+          // Операции с данными должны быть защищены отдельными серверными проверками.
+          setScreen("staff-dashboard");
           return;
         }
 
-        if (currentProfile.role === "staff") {
-          // Интерфейс сотрудников подключим отдельным этапом.
+        if (currentProfile.role !== "owner") {
           setScreen("forbidden");
           return;
         }
@@ -90,7 +88,9 @@ export default function AdminPage() {
         throw new Error("Не удалось проверить доступ владельца.");
       } catch {
         if (!cancelled) {
-          setMessage("Не удалось связаться с сервером. Попробуйте обновить страницу.");
+          setMessage(
+            "Не удалось связаться с сервером. Попробуйте обновить страницу.",
+          );
           setScreen("error");
         }
       }
@@ -128,7 +128,7 @@ export default function AdminPage() {
         setMessage(
           typeof data.error === "string"
             ? data.error
-            : "Не удалось выполнить вход."
+            : "Не удалось выполнить вход.",
         );
         return;
       }
@@ -140,7 +140,9 @@ export default function AdminPage() {
       });
 
       if (!statusResponse.ok) {
-        setMessage("Пароль принят, но подтвердить доступ не удалось. Обновите страницу.");
+        setMessage(
+          "Пароль принят, но подтвердить доступ не удалось. Обновите страницу.",
+        );
         return;
       }
 
@@ -187,28 +189,28 @@ export default function AdminPage() {
   if (screen === "loading" || screen === "checking") {
     return renderPanel(
       "Проверяем доступ",
-      "Проверяем сессию и права пользователя. Это может занять несколько секунд."
+      "Проверяем сессию и права пользователя. Это может занять несколько секунд.",
     );
   }
 
   if (screen === "login-required") {
     return renderPanel(
       "Войдите в аккаунт",
-      "Сначала откройте личный кабинет на главной странице и подтвердите свой номер телефона. Затем вернитесь сюда."
+      "Сначала откройте личный кабинет на главной странице и подтвердите свой номер телефона. Затем вернитесь сюда.",
     );
   }
 
   if (screen === "forbidden") {
     return renderPanel(
       "Нет доступа",
-      "Эта страница доступна только владельцу. Для сотрудников подготовим отдельный интерфейс с соответствующими правами."
+      "Эта страница доступна только владельцу и назначенным сотрудникам.",
     );
   }
 
   if (screen === "error") {
     return renderPanel(
       "Ошибка проверки",
-      message || "Не удалось проверить доступ."
+      message || "Не удалось проверить доступ.",
     );
   }
 
@@ -227,11 +229,10 @@ export default function AdminPage() {
             ◈
           </div>
 
-          <h1 className="mt-6 text-2xl font-semibold">
-            Панель владельца
-          </h1>
+          <h1 className="mt-6 text-2xl font-semibold">Панель владельца</h1>
           <p className="mt-3 text-sm leading-6 text-white/65">
-            Номер подтверждён. Введите дополнительный пароль для получения доступа к управлению студией.
+            Номер подтверждён. Введите дополнительный пароль для получения
+            доступа к управлению студией.
           </p>
 
           {profile && (
@@ -242,7 +243,10 @@ export default function AdminPage() {
           )}
 
           <form onSubmit={handlePasswordSubmit} className="mt-6 space-y-4">
-            <label htmlFor="owner-password" className="block text-sm text-white/80">
+            <label
+              htmlFor="owner-password"
+              className="block text-sm text-white/80"
+            >
               Пароль владельца
             </label>
             <input
@@ -284,6 +288,55 @@ export default function AdminPage() {
     );
   }
 
+  if (screen === "staff-dashboard") {
+    return (
+      <main className="min-h-screen bg-[#0b0914] px-5 py-8 text-white sm:px-8">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
+          <div>
+            <Link
+              href="/"
+              className="text-sm font-semibold tracking-[0.22em] text-violet-300"
+            >
+              PONGLAB
+            </Link>
+            <h1 className="mt-3 text-2xl font-semibold">Панель сотрудника</h1>
+            <p className="mt-1 text-sm text-white/50">
+              {profile ? `Аккаунт: ${profile.phone}` : "Доступ сотрудника"}
+            </p>
+          </div>
+          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs text-emerald-200">
+            Телефон подтверждён
+          </span>
+        </header>
+
+        <section className="mt-8 max-w-3xl">
+          <h2 className="text-lg font-semibold">Рабочая панель</h2>
+          <p className="mt-2 text-sm leading-6 text-white/60">
+            Вы вошли как сотрудник. Доступ к клубам и рабочим операциям будет
+            ограничен назначенными вам клубами. Финансовые данные владельца
+            здесь не отображаются.
+          </p>
+
+          <div className="mt-6 rounded-2xl border border-white/10 bg-[#151121] p-5">
+            <h3 className="font-semibold">Рабочие функции</h3>
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              Раздел бронирований, расписание и управление посещениями пока
+              не подключены. До подключения серверных проверок этот экран не
+              предоставляет операций изменения данных.
+            </p>
+          </div>
+
+          <Link
+            href="/"
+            className="mt-6 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[#151121] transition hover:bg-violet-100"
+          >
+            Вернуться на сайт
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#0b0914] px-5 py-8 text-white sm:px-8">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
@@ -306,7 +359,8 @@ export default function AdminPage() {
       <section className="mt-8">
         <h2 className="text-lg font-semibold">Управление PongLab</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-          Основа административной панели готова. Следующим этапом подключим расписание, бронирования, клиентов, оплаты и управление оборудованием.
+          Основа административной панели готова. Следующим этапом подключим
+          расписание, бронирования, клиентов, оплаты и управление оборудованием.
         </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
