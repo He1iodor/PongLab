@@ -20,9 +20,22 @@ type Club = {
   created_at: string;
 };
 
+type Table = {
+  id: string;
+  studio_id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+};
+
 export default function AdminLocationsPage() {
   const [cities, setCities] = useState<City[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
+  const [selectedClubId, setSelectedClubId] = useState("");
+const [tables, setTables] = useState<Table[]>([]);
+const [tableName, setTableName] = useState("");
+const [loadingTables, setLoadingTables] = useState(false);
+const [savingTable, setSavingTable] = useState(false);
   const [cityName, setCityName] = useState("");
   const [clubCityId, setClubCityId] = useState("");
   const [clubName, setClubName] = useState("");
@@ -73,7 +86,20 @@ export default function AdminLocationsPage() {
 
       const nextCities: City[] = citiesData.cities ?? [];
       setCities(nextCities);
-      setClubs(clubsData.clubs ?? []);
+      const nextClubs: Club[] = clubsData.clubs ?? [];
+setClubs(nextClubs);
+
+setSelectedClubId((current) => {
+  if (current && nextClubs.some((club) => club.id === current)) {
+    return current;
+  }
+
+  return (
+    nextClubs.find((club) => club.is_active)?.id ??
+    nextClubs[0]?.id ??
+    ""
+  );
+});
 
       setClubCityId((current) => {
         if (current && nextCities.some((city) => city.id === current && city.is_active)) {
@@ -90,6 +116,79 @@ export default function AdminLocationsPage() {
     }
   }, []);
 
+  const loadTables = useCallback(async () => {
+  if (!selectedClubId) {
+    setTables([]);
+    return;
+  }
+
+  setLoadingTables(true);
+  setError("");
+
+  try {
+    const response = await fetch(
+      `/api/admin/tables?studio_id=${encodeURIComponent(selectedClubId)}`,
+      {
+        cache: "no-store",
+        credentials: "same-origin",
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || "Не удалось загрузить столы.");
+    }
+
+    setTables(data.tables ?? []);
+  } catch (e) {
+    setError(e instanceof Error ? e.message : "Ошибка загрузки столов.");
+  } finally {
+    setLoadingTables(false);
+  }
+}, [selectedClubId]);
+
+useEffect(() => {
+  void loadTables();
+}, [loadTables]);
+
+async function handleAddTable(event: FormEvent<HTMLFormElement>) {
+  event.preventDefault();
+
+  if (savingTable || !selectedClubId || !tableName.trim()) return;
+
+  setSavingTable(true);
+  setMessage("");
+  setError("");
+
+  try {
+    const response = await fetch("/api/admin/tables", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        studio_id: selectedClubId,
+        name: tableName.trim(),
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || "Не удалось добавить стол.");
+    }
+
+    setTableName("");
+    setMessage("Стол добавлен.");
+    await loadTables();
+  } catch (e) {
+    setError(e instanceof Error ? e.message : "Ошибка создания стола.");
+  } finally {
+    setSavingTable(false);
+  }
+}
+  
   useEffect(() => {
     void loadData();
   }, [loadData]);
@@ -418,6 +517,82 @@ export default function AdminLocationsPage() {
                 </div>
               )}
             </section>
+            <section className="mt-6 rounded-2xl border border-white/10 bg-[#151121] p-5 sm:p-6">
+  <h2 className="text-xl font-semibold">Столы клуба</h2>
+  <p className="mt-2 text-sm text-white/55">
+    Выберите клуб, затем добавляйте столы, которые будут доступны для бронирования.
+  </p>
+
+  <div className="mt-5">
+    <label className="block text-sm">
+      Клуб
+      <select
+        value={selectedClubId}
+        onChange={(e) => setSelectedClubId(e.target.value)}
+        disabled={clubs.length === 0}
+        className="mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 outline-none focus:border-violet-400 disabled:opacity-50"
+      >
+        <option value="">Выберите клуб</option>
+        {clubs.map((club) => (
+          <option key={club.id} value={club.id}>
+            {club.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  </div>
+
+  <form onSubmit={handleAddTable} className="mt-4 flex flex-col gap-3 sm:flex-row">
+    <input
+      value={tableName}
+      onChange={(e) => setTableName(e.target.value)}
+      minLength={1}
+      maxLength={80}
+      required
+      disabled={!selectedClubId}
+      placeholder="Например, Стол № 1"
+      className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 outline-none focus:border-violet-400 disabled:opacity-50"
+    />
+
+    <button
+      type="submit"
+      disabled={savingTable || loadingTables || !selectedClubId}
+      className="rounded-xl bg-violet-500 px-5 py-3 text-sm font-semibold transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {savingTable ? "Сохраняем…" : "Добавить стол"}
+    </button>
+  </form>
+
+  <div className="mt-6 border-t border-white/10 pt-5">
+    <h3 className="text-sm font-semibold text-white/80">
+      Список столов ({tables.length})
+    </h3>
+
+    {loadingTables ? (
+      <p className="mt-3 text-sm text-white/50">Загрузка столов…</p>
+    ) : !selectedClubId ? (
+      <p className="mt-3 text-sm text-white/50">Сначала выберите клуб.</p>
+    ) : tables.length === 0 ? (
+      <p className="mt-3 text-sm text-white/50">
+        В этом клубе пока нет столов.
+      </p>
+    ) : (
+      <ul className="mt-3 space-y-2">
+        {tables.map((table) => (
+          <li
+            key={table.id}
+            className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.04] px-4 py-3"
+          >
+            <span className="text-sm font-medium">{table.name}</span>
+            <span className={table.is_active ? "text-xs text-emerald-300" : "text-xs text-white/40"}>
+              {table.is_active ? "Активен" : "Отключён"}
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
           </>
         )}
       </div>
