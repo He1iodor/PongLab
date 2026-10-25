@@ -1,10 +1,10 @@
-"use client";
+import { NextRequest, NextResponse } from "next/server";
+import { requireOwner } from "@/app/lib/owner-auth";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-type Club = { id: string; name: string; is_active: boolean };
-type Settings = {
+type BookingSettings = {
   studio_id: string;
   slot_interval_minutes: number;
   allowed_durations_minutes: number[];
@@ -12,9 +12,10 @@ type Settings = {
   minimum_notice_minutes: number;
   hold_minutes: number;
   allow_same_day_booking: boolean;
+  updated_at?: string;
 };
 
-const DEFAULTS: Omit<Settings, "studio_id"> = {
+const DEFAULTS = {
   slot_interval_minutes: 30,
   allowed_durations_minutes: [30, 60, 75, 90, 120],
   booking_horizon_days: 30,
@@ -22,188 +23,172 @@ const DEFAULTS: Omit<Settings, "studio_id"> = {
   hold_minutes: 10,
   allow_same_day_booking: true,
 };
-const DURATION_OPTIONS = Array.from({ length: 94 }, (_, i) => (i + 3) * 5);
 
-const inputClass = "mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 text-white outline-none focus:border-violet-400";
-const cardClass = "rounded-2xl border border-white/10 bg-[#151121] p-5 sm:p-6";
+function errorResponse(message: string, status: number) {
+  return NextResponse.json({ error: message }, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
-export default function BookingSettingsPage() {
-  const [clubs, setClubs] = useState<Club[]>([]);
-  const [studioId, setStudioId] = useState("");
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [newDuration, setNewDuration] = useState("45");
-  const [loadingClubs, setLoadingClubs] = useState(true);
-  const [loadingSettings, setLoadingSettings] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+function getConfig() {
+  const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+  const key = process.env.SUPABASE_SECRET_KEY;
+  return url && key ? { url, key } : null;
+}
 
-  const loadClubs = useCallback(async () => {
-    setLoadingClubs(true);
-    setError("");
-    try {
-      const response = await fetch("/api/admin/clubs", { cache: "no-store", credentials: "same-origin" });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Не удалось загрузить клубы.");
-      const next: Club[] = data.clubs ?? [];
-      setClubs(next);
-      setStudioId((current) => current && next.some((club) => club.id === current)
-        ? current : next.find((club) => club.is_active)?.id ?? "");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка загрузки клубов.");
-    } finally { setLoadingClubs(false); }
-  }, []);
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
 
-  const loadSettings = useCallback(async () => {
-    if (!studioId) { setSettings(null); return; }
-    setLoadingSettings(true);
-    setError("");
-    setMessage("");
-    try {
-      const response = await fetch(`/api/admin/booking-settings?studio_id=${encodeURIComponent(studioId)}`, {
-        cache: "no-store", credentials: "same-origin",
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Не удалось загрузить настройки.");
-      setSettings({ ...DEFAULTS, ...data.settings, studio_id: studioId });
-    } catch (e) {
-      setSettings(null);
-      setError(e instanceof Error ? e.message : "Ошибка загрузки настроек.");
-    } finally { setLoadingSettings(false); }
-  }, [studioId]);
+function headers(key: string) {
+  return { apikey: key, Authorization: `Bearer ${key}` };
+}
 
-  useEffect(() => { void loadClubs(); }, [loadClubs]);
-  useEffect(() => { void loadSettings(); }, [loadSettings]);
+function validInt(value: unknown, min: number, max: number, step = 1) {
+  return typeof value === "number" && Number.isInteger(value) &&
+    value >= min && value <= max && (value - min) % step === 0;
+}
 
-  function update<K extends keyof Omit<Settings, "studio_id">>(key: K, value: Settings[K]) {
-    setSettings((current) => current ? { ...current, [key]: value } : current);
-    setMessage("");
+function validate(body: Record<string, unknown>) {
+  if (!validInt(body.slot_interval_minutes, 5, 60, 5))
+    return "Шаг начала слотов должен быть от 5 до 60 минут с шагом 5 минут.";
+  if (!Array.isArray(body.allowed_durations_minutes) ||
+      body.allowed_durations_minutes.length < 1 ||
+      body.allowed_durations_minutes.length > 94 ||
+      !body.allowed_durations_minutes.every((v) => validInt(v, 15, 480, 5)))
+    return "Выберите хотя бы одну длительность от 15 до 480 минут с шагом 5 минут.";
+  if (new Set(body.allowed_durations_minutes as number[]).size !== body.allowed_durations_minutes.length)
+    return "Длительности не должны повторяться.";
+  if (!validInt(body.booking_horizon_days, 1, 365))
+    return "Горизонт бронирования должен быть от 1 до 365 дней.";
+  if (!validInt(body.minimum_notice_minutes, 0, 10080))
+    return "Минимальное время до начала должно быть от 0 до 10080 минут.";
+  if (!validInt(body.hold_minutes, 1, 60))
+    return "Время удержания неоплаченной брони должно быть от 1 до 60 минут.";
+  if (typeof body.allow_same_day_booking !== "boolean")
+    return "Укажите, разрешено ли бронирование на сегодня.";
+  return null;
+}
+
+async function checkStudio(url: string, key: string, studioId: string) {
+  const target = new URL(`${url}/rest/v1/studios`);
+  target.searchParams.set("select", "id");
+  target.searchParams.set("id", `eq.${studioId}`);
+  target.searchParams.set("is_active", "eq.true");
+  target.searchParams.set("limit", "1");
+  const response = await fetch(target, { headers: headers(key), cache: "no-store" });
+  if (!response.ok) throw new Error("Не удалось проверить клуб.");
+  const rows = await response.json();
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+async function ensureRow(url: string, key: string, studioId: string) {
+  const target = new URL(`${url}/rest/v1/studio_booking_settings`);
+  target.searchParams.set("select", "*");
+  target.searchParams.set("studio_id", `eq.${studioId}`);
+  target.searchParams.set("limit", "1");
+  const response = await fetch(target, { headers: headers(key), cache: "no-store" });
+  if (!response.ok) throw new Error("Не удалось загрузить настройки бронирования.");
+  const rows = await response.json();
+  if (Array.isArray(rows) && rows.length) return rows[0] as BookingSettings;
+
+  const create = await fetch(`${url}/rest/v1/studio_booking_settings`, {
+    method: "POST",
+    headers: {
+      ...headers(key),
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify({ studio_id: studioId, ...DEFAULTS }),
+    cache: "no-store",
+  });
+  if (!create.ok) throw new Error("Не удалось создать настройки бронирования.");
+  const created = await create.json();
+  if (!Array.isArray(created) || !created[0]) throw new Error("Не удалось подтвердить настройки бронирования.");
+  return created[0] as BookingSettings;
+}
+
+export async function GET(request: NextRequest) {
+  const access = await requireOwner(request);
+  if (!access.ok) return access.response;
+  const config = getConfig();
+  if (!config) return errorResponse("Сервис временно недоступен.", 503);
+  const studioId = request.nextUrl.searchParams.get("studio_id");
+  if (!isUuid(studioId)) return errorResponse("Укажите корректный клуб.", 400);
+
+  try {
+    if (!(await checkStudio(config.url, config.key, studioId)))
+      return errorResponse("Клуб не найден или отключён.", 404);
+    const settings = await ensureRow(config.url, config.key, studioId);
+    return NextResponse.json({ settings }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("Booking settings GET error:", error);
+    return errorResponse("Не удалось загрузить настройки бронирования.", 503);
   }
+}
 
-  function addDuration() {
-    const value = Number(newDuration);
-    if (!Number.isInteger(value) || value < 15 || value > 480 || value % 5 !== 0) {
-      setError("Длительность должна быть от 15 до 480 минут с шагом 5 минут.");
-      return;
+export async function PUT(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin || origin !== new URL(request.url).origin)
+    return errorResponse("Недопустимый запрос.", 403);
+
+  const access = await requireOwner(request);
+  if (!access.ok) return access.response;
+  const config = getConfig();
+  if (!config) return errorResponse("Сервис временно недоступен.", 503);
+
+  let body: unknown;
+  try { body = await request.json(); }
+  catch { return errorResponse("Некорректный запрос.", 400); }
+
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    return errorResponse("Некорректный запрос.", 400);
+
+  const data = body as Record<string, unknown>;
+  if (!isUuid(data.studio_id)) return errorResponse("Выберите клуб.", 400);
+  const validationError = validate(data);
+  if (validationError) return errorResponse(validationError, 400);
+
+  try {
+    if (!(await checkStudio(config.url, config.key, data.studio_id)))
+      return errorResponse("Клуб не найден или отключён.", 404);
+
+    const settings = {
+      studio_id: data.studio_id,
+      slot_interval_minutes: data.slot_interval_minutes,
+      allowed_durations_minutes: [...(data.allowed_durations_minutes as number[])].sort((a, b) => a - b),
+      booking_horizon_days: data.booking_horizon_days,
+      minimum_notice_minutes: data.minimum_notice_minutes,
+      hold_minutes: data.hold_minutes,
+      allow_same_day_booking: data.allow_same_day_booking,
+      updated_at: new Date().toISOString(),
+    };
+
+    const target = new URL(`${config.url}/rest/v1/studio_booking_settings`);
+    target.searchParams.set("on_conflict", "studio_id");
+    const response = await fetch(target, {
+      method: "POST",
+      headers: {
+        ...headers(config.key),
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify(settings),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      console.error("Booking settings PUT failed:", response.status, await response.text());
+      return errorResponse("Не удалось сохранить настройки бронирования.", 503);
     }
-    if (!settings) return;
-    if (settings.allowed_durations_minutes.includes(value)) {
-      setError("Эта длительность уже добавлена.");
-      return;
-    }
-    update("allowed_durations_minutes", [...settings.allowed_durations_minutes, value].sort((a, b) => a - b));
-    setError("");
+    const rows = await response.json();
+    if (!Array.isArray(rows) || !rows[0])
+      return errorResponse("Сервер не подтвердил сохранение настроек.", 503);
+    return NextResponse.json({ settings: rows[0] }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("Booking settings PUT error:", error);
+    return errorResponse("Ошибка сохранения настроек бронирования.", 503);
   }
-
-  async function save() {
-    if (!settings || saving) return;
-    if (!settings.allowed_durations_minutes.length) {
-      setError("Нужно оставить хотя бы одну доступную длительность.");
-      return;
-    }
-    setSaving(true); setError(""); setMessage("");
-    try {
-      const response = await fetch("/api/admin/booking-settings", {
-        method: "PUT",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Не удалось сохранить настройки.");
-      setSettings({ ...DEFAULTS, ...data.settings, studio_id: studioId });
-      setMessage("Настройки сохранены и применены к расчёту доступных слотов.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка сохранения настроек.");
-    } finally { setSaving(false); }
-  }
-
-  const activeClub = clubs.find((club) => club.id === studioId);
-
-  return (
-    <main className="min-h-screen bg-[#0b0914] px-4 py-8 text-white sm:px-8">
-      <div className="mx-auto max-w-5xl">
-        <Link href="/admin" className="text-sm text-violet-300 transition hover:text-violet-200">← Панель владельца</Link>
-        <header className="mt-6">
-          <p className="text-xs font-semibold tracking-[0.24em] text-violet-300">PONGLAB · УПРАВЛЕНИЕ</p>
-          <h1 className="mt-3 text-3xl font-semibold">Настройки бронирования</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-            Эти параметры хранятся отдельно для каждого клуба. Они управляют шагом начала слотов,
-            разрешённой длительностью игры, глубиной календаря и правилами удержания неоплаченной брони.
-          </p>
-        </header>
-
-        {message && <p className="mt-6 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200">{message}</p>}
-        {error && <p role="alert" className="mt-6 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">{error}</p>}
-
-        <section className={`${cardClass} mt-8`}>
-          <label className="block text-sm">Клуб
-            <select value={studioId} onChange={(e) => setStudioId(e.target.value)} disabled={loadingClubs || clubs.length === 0} className={inputClass}>
-              <option value="">{loadingClubs ? "Загружаем клубы…" : "Выберите клуб"}</option>
-              {clubs.map((club) => <option key={club.id} value={club.id}>{club.name}{club.is_active ? "" : " (отключён)"}</option>)}
-            </select>
-          </label>
-          {!loadingClubs && clubs.length === 0 && <p className="mt-3 text-sm text-amber-200/80">Сначала создайте клуб в разделе «Города и клубы».</p>}
-        </section>
-
-        {studioId && (loadingSettings || !settings) && <p className="mt-6 text-sm text-white/50">{loadingSettings ? "Загружаем настройки…" : "Настройки не загружены. Проверьте сообщение об ошибке и попробуйте обновить страницу."}</p>}
-
-        {settings && !loadingSettings && <>
-          <section className={`${cardClass} mt-6`}>
-            <h2 className="text-xl font-semibold">Правила календаря</h2>
-            <p className="mt-1 text-sm text-white/50">{activeClub?.name}</p>
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              <label className="block text-sm">Шаг начала слотов
-                <select value={settings.slot_interval_minutes} onChange={(e) => update("slot_interval_minutes", Number(e.target.value))} className={inputClass}>
-                  {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map((v) => <option key={v} value={v}>{v} минут</option>)}
-                </select>
-                <span className="mt-2 block text-xs leading-5 text-white/45">Например, при шаге 15 минут возможны старты в 09:00, 09:15, 09:30 и так далее.</span>
-              </label>
-              <label className="block text-sm">На сколько дней вперёд открывать бронирование
-                <input type="number" min={1} max={365} step={1} value={settings.booking_horizon_days} onChange={(e) => update("booking_horizon_days", Number(e.target.value))} className={inputClass} />
-              </label>
-              <label className="block text-sm">Минимум минут до начала брони
-                <input type="number" min={0} max={10080} step={5} value={settings.minimum_notice_minutes} onChange={(e) => update("minimum_notice_minutes", Number(e.target.value))} className={inputClass} />
-                <span className="mt-2 block text-xs text-white/45">0 — можно бронировать ближайший ещё не начавшийся слот.</span>
-              </label>
-              <label className="block text-sm">Удержание неоплаченной брони
-                <input type="number" min={1} max={60} step={1} value={settings.hold_minutes} onChange={(e) => update("hold_minutes", Number(e.target.value))} className={inputClass} />
-                <span className="mt-2 block text-xs text-white/45">В минутах. Создание и автоматическое истечение брони должны использовать это значение.</span>
-              </label>
-            </div>
-            <label className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 p-4 text-sm">
-              <input type="checkbox" checked={settings.allow_same_day_booking} onChange={(e) => update("allow_same_day_booking", e.target.checked)} className="mt-1 h-4 w-4 accent-violet-500" />
-              <span><span className="block font-medium">Разрешить бронирование на сегодня</span><span className="mt-1 block text-xs leading-5 text-white/45">Если выключить, клиентам будут недоступны слоты на текущую дату клуба.</span></span>
-            </label>
-          </section>
-
-          <section className={`${cardClass} mt-6`}>
-            <h2 className="text-xl font-semibold">Доступная длительность игры</h2>
-            <p className="mt-2 text-sm leading-6 text-white/55">Клиент увидит только эти варианты. Для каждого варианта, который должен открываться в календаре, должен существовать подходящий активный тариф.</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {settings.allowed_durations_minutes.map((duration) => (
-                <span key={duration} className="inline-flex items-center gap-2 rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-2 text-sm">
-                  {duration} мин
-                  <button type="button" aria-label={`Убрать ${duration} минут`} onClick={() => update("allowed_durations_minutes", settings.allowed_durations_minutes.filter((v) => v !== duration))} disabled={settings.allowed_durations_minutes.length <= 1} className="text-white/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-30">×</button>
-                </span>
-              ))}
-            </div>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="block max-w-xs flex-1 text-sm">Добавить длительность, минут
-                <input type="number" min={15} max={480} step={5} value={newDuration} onChange={(e) => setNewDuration(e.target.value)} className={inputClass} />
-              </label>
-              <button type="button" onClick={addDuration} className="rounded-xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5">Добавить вариант</button>
-            </div>
-            <p className="mt-3 text-xs leading-5 text-white/40">Допустимо от 15 до 480 минут с шагом 5 минут. Удаление длительности из списка не удаляет старые тарифы, но скрывает эту длительность из доступных слотов.</p>
-          </section>
-
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button type="button" onClick={() => void save()} disabled={saving} className="rounded-xl bg-violet-500 px-6 py-3 font-semibold transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Сохраняем…" : "Сохранить настройки"}</button>
-            <button type="button" onClick={() => void loadSettings()} disabled={saving || loadingSettings} className="rounded-xl border border-white/15 px-5 py-3 text-sm hover:bg-white/5 disabled:opacity-50">Отменить изменения</button>
-          </div>
-        </>}
-      </div>
-    </main>
-  );
 }
