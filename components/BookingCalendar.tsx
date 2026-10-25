@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   CalendarDays,
   Clock3,
@@ -42,6 +43,19 @@ type Slot = {
 type SelectedSlot = {
   key: string;
   tableId: string;
+};
+
+type HoldResult = {
+  bookings: Array<{
+    id: string;
+    start_at: string;
+    end_at: string;
+    price_rub: number;
+    hold_expires_at: string;
+    table_id: string;
+  }>;
+  total_price_rub: number;
+  hold_expires_at: string;
 };
 
 type BookingGroup = {
@@ -119,6 +133,11 @@ export default function BookingCalendar() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [offerAccepted, setOfferAccepted] = useState(false);
+  const [creatingHold, setCreatingHold] = useState(false);
+  const [holdError, setHoldError] = useState("");
+  const [holdResult, setHoldResult] = useState<HoldResult | null>(null);
 
   const selectedStudio = useMemo(
     () => studios.find((studio) => studio.id === studioId) ?? null,
@@ -290,6 +309,9 @@ export default function BookingCalendar() {
     setError("");
     setSelectedSlots([]);
     setSelectionError("");
+    setHoldError("");
+    setHoldResult(null);
+    setOfferAccepted(false);
 
     try {
       const params = new URLSearchParams({
@@ -335,6 +357,8 @@ export default function BookingCalendar() {
     );
 
     setSelectionError("");
+    setHoldError("");
+    setHoldResult(null);
 
     if (alreadySelected) {
       setSelectedSlots((current) =>
@@ -375,12 +399,80 @@ export default function BookingCalendar() {
   };
 
   const selectTableForSlot = (key: string, tableId: string) => {
+    setHoldError("");
+    setHoldResult(null);
+
     setSelectedSlots((current) =>
       current.map((selection) =>
         selection.key === key ? { ...selection, tableId } : selection,
       ),
     );
+
     setSelectionError("");
+  };
+
+  const createHold = async () => {
+    if (!selectedStudio || !date || bookingGroups.length === 0) return;
+
+    if (!offerAccepted) {
+      setHoldError(
+        "Перед резервированием ознакомьтесь с офертой и подтвердите согласие с её условиями.",
+      );
+      return;
+    }
+
+    setCreatingHold(true);
+    setHoldError("");
+    setHoldResult(null);
+
+    try {
+      const response = await fetch("/api/bookings/hold", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          studio_id: studioId,
+          date,
+          groups: bookingGroups.map((group) => ({
+            table_id: group.tableId,
+            start_at: group.start_at,
+            duration_minutes: group.duration_minutes,
+          })),
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+            (response.status === 401
+              ? "Войдите в личный кабинет и подтвердите номер телефона."
+              : "Не удалось зарезервировать выбранное время."),
+        );
+      }
+
+      if (
+        !Array.isArray(result.bookings) ||
+        result.bookings.length !== bookingGroups.length ||
+        !result.hold_expires_at
+      ) {
+        throw new Error(
+          "Сервер не подтвердил создание всех временных броней. Обновите страницу перед повторной попыткой.",
+        );
+      }
+
+      setHoldResult(result as HoldResult);
+      setOfferAccepted(false);
+    } catch (caught) {
+      setHoldError(
+        caught instanceof Error
+          ? caught.message
+          : "Не удалось создать временную бронь. Повторите попытку.",
+      );
+    } finally {
+      setCreatingHold(false);
+    }
   };
 
   if (loadingStudios) {
@@ -464,6 +556,9 @@ export default function BookingCalendar() {
                   setDate("");
                   setSelectedSlots([]);
                   setSelectionError("");
+                  setHoldError("");
+                  setHoldResult(null);
+                  setOfferAccepted(false);
                 }}
                 className="h-12 w-full rounded-xl border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
               >
@@ -652,7 +747,8 @@ export default function BookingCalendar() {
                         {slot.starts_at}–{slot.ends_at}
                       </p>
                       <p className="mt-1 text-xs text-white/50">
-                        {durationLabel(slot.duration_minutes)} · {money(slot.price_rub)}
+                        {durationLabel(slot.duration_minutes)} ·{" "}
+                        {money(slot.price_rub)}
                       </p>
                     </div>
 
@@ -663,7 +759,10 @@ export default function BookingCalendar() {
                       <select
                         value={selection.tableId}
                         onChange={(event) =>
-                          selectTableForSlot(selection.key, event.target.value)
+                          selectTableForSlot(
+                            selection.key,
+                            event.target.value,
+                          )
                         }
                         className="h-10 w-full rounded-lg border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
                       >
@@ -712,7 +811,8 @@ export default function BookingCalendar() {
                           Бронь {index + 1}: {group.starts_at}–{group.ends_at}
                         </p>
                         <p className="mt-1 text-xs leading-5 text-white/50">
-                          {durationLabel(group.duration_minutes)} · {tableName}
+                          {durationLabel(group.duration_minutes)} ·{" "}
+                          {tableName}
                           {group.slots.length > 1
                             ? ` · объединено слотов: ${group.slots.length}`
                             : ""}
@@ -738,10 +838,92 @@ export default function BookingCalendar() {
                 </span>
               </div>
 
-              <p className="text-xs leading-5 text-white/45">
-                Выбор пока не создаёт бронь, не резервирует время и не списывает
-                деньги. Серверный резерв на 10 минут и платёж подключим отдельно.
-              </p>
+              <div className="space-y-4 border-t border-white/10 pt-4">
+                <label className="flex cursor-pointer items-start gap-3 text-sm leading-6 text-white/75">
+                  <input
+                    type="checkbox"
+                    checked={offerAccepted}
+                    onChange={(event) => {
+                      setOfferAccepted(event.target.checked);
+                      setHoldError("");
+                    }}
+                    className="mt-1 h-4 w-4 shrink-0 accent-[#A77BFF]"
+                  />
+                  <span>
+                    Я ознакомился(-ась) с{" "}
+                    <Link
+                      href="/oferta"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#C8B2FF] underline underline-offset-4 hover:text-white"
+                    >
+                      договором-офертой
+                    </Link>{" "}
+                    и согласен(-на) с его условиями. Понимаю, что временный
+                    резерв сам по себе не заключает договор: согласно оферте,
+                    договор заключается после полной оплаты.
+                  </span>
+                </label>
+
+                {holdError && (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm leading-6 text-red-200"
+                  >
+                    {holdError}
+                  </div>
+                )}
+
+                {holdResult ? (
+                  <div
+                    role="status"
+                    className="space-y-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4"
+                  >
+                    <p className="font-semibold text-emerald-100">
+                      Временная бронь создана
+                    </p>
+                    <p className="text-sm leading-6 text-white/75">
+                      Выбранное время удерживается до{" "}
+                      {new Intl.DateTimeFormat("ru-RU", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                        timeZone:
+                          selectedStudio?.timezone || "Europe/Moscow",
+                      }).format(new Date(holdResult.hold_expires_at))}.
+                    </p>
+                    <p className="text-sm leading-6 text-white/75">
+                      Сумма резерва: {money(holdResult.total_price_rub)}.
+                      Переход к оплате ещё не подключён, деньги не списаны.
+                    </p>
+                    <p className="text-xs leading-5 text-white/50">
+                      Номера временных броней:{" "}
+                      {holdResult.bookings
+                        .map((booking) => booking.id)
+                        .join(", ")}
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void createHold()}
+                    disabled={
+                      !offerAccepted ||
+                      creatingHold ||
+                      bookingGroups.length === 0
+                    }
+                    className="flex min-h-12 w-full items-center justify-center rounded-xl bg-[#8F5BFF] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#A77BFF] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {creatingHold
+                      ? "Создаём временную бронь..."
+                      : "Зарезервировать на 10 минут"}
+                  </button>
+                )}
+
+                <p className="text-xs leading-5 text-white/45">
+                  Резерв не является оплатой. Если не завершить оплату до
+                  истечения срока удержания, бронь будет освобождена системой.
+                </p>
+              </div>
             </div>
           )}
         </>
