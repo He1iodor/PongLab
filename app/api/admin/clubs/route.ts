@@ -48,10 +48,15 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    if (!response.ok) {
-      console.error("Clubs GET failed:", response.status);
-      return errorResponse("Не удалось загрузить клубы.", 503);
-    }
+   if (!response.ok) {
+  const details = await response.text();
+  console.error(
+    "Clubs GET failed:",
+    response.status,
+    details
+  );
+  return errorResponse("Не удалось загрузить клубы.", 503);
+}
 
     return NextResponse.json(
       { clubs: await response.json() },
