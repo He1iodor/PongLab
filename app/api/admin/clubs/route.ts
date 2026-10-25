@@ -159,7 +159,6 @@ export async function POST(request: NextRequest) {
     }
 
     const cities = await cityResponse.json();
-
     if (!Array.isArray(cities) || cities.length === 0) {
       return errorResponse(
         "Город не найден или отключён. Обновите список городов.",
