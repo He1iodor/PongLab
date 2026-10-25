@@ -370,11 +370,11 @@ export default function AdminPricesPage() {
                       required
                       className="mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 outline-none focus:border-violet-400"
                     >
-                      {[30, 60, 75, 90, 120].map((minutes) => (
-                        <option key={minutes} value={String(minutes)}>
-                          {minutes} минут
-                        </option>
-                      ))}
+                      {Array.from({ length: 94 }, (_, index) => (index + 3) * 5).map((minutes) => (
+  <option key={minutes} value={String(minutes)}>
+    {minutes} минут
+  </option>
+))}
                     </select>
                   </label>
 
