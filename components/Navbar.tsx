@@ -1,8 +1,9 @@
+
 "use client";
 
 import Link from "next/link";
-import PersonalAccountModal from "@/components/PersonalAccountModal";
 import Image from "next/image";
+import PersonalAccountModal from "@/components/PersonalAccountModal";
 import HowItWorksModal from "@/components/HowItWorksModal";
 import WhyPongLabModal from "@/components/WhyPongLabModal";
 import { useEffect, useState } from "react";
@@ -32,151 +33,152 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handler);
   }, []);
 
+  const openAccount = () => {
+    setMobileOpen(false);
+    setAccountOpen(true);
+  };
+
   return (
     <>
-      <header className="fixed top-0 left-0 w-full flex justify-center z-50">
+      <header className="fixed top-0 left-0 z-50 flex w-full justify-center">
         <div
           className={`
-            w-[94%]
-            max-w-[1450px]
-            flex
-            items-center
-            justify-between
-            transition-all
-            duration-500
-            rounded-[30px]
-            border
-
+            flex w-[94%] max-w-[1450px]
+            items-center justify-between
+            rounded-[30px] border
+            transition-all duration-500
             ${
               scrolled
                 ? `
-                  py-3 px-6
-                  bg-[rgba(10,12,24,.82)]
+                  px-4 py-3 sm:px-6
                   border-white/10
+                  bg-[rgba(10,12,24,.82)]
                   backdrop-blur-2xl
                   shadow-[0_10px_60px_rgba(107,48,206,.25)]
                 `
                 : `
-                  py-4 px-8
-                  bg-[rgba(10,12,24,.45)]
+                  px-4 py-4 sm:px-8
                   border-white/5
+                  bg-[rgba(10,12,24,.45)]
                   backdrop-blur-xl
                   shadow-[0_10px_40px_rgba(0,0,0,.35)]
                 `
             }
           `}
         >
-          {/* Logo */}
-          <Link href="/">
-            <div className="flex items-center gap-3 cursor-pointer">
-              <Image
-                src="/logotext.png"
-                alt="PongLab"
-                width={200}
-                height={60}
-                priority
-              />
-            </div>
+          {/* Логотип */}
+          <Link
+            href="/"
+            aria-label="PongLab — главная"
+            onClick={() => setMobileOpen(false)}
+            className="shrink-0"
+          >
+            <Image
+              src="/logotext.png"
+              alt="PongLab"
+              width={200}
+              height={60}
+              priority
+              className="h-auto w-[130px] sm:w-[160px] lg:w-[200px]"
+            />
           </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden lg:flex items-center gap-10">
+          {/* Навигация на компьютере */}
+          <nav className="hidden items-center gap-10 lg:flex">
             {navItems.map((item) => {
               if (item.href === "/how-it-works") {
                 return (
                   <button
                     key={item.href}
+                    type="button"
                     onClick={() => setHowItWorksOpen(true)}
                     className="
-                      relative group
-                      text-sm text-white/70
-                      transition-all duration-300
-                      hover:text-white
+                      relative text-sm text-white/70
+                      transition-all duration-300 hover:text-white
+                      group
                     "
                   >
                     {item.title}
-                    <span className="absolute left-0 -bottom-2 h-[2px] w-0 bg-[#8F5BFF] transition-all duration-300 group-hover:w-full" />
+                    <span className="absolute -bottom-2 left-0 h-[2px] w-0 bg-[#8F5BFF] transition-all duration-300 group-hover:w-full" />
                   </button>
                 );
               }
-if (item.href === "/why-effective") {
-  return (
-    <button
-      key={item.href}
-      onClick={() => setWhyOpen(true)}
-      className="
-        relative group
-        text-sm text-white/70
-        transition-all duration-300
-        hover:text-white
-      "
-    >
-      {item.title}
 
-      <span
-        className="
-          absolute
-          left-0
-          -bottom-2
-          h-[2px]
-          w-0
-          bg-[#8F5BFF]
-          transition-all
-          duration-300
-          group-hover:w-full
-        "
-      />
-    </button>
-  );
-}
+              if (item.href === "/why-effective") {
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    onClick={() => setWhyOpen(true)}
+                    className="
+                      relative text-sm text-white/70
+                      transition-all duration-300 hover:text-white
+                      group
+                    "
+                  >
+                    {item.title}
+                    <span className="absolute -bottom-2 left-0 h-[2px] w-0 bg-[#8F5BFF] transition-all duration-300 group-hover:w-full" />
+                  </button>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className="
-                    relative group
-                    text-sm text-white/70
-                    transition-all duration-300
-                    hover:text-white
+                    relative text-sm text-white/70
+                    transition-all duration-300 hover:text-white
+                    group
                   "
                 >
                   {item.title}
-                  <span className="absolute left-0 -bottom-2 h-[2px] w-0 bg-[#8F5BFF] transition-all duration-300 group-hover:w-full" />
+                  <span className="absolute -bottom-2 left-0 h-[2px] w-0 bg-[#8F5BFF] transition-all duration-300 group-hover:w-full" />
                 </Link>
               );
             })}
           </nav>
 
-          {/* Right side */}
-          <div className="flex items-center gap-4">
-            <div className="hidden xl:flex items-center gap-2">
-              <div className="h-2.5 w-2.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-xs text-white/60">Система онлайн</span>
+          {/* Правая часть шапки */}
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            <div className="hidden items-center gap-2 xl:flex">
+              <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-green-400" />
+              <span className="text-xs text-white/60">
+                Система онлайн
+              </span>
             </div>
 
+            {/* Кнопка личного кабинета на компьютере */}
             <button
-              onClick={() => setAccountOpen(true)}
+              type="button"
+              onClick={openAccount}
               className="
                 hidden md:flex
-                relative overflow-hidden
-                items-center justify-center
-                rounded-[18px]
-                px-6 py-3
-                font-semibold
-                bg-gradient-to-r
-                from-[#6B30CE] to-[#8F5BFF]
+                relative items-center justify-center
+                overflow-hidden rounded-[18px]
+                bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF]
+                px-4 py-3 font-semibold
                 transition-all duration-300
                 hover:scale-105
                 hover:shadow-[0_0_40px_rgba(107,48,206,.55)]
+                lg:px-6
               "
             >
-              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-all duration-700" />
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-all duration-700 hover:translate-x-full" />
               <span className="relative z-10">Личный кабинет</span>
             </button>
 
+            {/* Кнопка меню на планшете и телефоне */}
             <button
+              type="button"
+              aria-label="Открыть меню"
+              aria-expanded={mobileOpen}
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden flex items-center justify-center h-11 w-11 rounded-xl bg-white/5 border border-white/10"
+              className="
+                flex h-11 w-11 items-center justify-center
+                rounded-xl border border-white/10
+                bg-white/5 lg:hidden
+              "
             >
               <Menu size={22} />
             </button>
@@ -184,83 +186,120 @@ if (item.href === "/why-effective") {
         </div>
       </header>
 
-      {/* Mobile menu */}
+      {/* Мобильное меню */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-[100] bg-[#090B18] flex flex-col">
-          <div className="flex justify-between items-center p-6">
-            <div className="font-black text-xl">PONGLAB</div>
+        <div className="fixed inset-0 z-[100] flex flex-col overflow-y-auto bg-[#090B18] text-white">
+          <div className="flex items-center justify-between p-5 sm:p-6">
+            <Link
+              href="/"
+              onClick={() => setMobileOpen(false)}
+              aria-label="PongLab — главная"
+            >
+              <Image
+                src="/logotext.png"
+                alt="PongLab"
+                width={160}
+                height={48}
+                className="h-auto w-[140px]"
+              />
+            </Link>
 
             <button
+              type="button"
+              aria-label="Закрыть меню"
               onClick={() => setMobileOpen(false)}
-              className="h-11 w-11 rounded-xl bg-white/5 flex items-center justify-center"
+              className="
+                flex h-11 w-11 items-center justify-center
+                rounded-xl border border-white/10 bg-white/5
+              "
             >
               <X size={22} />
             </button>
           </div>
 
-          <div className="flex flex-col gap-8 p-8 text-2xl">
+          <nav className="flex flex-col gap-7 px-6 pb-10 pt-5 text-xl sm:px-8">
             {navItems.map((item) => {
               if (item.href === "/how-it-works") {
                 return (
                   <button
                     key={item.href}
+                    type="button"
                     onClick={() => {
-                      setHowItWorksOpen(true);
                       setMobileOpen(false);
+                      setHowItWorksOpen(true);
                     }}
-                    className="text-left text-white/70 hover:text-white transition"
+                    className="text-left text-white/75 transition hover:text-white"
                   >
                     {item.title}
                   </button>
                 );
               }
-if (item.href === "/why-effective") {
-  return (
-    <button
-      key={item.href}
-      onClick={() => {
-        setWhyOpen(true);
-        setMobileOpen(false);
-      }}
-      className="
-        text-left
-        text-white/70
-        hover:text-white
-        transition
-      "
-    >
-      {item.title}
-    </button>
-  );
-}
+
+              if (item.href === "/why-effective") {
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      setWhyOpen(true);
+                    }}
+                    className="text-left text-white/75 transition hover:text-white"
+                  >
+                    {item.title}
+                  </button>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
-                  className="text-white/70 hover:text-white transition"
+                  className="text-white/75 transition hover:text-white"
                 >
                   {item.title}
                 </Link>
               );
             })}
-          </div>
+
+            {/* Личный кабинет в мобильном меню */}
+            <div className="my-2 h-px w-full bg-white/10" />
+
+            <button
+              type="button"
+              onClick={openAccount}
+              className="
+                w-full rounded-2xl
+                bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF]
+                px-6 py-4 text-left text-lg font-semibold text-white
+                shadow-[0_0_30px_rgba(107,48,206,.2)]
+                transition-all duration-300
+                hover:shadow-[0_0_40px_rgba(107,48,206,.45)]
+                active:scale-[0.98]
+              "
+            >
+              Личный кабинет
+            </button>
+          </nav>
         </div>
       )}
 
-      {/* Modal */}
+      {/* Модальные окна */}
       <HowItWorksModal
         open={howItWorksOpen}
         onClose={() => setHowItWorksOpen(false)}
       />
-       <PersonalAccountModal
+
+      <PersonalAccountModal
         open={accountOpen}
         onClose={() => setAccountOpen(false)}
       />
+
       <WhyPongLabModal
-  open={whyOpen}
-  onClose={() => setWhyOpen(false)}
-/>
+        open={whyOpen}
+        onClose={() => setWhyOpen(false)}
+      />
     </>
   );
 }
