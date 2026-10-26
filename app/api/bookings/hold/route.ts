@@ -400,6 +400,12 @@ export async function POST(request: NextRequest) {
       const availabilityData = await availabilityResponse
         .json()
         .catch(() => ({}));
+      console.error("Booking hold availability response:", {
+  url: availabilityUrl.toString(),
+  status: availabilityResponse.status,
+  ok: availabilityResponse.ok,
+  data: availabilityData,
+});
 
       if (!availabilityResponse.ok) {
         return errorResponse(
