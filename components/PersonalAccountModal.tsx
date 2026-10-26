@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import BookingCalendar from "@/components/BookingCalendar";
+import MyBookingsPanel from "@/components/MyBookingsPanel";
 import {
   X,
   Phone,
@@ -74,6 +75,7 @@ export default function PersonalAccountModal({
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
+  const [showMyBookings, setShowMyBookings] = useState(false);
 
   const [phoneDigits, setPhoneDigits] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -106,6 +108,8 @@ export default function PersonalAccountModal({
     } else {
       setVisible(false);
       setShowBooking(false);
+      setShowMyBookings(false);
+
       timer = setTimeout(() => {
         setMounted(false);
       }, ANIMATION_DURATION);
@@ -193,6 +197,7 @@ export default function PersonalAccountModal({
           setAccountRole(null);
           setIsLoadingRole(false);
           setShowBooking(false);
+          setShowMyBookings(false);
         }
       } catch {
         if (!cancelled) {
@@ -253,9 +258,6 @@ export default function PersonalAccountModal({
           setAuthError("");
           setIsLoadingRole(true);
 
-          // Не проверяем флаг cancelled здесь:
-          // при смене authSuccess эффект очищается,
-          // иначе индикатор мог остаться навсегда.
           void fetchAccountRole()
             .then((role) => {
               setAccountRole(role);
@@ -336,6 +338,7 @@ export default function PersonalAccountModal({
       setChallengeId("");
       setExpiresAt("");
       setShowBooking(false);
+      setShowMyBookings(false);
 
       if (!response.ok || result.success !== true) {
         setLogoutError(
@@ -485,7 +488,7 @@ export default function PersonalAccountModal({
         <div className="mb-5 flex items-center gap-3 pr-10">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#6B30CE]/20 text-[#A77BFF]">
             {isAuthenticated ? (
-              showBooking ? (
+              showBooking || showMyBookings ? (
                 <CalendarDays size={25} strokeWidth={1.8} />
               ) : (
                 <UserRound size={25} strokeWidth={1.8} />
@@ -506,12 +509,14 @@ export default function PersonalAccountModal({
             >
               {showBooking
                 ? "Выберите подходящий слот:"
-                : "Личный кабинет"}
+                : showMyBookings
+                  ? "Мои бронирования"
+                  : "Личный кабинет"}
             </h2>
           </div>
         </div>
 
-        {!showBooking && (
+        {!showBooking && !showMyBookings && (
           <p className="mb-6 text-sm leading-6 text-white/60">
             {isAuthenticated
               ? "Управляйте своими тренировками и бронированиями."
@@ -519,15 +524,20 @@ export default function PersonalAccountModal({
           </p>
         )}
 
-        {showBooking && (
+        {(showBooking || showMyBookings) && (
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm leading-5 text-white/55">
-              Выберите клуб, дату, длительность и свободное время.
+              {showBooking
+                ? "Выберите клуб, дату, длительность и свободное время."
+                : "Просмотр ваших временных резервов и подтверждённых бронирований."}
             </p>
 
             <button
               type="button"
-              onClick={() => setShowBooking(false)}
+              onClick={() => {
+                setShowBooking(false);
+                setShowMyBookings(false);
+              }}
               className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-semibold text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
             >
               <ArrowLeft size={16} />
@@ -577,6 +587,13 @@ export default function PersonalAccountModal({
           <div className="space-y-4">
             {showBooking ? (
               <BookingCalendar />
+            ) : showMyBookings ? (
+              <MyBookingsPanel
+                onCreateBooking={() => {
+                  setShowBooking(true);
+                  setShowMyBookings(false);
+                }}
+              />
             ) : (
               <>
                 <div
@@ -635,6 +652,33 @@ export default function PersonalAccountModal({
                   <ArrowRight
                     size={20}
                     className="shrink-0 text-[#C8B2FF] transition-transform group-hover:translate-x-1"
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBooking(false);
+                    setShowMyBookings(true);
+                  }}
+                  className="group flex min-h-[76px] w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-left transition-colors hover:border-white/20 hover:bg-white/[0.06]"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-[#C8B2FF]">
+                    <CalendarDays size={22} />
+                  </span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-semibold text-white">
+                      Мои бронирования
+                    </span>
+                    <span className="mt-1 block text-sm leading-5 text-white/55">
+                      Резервы, время посещения и статусы
+                    </span>
+                  </span>
+
+                  <ArrowRight
+                    size={19}
+                    className="shrink-0 text-white/45 transition-transform group-hover:translate-x-1 group-hover:text-white"
                   />
                 </button>
 
