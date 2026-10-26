@@ -129,7 +129,39 @@ function getStatus(booking: AccountBooking, now: number) {
     className: "border-white/10 bg-white/5 text-white/65",
   };
 }
+function formatDeadline(
+  value: string | null | undefined,
+  timeZone: string | null | undefined,
+): string {
+  if (!value) {
+    return "не указано";
+  }
 
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "не указано";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("ru-RU", {
+      timeZone: timeZone || "Europe/Moscow",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  }
+}
 export default function MyBookingsPanel({
   onCreateBooking,
 }: MyBookingsPanelProps) {
