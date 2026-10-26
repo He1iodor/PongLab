@@ -1,21 +1,42 @@
 
-import Link from "next/link";
+"use client";
+
+import { useRouter } from "next/navigation";
 
 const sectionClass = "space-y-4";
 const headingClass = "text-lg font-semibold text-white sm:text-xl";
 const paragraphClass = "text-sm leading-7 text-white/75";
 const listClass = "list-disc space-y-2 pl-6 text-sm leading-7 text-white/75";
 
+function BackButton({
+  children = "← Вернуться назад",
+}: {
+  children?: React.ReactNode;
+}) {
+  const router = useRouter();
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (window.history.length > 1) {
+          router.back();
+        } else {
+          router.push("/");
+        }
+      }}
+      className="inline-flex text-sm text-[#C8B2FF] transition hover:text-white"
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function OfertaPage() {
   return (
     <main className="min-h-screen bg-[#0B0D18] px-4 py-10 text-white sm:px-6 sm:py-16">
       <article className="mx-auto max-w-4xl">
-        <Link
-          href="/"
-          className="inline-flex text-sm text-[#C8B2FF] transition hover:text-white"
-        >
-          ← На главную
-        </Link>
+        <BackButton />
 
         <header className="mt-8 border-b border-white/10 pb-8">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#A77BFF]">
@@ -317,12 +338,7 @@ export default function OfertaPage() {
         </div>
 
         <footer className="mt-12 border-t border-white/10 pt-6">
-          <Link
-            href="/"
-            className="text-sm text-[#C8B2FF] transition hover:text-white"
-          >
-            Вернуться на главную
-          </Link>
+          <BackButton>← Вернуться назад</BackButton>
         </footer>
       </article>
     </main>
