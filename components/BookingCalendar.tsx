@@ -852,13 +852,11 @@ export default function BookingCalendar() {
                   <span>
                     Я ознакомился(-ась) с{" "}
                     <Link
-                      href="/oferta"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[#C8B2FF] underline underline-offset-4 hover:text-white"
-                    >
-                      договором-офертой
-                    </Link>{" "}
+  href="/oferta"
+  className="text-[#C8B2FF] underline underline-offset-4 hover:text-white"
+>
+  договором-офертой
+</Link>{" "}
                     и согласен(-на) с его условиями. Понимаю, что временный
                     резерв сам по себе не заключает договор: согласно оферте,
                     договор заключается после полной оплаты.
