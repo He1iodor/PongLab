@@ -38,7 +38,9 @@ function getConfig() {
 function isUuid(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
   );
 }
 
@@ -406,43 +408,42 @@ export async function POST(request: NextRequest) {
         ? (availabilityData.slots as AvailableSlot[])
         : [];
 
+      // Сравниваем время по миллисекундам, а не по строковому представлению.
       const requestedStartMs = Date.parse(group.start_at);
 
-const requestedStartMs = Date.parse(group.start_at);
+      const slot = slots.find(
+        (candidate) =>
+          Date.parse(candidate.start_at) === requestedStartMs &&
+          Number(candidate.duration_minutes) === group.duration_minutes &&
+          candidate.available_tables.some(
+            (table) => table.id === group.table_id,
+          ),
+      );
 
-const slot = slots.find(
-  (candidate) =>
-    Date.parse(candidate.start_at) === requestedStartMs &&
-    Number(candidate.duration_minutes) === group.duration_minutes &&
-    candidate.available_tables.some(
-      (table) => table.id === group.table_id,
-    ),
-);
+      if (!slot) {
+        console.error("Booking hold slot mismatch:", {
+          studioId,
+          date,
+          requested: {
+            start_at: group.start_at,
+            duration_minutes: group.duration_minutes,
+            table_id: group.table_id,
+          },
+          serverSlots: slots.map((candidate) => ({
+            start_at: candidate.start_at,
+            duration_minutes: candidate.duration_minutes,
+            price_rub: candidate.price_rub,
+            available_table_ids: candidate.available_tables.map(
+              (table) => table.id,
+            ),
+          })),
+        });
 
-if (!slot) {
-  console.error("Booking hold slot mismatch:", {
-    studioId,
-    date,
-    requested: {
-      start_at: group.start_at,
-      duration_minutes: group.duration_minutes,
-      table_id: group.table_id,
-    },
-    serverSlots: slots.map((candidate) => ({
-      start_at: candidate.start_at,
-      duration_minutes: candidate.duration_minutes,
-      price_rub: candidate.price_rub,
-      available_table_ids: candidate.available_tables.map(
-        (table) => table.id,
-      ),
-    })),
-  });
-
-  return errorResponse(
-    "Один из выбранных периодов уже недоступен или тариф изменился. Обновите календарь.",
-    409,
-  );
-}
+        return errorResponse(
+          "Один из выбранных периодов уже недоступен или тариф изменился. Обновите календарь.",
+          409,
+        );
+      }
 
       validated.push({
         table_id: group.table_id,
