@@ -18,13 +18,7 @@ function BackButton({
   return (
     <button
       type="button"
-      onClick={() => {
-        if (window.history.length > 1) {
-          router.back();
-        } else {
-          router.push("/");
-        }
-      }}
+      onClick={() => router.push("/booking")}
       className="inline-flex text-sm text-[#C8B2FF] transition hover:text-white"
     >
       {children}
