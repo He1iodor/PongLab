@@ -200,6 +200,11 @@ function parseRequestedGroups(
 }
 
 export async function POST(request: NextRequest) {
+  console.log("[PONGLAB_HOLD] POST reached", {
+  path: new URL(request.url).pathname,
+  origin: request.headers.get("origin"),
+  environment: process.env.VERCEL_ENV ?? "local",
+});
   // Не принимаем запросы с посторонних сайтов.
   const origin = request.headers.get("origin");
 
