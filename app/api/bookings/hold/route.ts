@@ -1,5 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
+import { GET as getAvailability } from "@/app/api/availability/route";
 import { createHash } from "node:crypto";
 
 export const runtime = "nodejs";
@@ -393,41 +394,15 @@ export async function POST(request: NextRequest) {
         String(group.duration_minutes),
       );
 
-      const availabilityResponse = await fetch(availabilityUrl, {
-        cache: "no-store",
-      });
-
-      // Сначала читаем исходное тело ответа, чтобы увидеть, что реально
-      // возвращает /api/availability при внутреннем запросе.
-      const availabilityRaw = await availabilityResponse.text();
-
-      console.error("Booking hold availability raw response:", {
-        url: availabilityUrl.toString(),
-        status: availabilityResponse.status,
-        ok: availabilityResponse.ok,
-        contentType: availabilityResponse.headers.get("content-type"),
-        body: availabilityRaw.slice(0, 5000),
-      });
-
-      let availabilityData: Record<string, any> = {};
-      try {
-        const parsedAvailability: unknown = JSON.parse(availabilityRaw);
-        if (
-          parsedAvailability &&
-          typeof parsedAvailability === "object" &&
-          !Array.isArray(parsedAvailability)
-        ) {
-          availabilityData = parsedAvailability as Record<string, any>;
-        } else {
-          console.error(
-            "Booking hold availability response is not a JSON object.",
-          );
-        }
-      } catch {
-        console.error(
-          "Booking hold availability response is not valid JSON.",
-        );
-      }
+      // Вызываем обработчик доступности напрямую внутри сервера.
+      // Так запрос не зависит от домена Vercel и не попадает на HTML-страницу
+      // защиты preview-деплоя вместо JSON API-ответа.
+      const availabilityResponse = await getAvailability(
+        new NextRequest(availabilityUrl),
+      );
+      const availabilityData = await availabilityResponse
+        .json()
+        .catch(() => ({}));
 
       if (!availabilityResponse.ok) {
         return errorResponse(
