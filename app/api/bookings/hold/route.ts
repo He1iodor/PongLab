@@ -397,15 +397,37 @@ export async function POST(request: NextRequest) {
         cache: "no-store",
       });
 
-      const availabilityData = await availabilityResponse
-        .json()
-        .catch(() => ({}));
-      console.error("Booking hold availability response:", {
-  url: availabilityUrl.toString(),
-  status: availabilityResponse.status,
-  ok: availabilityResponse.ok,
-  data: availabilityData,
-});
+      // Сначала читаем исходное тело ответа, чтобы увидеть, что реально
+      // возвращает /api/availability при внутреннем запросе.
+      const availabilityRaw = await availabilityResponse.text();
+
+      console.error("Booking hold availability raw response:", {
+        url: availabilityUrl.toString(),
+        status: availabilityResponse.status,
+        ok: availabilityResponse.ok,
+        contentType: availabilityResponse.headers.get("content-type"),
+        body: availabilityRaw.slice(0, 5000),
+      });
+
+      let availabilityData: Record<string, any> = {};
+      try {
+        const parsedAvailability: unknown = JSON.parse(availabilityRaw);
+        if (
+          parsedAvailability &&
+          typeof parsedAvailability === "object" &&
+          !Array.isArray(parsedAvailability)
+        ) {
+          availabilityData = parsedAvailability as Record<string, any>;
+        } else {
+          console.error(
+            "Booking hold availability response is not a JSON object.",
+          );
+        }
+      } catch {
+        console.error(
+          "Booking hold availability response is not valid JSON.",
+        );
+      }
 
       if (!availabilityResponse.ok) {
         return errorResponse(
