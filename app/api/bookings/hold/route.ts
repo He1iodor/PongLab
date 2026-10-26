@@ -408,6 +408,8 @@ export async function POST(request: NextRequest) {
 
       const requestedStartMs = Date.parse(group.start_at);
 
+const requestedStartMs = Date.parse(group.start_at);
+
 const slot = slots.find(
   (candidate) =>
     Date.parse(candidate.start_at) === requestedStartMs &&
@@ -417,12 +419,30 @@ const slot = slots.find(
     ),
 );
 
-      if (!slot) {
-        return errorResponse(
-          "Один из выбранных периодов уже недоступен или тариф изменился. Обновите календарь.",
-          409,
-        );
-      }
+if (!slot) {
+  console.error("Booking hold slot mismatch:", {
+    studioId,
+    date,
+    requested: {
+      start_at: group.start_at,
+      duration_minutes: group.duration_minutes,
+      table_id: group.table_id,
+    },
+    serverSlots: slots.map((candidate) => ({
+      start_at: candidate.start_at,
+      duration_minutes: candidate.duration_minutes,
+      price_rub: candidate.price_rub,
+      available_table_ids: candidate.available_tables.map(
+        (table) => table.id,
+      ),
+    })),
+  });
+
+  return errorResponse(
+    "Один из выбранных периодов уже недоступен или тариф изменился. Обновите календарь.",
+    409,
+  );
+}
 
       validated.push({
         table_id: group.table_id,
