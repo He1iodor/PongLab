@@ -406,14 +406,16 @@ export async function POST(request: NextRequest) {
         ? (availabilityData.slots as AvailableSlot[])
         : [];
 
-      const slot = slots.find(
-        (candidate) =>
-          candidate.start_at === group.start_at &&
-          candidate.duration_minutes === group.duration_minutes &&
-          candidate.available_tables.some(
-            (table) => table.id === group.table_id,
-          ),
-      );
+      const requestedStartMs = Date.parse(group.start_at);
+
+const slot = slots.find(
+  (candidate) =>
+    Date.parse(candidate.start_at) === requestedStartMs &&
+    Number(candidate.duration_minutes) === group.duration_minutes &&
+    candidate.available_tables.some(
+      (table) => table.id === group.table_id,
+    ),
+);
 
       if (!slot) {
         return errorResponse(
