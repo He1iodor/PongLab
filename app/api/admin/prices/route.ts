@@ -57,8 +57,8 @@ function validateRule(data: Record<string, unknown>) {
   const minutes = (value: string) => { const [h, m] = value.split(":").map(Number); return h * 60 + m; };
   if (minutes(startsAt) >= minutes(endsAt))
     return "Время окончания должно быть позже времени начала.";
-  if (!Number.isInteger(duration) || (duration as number) < 15 || (duration as number) > 480 || (duration as number) % 5 !== 0)
-    return "Длительность должна быть от 15 до 480 минут с шагом 5 минут.";
+  if (duration !== 60)
+    return "Тариф задаёт стоимость одного слота продолжительностью 60 минут.";
   if (typeof price !== "number" || !Number.isInteger(price) || price <= 0 || price > 1000000)
     return "Цена должна быть целым числом от 1 до 1 000 000 рублей.";
   if (!validDate(from) || !validDate(to))
@@ -75,7 +75,7 @@ function normalizeRule(data: Record<string, unknown>) {
     weekday: data.weekday,
     starts_at: normalizeTime(data.starts_at as string),
     ends_at: normalizeTime(data.ends_at as string),
-    duration_minutes: data.duration_minutes,
+    duration_minutes: 60,
     price_rub: data.price_rub,
     effective_from: data.effective_from || null,
     effective_to: data.effective_to || null,
