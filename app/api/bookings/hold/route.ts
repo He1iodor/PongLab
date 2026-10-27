@@ -155,9 +155,9 @@ function parseRequestedGroups(
         typeof item.start_at !== "string" ||
         !Number.isFinite(Date.parse(item.start_at)) ||
         !Number.isInteger(item.duration_minutes) ||
-        (item.duration_minutes as number) < 15 ||
+        (item.duration_minutes as number) < 60 ||
         (item.duration_minutes as number) > 480 ||
-        (item.duration_minutes as number) % 5 !== 0
+        (item.duration_minutes as number) % 60 !== 0
       ) {
         return null;
       }
@@ -181,9 +181,9 @@ function parseRequestedGroups(
     typeof data.start_at === "string" &&
     Number.isFinite(Date.parse(data.start_at)) &&
     Number.isInteger(data.duration_minutes) &&
-    (data.duration_minutes as number) >= 15 &&
+    (data.duration_minutes as number) >= 60 &&
     (data.duration_minutes as number) <= 480 &&
-    (data.duration_minutes as number) % 5 === 0
+    (data.duration_minutes as number) % 60 === 0
   ) {
     return {
       groups: [
@@ -327,7 +327,7 @@ export async function POST(request: NextRequest) {
       config.key,
       "studio_booking_settings",
       {
-        select: "hold_minutes,allowed_durations_minutes",
+        select: "hold_minutes",
         studio_id: `eq.${studioId}`,
         limit: "1",
       },
@@ -344,18 +344,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allowedDurations = Array.isArray(
-      settings.allowed_durations_minutes,
-    )
-      ? settings.allowed_durations_minutes.map(Number)
-      : [];
-
     for (const group of groups) {
-      if (!allowedDurations.includes(group.duration_minutes)) {
-        return errorResponse(
-          `Длительность ${group.duration_minutes} минут не разрешена настройками клуба. Выберите доступную длительность.`,
-          400,
-        );
+      if (group.duration_minutes < 60 || group.duration_minutes > 480 || group.duration_minutes % 60 !== 0) {
+        return errorResponse("Бронирование должно состоять из целого количества часовых слотов.", 400);
       }
     }
 
@@ -372,8 +363,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем каждую группу через серверный календарь.
-    // Цена и время окончания берутся из серверного ответа.
+    // Проверяем каждый час отдельно. В БД создаётся одна бронь на выбранную
+    // группу соседних часов, а цена суммируется по часовым тарифам.
     const validated: Array<{
       table_id: string;
       start_at: string;
@@ -382,82 +373,61 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     for (const group of groups) {
-      const availabilityUrl = new URL(
-        "/api/availability",
-        request.url,
-      );
+      const groupStartMs = Date.parse(group.start_at);
+      const hours = group.duration_minutes / 60;
+      let totalPrice = 0;
+      let firstStartAt = "";
+      let finalEndAt = "";
 
-      availabilityUrl.searchParams.set("studio_id", studioId);
-      availabilityUrl.searchParams.set("date", date);
-      availabilityUrl.searchParams.set(
-        "duration_minutes",
-        String(group.duration_minutes),
-      );
+      for (let index = 0; index < hours; index++) {
+        const segmentStart = new Date(groupStartMs + index * 60 * 60_000);
+        const availabilityUrl = new URL("/api/availability", request.url);
+        availabilityUrl.searchParams.set("studio_id", studioId);
+        availabilityUrl.searchParams.set("date", date);
+        availabilityUrl.searchParams.set("duration_minutes", "60");
 
-      // Вызываем обработчик доступности напрямую внутри сервера.
-      // Так запрос не зависит от домена Vercel и не попадает на HTML-страницу
-      // защиты preview-деплоя вместо JSON API-ответа.
-      const availabilityResponse = await getAvailability(
-        new NextRequest(availabilityUrl),
-      );
-      const availabilityData = await availabilityResponse
-        .json()
-        .catch(() => ({}));
+        // Вызов внутреннего обработчика, чтобы не зависеть от домена preview.
+        const availabilityResponse = await getAvailability(new NextRequest(availabilityUrl));
+        const availabilityData = await availabilityResponse.json().catch(() => ({}));
 
-      if (!availabilityResponse.ok) {
-        return errorResponse(
-          availabilityData.error ||
-            "Не удалось проверить доступность слота.",
-          availabilityResponse.status,
+        if (!availabilityResponse.ok) {
+          return errorResponse(
+            availabilityData.error || "Не удалось проверить доступность слота.",
+            availabilityResponse.status,
+          );
+        }
+
+        const slots = Array.isArray(availabilityData.slots)
+          ? (availabilityData.slots as AvailableSlot[])
+          : [];
+        const slot = slots.find((candidate) =>
+          Date.parse(candidate.start_at) === segmentStart.getTime() &&
+          Number(candidate.duration_minutes) === 60 &&
+          candidate.available_tables.some((table) => table.id === group.table_id)
         );
-      }
 
-      const slots = Array.isArray(availabilityData.slots)
-        ? (availabilityData.slots as AvailableSlot[])
-        : [];
+        if (!slot) {
+          console.error("Booking hold hourly segment mismatch:", {
+            studioId, date, table_id: group.table_id,
+            segment_start_at: segmentStart.toISOString(),
+            group_duration_minutes: group.duration_minutes,
+          });
+          return errorResponse(
+            "Один из выбранных часовых слотов уже недоступен или тариф изменился. Обновите календарь.",
+            409,
+          );
+        }
 
-      // Сравниваем время по миллисекундам, а не по строковому представлению.
-      const requestedStartMs = Date.parse(group.start_at);
-
-      const slot = slots.find(
-        (candidate) =>
-          Date.parse(candidate.start_at) === requestedStartMs &&
-          Number(candidate.duration_minutes) === group.duration_minutes &&
-          candidate.available_tables.some(
-            (table) => table.id === group.table_id,
-          ),
-      );
-
-      if (!slot) {
-        console.error("Booking hold slot mismatch:", {
-          studioId,
-          date,
-          requested: {
-            start_at: group.start_at,
-            duration_minutes: group.duration_minutes,
-            table_id: group.table_id,
-          },
-          serverSlots: slots.map((candidate) => ({
-            start_at: candidate.start_at,
-            duration_minutes: candidate.duration_minutes,
-            price_rub: candidate.price_rub,
-            available_table_ids: candidate.available_tables.map(
-              (table) => table.id,
-            ),
-          })),
-        });
-
-        return errorResponse(
-          "Один из выбранных периодов уже недоступен или тариф изменился. Обновите календарь.",
-          409,
-        );
+        if (index === 0) firstStartAt = slot.start_at;
+        finalEndAt = slot.end_at;
+        totalPrice += Number(slot.price_rub);
       }
 
       validated.push({
         table_id: group.table_id,
-        start_at: slot.start_at,
-        end_at: slot.end_at,
-        price_rub: Number(slot.price_rub),
+        start_at: firstStartAt,
+        end_at: finalEndAt,
+        price_rub: totalPrice,
       });
     }
 
