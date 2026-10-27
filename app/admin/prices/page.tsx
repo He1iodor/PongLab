@@ -1,4 +1,3 @@
-
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -347,6 +346,7 @@ export default function AdminPricesPage() {
                       value={form.starts_at}
                       onChange={(e) => updateForm({ starts_at: e.target.value })}
                       required
+                      style={{ colorScheme: "dark" }}
                       className="mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </label>
@@ -358,6 +358,7 @@ export default function AdminPricesPage() {
                       value={form.ends_at}
                       onChange={(e) => updateForm({ ends_at: e.target.value })}
                       required
+                      style={{ colorScheme: "dark" }}
                       className="mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </label>
@@ -371,10 +372,10 @@ export default function AdminPricesPage() {
                       className="mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 outline-none focus:border-violet-400"
                     >
                       {Array.from({ length: 94 }, (_, index) => (index + 3) * 5).map((minutes) => (
-  <option key={minutes} value={String(minutes)}>
-    {minutes} минут
-  </option>
-))}
+                        <option key={minutes} value={String(minutes)}>
+                          {minutes} минут
+                        </option>
+                      ))}
                     </select>
                   </label>
 
@@ -409,6 +410,7 @@ export default function AdminPricesPage() {
                       type="date"
                       value={form.effective_from}
                       onChange={(e) => updateForm({ effective_from: e.target.value })}
+                      style={{ colorScheme: "dark" }}
                       className="mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </label>
@@ -420,6 +422,7 @@ export default function AdminPricesPage() {
                       value={form.effective_to}
                       min={form.effective_from || undefined}
                       onChange={(e) => updateForm({ effective_to: e.target.value })}
+                      style={{ colorScheme: "dark" }}
                       className="mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </label>
