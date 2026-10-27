@@ -144,8 +144,7 @@ export default function BookingCalendar() {
     [studios, studioId],
   );
 
-  const availableDurations =
-    selectedStudio?.settings.allowed_durations_minutes ?? [];
+  const availableDurations = [60];
 
   const resolvedSelectedSlots = useMemo(
     () =>
@@ -286,9 +285,7 @@ export default function BookingCalendar() {
   useEffect(() => {
     if (!selectedStudio) return;
 
-    if (!availableDurations.includes(duration)) {
-      setDuration(availableDurations[0] ?? 60);
-    }
+    if (duration !== 60) setDuration(60);
 
     if (!date || date < minDate || date > maxDate) {
       setDate(minDate);
