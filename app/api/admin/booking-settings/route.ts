@@ -16,8 +16,8 @@ type BookingSettings = {
 };
 
 const DEFAULTS = {
-  slot_interval_minutes: 30,
-  allowed_durations_minutes: [30, 60, 75, 90, 120],
+  slot_interval_minutes: 60,
+  allowed_durations_minutes: [60],
   booking_horizon_days: 30,
   minimum_notice_minutes: 0,
   hold_minutes: 10,
@@ -52,15 +52,12 @@ function validInt(value: unknown, min: number, max: number, step = 1) {
 }
 
 function validate(body: Record<string, unknown>) {
-  if (!validInt(body.slot_interval_minutes, 5, 60, 5))
-    return "Шаг начала слотов должен быть от 5 до 60 минут с шагом 5 минут.";
+  if (body.slot_interval_minutes !== 60)
+    return "Шаг начала слотов фиксирован и составляет 60 минут.";
   if (!Array.isArray(body.allowed_durations_minutes) ||
-      body.allowed_durations_minutes.length < 1 ||
-      body.allowed_durations_minutes.length > 94 ||
-      !body.allowed_durations_minutes.every((v) => validInt(v, 15, 480, 5)))
-    return "Выберите хотя бы одну длительность от 15 до 480 минут с шагом 5 минут.";
-  if (new Set(body.allowed_durations_minutes as number[]).size !== body.allowed_durations_minutes.length)
-    return "Длительности не должны повторяться.";
+      body.allowed_durations_minutes.length !== 1 ||
+      body.allowed_durations_minutes[0] !== 60)
+    return "Длительность одного слота фиксирована и составляет 60 минут.";
   if (!validInt(body.booking_horizon_days, 1, 365))
     return "Горизонт бронирования должен быть от 1 до 365 дней.";
   if (!validInt(body.minimum_notice_minutes, 0, 10080))
@@ -157,8 +154,8 @@ export async function PUT(request: NextRequest) {
 
     const settings = {
       studio_id: data.studio_id,
-      slot_interval_minutes: data.slot_interval_minutes,
-      allowed_durations_minutes: [...(data.allowed_durations_minutes as number[])].sort((a, b) => a - b),
+      slot_interval_minutes: 60,
+      allowed_durations_minutes: [60],
       booking_horizon_days: data.booking_horizon_days,
       minimum_notice_minutes: data.minimum_notice_minutes,
       hold_minutes: data.hold_minutes,
