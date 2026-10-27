@@ -4,8 +4,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_SETTINGS = {
-  slot_interval_minutes: 30,
-  allowed_durations_minutes: [30, 60, 75, 90, 120],
+  slot_interval_minutes: 60,
+  allowed_durations_minutes: [60],
   booking_horizon_days: 30,
   minimum_notice_minutes: 0,
   hold_minutes: 10,
@@ -131,20 +131,17 @@ export async function GET(request: NextRequest) {
     });
     const rawSettings = Array.isArray(settingRows) && settingRows.length ? settingRows[0] : {};
     const settings = {
-      slot_interval_minutes: Number(rawSettings.slot_interval_minutes ?? DEFAULT_SETTINGS.slot_interval_minutes),
-      allowed_durations_minutes: Array.isArray(rawSettings.allowed_durations_minutes)
-        ? rawSettings.allowed_durations_minutes.map(Number).filter((v: number) => Number.isInteger(v) && v >= 15 && v <= 480 && v % 5 === 0)
-        : DEFAULT_SETTINGS.allowed_durations_minutes,
+      // В календаре доступен только часовой слот; старые значения в БД игнорируются.
+      slot_interval_minutes: 60,
+      allowed_durations_minutes: [60],
       booking_horizon_days: Number(rawSettings.booking_horizon_days ?? DEFAULT_SETTINGS.booking_horizon_days),
       minimum_notice_minutes: Number(rawSettings.minimum_notice_minutes ?? DEFAULT_SETTINGS.minimum_notice_minutes),
       hold_minutes: Number(rawSettings.hold_minutes ?? DEFAULT_SETTINGS.hold_minutes),
       allow_same_day_booking: rawSettings.allow_same_day_booking ?? DEFAULT_SETTINGS.allow_same_day_booking,
     };
 
-    if (!Number.isInteger(settings.slot_interval_minutes) || settings.slot_interval_minutes < 5 || settings.slot_interval_minutes > 60 || settings.slot_interval_minutes % 5 !== 0)
-      throw new Error("В настройках клуба указан некорректный шаг слотов.");
-    if (!settings.allowed_durations_minutes.length)
-      throw new Error("В настройках клуба не выбрана ни одна длительность бронирования.");
+    if (settings.slot_interval_minutes !== 60 || settings.allowed_durations_minutes.length !== 1 || settings.allowed_durations_minutes[0] !== 60)
+      throw new Error("Внутренняя ошибка настройки часовых слотов.");
     if (!Number.isInteger(settings.booking_horizon_days) || settings.booking_horizon_days < 1 || settings.booking_horizon_days > 365)
       throw new Error("В настройках клуба указан некорректный горизонт бронирования.");
     if (!Number.isInteger(settings.minimum_notice_minutes) || settings.minimum_notice_minutes < 0 || settings.minimum_notice_minutes > 10080)
@@ -152,12 +149,10 @@ export async function GET(request: NextRequest) {
 
     if (requestedDuration !== null) {
       const parsed = Number(requestedDuration);
-      if (!Number.isInteger(parsed) || !settings.allowed_durations_minutes.includes(parsed))
-        return errorResponse("Эта длительность бронирования сейчас недоступна.", 400);
+      if (parsed !== 60)
+        return errorResponse("Один слот длится ровно 60 минут. Выберите нужное количество соседних часов.", 400);
     }
-    const durations: number[] = requestedDuration === null
-      ? settings.allowed_durations_minutes
-      : [Number(requestedDuration)];
+    const durations: number[] = [60];
 
     // Сравниваем календарные даты именно в часовом поясе клуба.
     const today = new Intl.DateTimeFormat("en-CA", {
