@@ -141,7 +141,7 @@ export default function AdminPricesPage() {
       weekday: String(rule.weekday),
       starts_at: rule.starts_at.slice(0, 5),
       ends_at: rule.ends_at.slice(0, 5),
-      duration_minutes: String(rule.duration_minutes),
+      duration_minutes: "60",
       price_rub: String(rule.price_rub),
       effective_from: rule.effective_from ?? "",
       effective_to: rule.effective_to ?? "",
@@ -247,8 +247,8 @@ export default function AdminPricesPage() {
           </p>
           <h1 className="mt-3 text-3xl font-semibold">Цены и тарифы</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
-            Настраивайте стоимость бронирования по дням недели,
-            времени и длительности игры.
+            Настраивайте стоимость одного часового слота по дням недели,
+            времени и периоду действия тарифа. Цена нескольких часов суммируется автоматически.
           </p>
         </header>
 
@@ -363,21 +363,11 @@ export default function AdminPricesPage() {
                     />
                   </label>
 
-                  <label className="block text-sm">
-                    Длительность бронирования
-                    <select
-                      value={form.duration_minutes}
-                      onChange={(e) => updateForm({ duration_minutes: e.target.value })}
-                      required
-                      className="mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 outline-none focus:border-violet-400"
-                    >
-                      {Array.from({ length: 94 }, (_, index) => (index + 3) * 5).map((minutes) => (
-                        <option key={minutes} value={String(minutes)}>
-                          {minutes} минут
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                    Длительность слота
+                    <p className="mt-2 font-medium">60 минут</p>
+                    <p className="mt-1 text-xs leading-5 text-white/45">Цена указывается за один час.</p>
+                  </div>
 
                   <label className="block text-sm">
                     Цена, ₽
