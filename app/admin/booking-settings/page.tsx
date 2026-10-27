@@ -15,14 +15,13 @@ type Settings = {
 };
 
 const DEFAULTS: Omit<Settings, "studio_id"> = {
-  slot_interval_minutes: 30,
-  allowed_durations_minutes: [30, 60, 75, 90, 120],
+  slot_interval_minutes: 60,
+  allowed_durations_minutes: [60],
   booking_horizon_days: 30,
   minimum_notice_minutes: 0,
   hold_minutes: 10,
   allow_same_day_booking: true,
 };
-const DURATION_OPTIONS = Array.from({ length: 94 }, (_, i) => (i + 3) * 5);
 
 const inputClass = "mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 text-white outline-none focus:border-violet-400";
 const cardClass = "rounded-2xl border border-white/10 bg-[#151121] p-5 sm:p-6";
@@ -31,7 +30,6 @@ export default function BookingSettingsPage() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [studioId, setStudioId] = useState("");
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [newDuration, setNewDuration] = useState("45");
   const [loadingClubs, setLoadingClubs] = useState(true);
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,27 +78,10 @@ export default function BookingSettingsPage() {
     setMessage("");
   }
 
-  function addDuration() {
-    const value = Number(newDuration);
-    if (!Number.isInteger(value) || value < 15 || value > 480 || value % 5 !== 0) {
-      setError("Длительность должна быть от 15 до 480 минут с шагом 5 минут.");
-      return;
-    }
-    if (!settings) return;
-    if (settings.allowed_durations_minutes.includes(value)) {
-      setError("Эта длительность уже добавлена.");
-      return;
-    }
-    update("allowed_durations_minutes", [...settings.allowed_durations_minutes, value].sort((a, b) => a - b));
-    setError("");
-  }
 
   async function save() {
     if (!settings || saving) return;
-    if (!settings.allowed_durations_minutes.length) {
-      setError("Нужно оставить хотя бы одну доступную длительность.");
-      return;
-    }
+
     setSaving(true); setError(""); setMessage("");
     try {
       const response = await fetch("/api/admin/booking-settings", {
@@ -129,8 +110,8 @@ export default function BookingSettingsPage() {
           <p className="text-xs font-semibold tracking-[0.24em] text-violet-300">PONGLAB · УПРАВЛЕНИЕ</p>
           <h1 className="mt-3 text-3xl font-semibold">Настройки бронирования</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-            Эти параметры хранятся отдельно для каждого клуба. Они управляют шагом начала слотов,
-            разрешённой длительностью игры, глубиной календаря и правилами удержания неоплаченной брони.
+            Настройки хранятся отдельно для каждого клуба. Один слот всегда длится 60 минут;
+            соседние часы можно выбрать вместе, а стоимость рассчитывается по тарифу каждого часа.
           </p>
         </header>
 
@@ -154,12 +135,10 @@ export default function BookingSettingsPage() {
             <h2 className="text-xl font-semibold">Правила календаря</h2>
             <p className="mt-1 text-sm text-white/50">{activeClub?.name}</p>
             <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              <label className="block text-sm">Шаг начала слотов
-                <select value={settings.slot_interval_minutes} onChange={(e) => update("slot_interval_minutes", Number(e.target.value))} className={inputClass}>
-                  {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map((v) => <option key={v} value={v}>{v} минут</option>)}
-                </select>
-                <span className="mt-2 block text-xs leading-5 text-white/45">Например, при шаге 15 минут возможны старты в 09:00, 09:15, 09:30 и так далее.</span>
-              </label>
+              <div className="rounded-xl border border-violet-300/20 bg-violet-300/5 p-4 text-sm">
+                <p className="font-medium">Фиксированная длительность слота</p>
+                <p className="mt-2 text-white/60">60 минут. Начало — каждый час. Для бронирования нескольких часов выберите соседние слоты в календаре.</p>
+              </div>
               <label className="block text-sm">На сколько дней вперёд открывать бронирование
                 <input type="number" min={1} max={365} step={1} value={settings.booking_horizon_days} onChange={(e) => update("booking_horizon_days", Number(e.target.value))} className={inputClass} />
               </label>
@@ -178,25 +157,6 @@ export default function BookingSettingsPage() {
             </label>
           </section>
 
-          <section className={`${cardClass} mt-6`}>
-            <h2 className="text-xl font-semibold">Доступная длительность игры</h2>
-            <p className="mt-2 text-sm leading-6 text-white/55">Клиент увидит только эти варианты. Для каждого варианта, который должен открываться в календаре, должен существовать подходящий активный тариф.</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {settings.allowed_durations_minutes.map((duration) => (
-                <span key={duration} className="inline-flex items-center gap-2 rounded-full border border-violet-300/20 bg-violet-300/10 px-3 py-2 text-sm">
-                  {duration} мин
-                  <button type="button" aria-label={`Убрать ${duration} минут`} onClick={() => update("allowed_durations_minutes", settings.allowed_durations_minutes.filter((v) => v !== duration))} disabled={settings.allowed_durations_minutes.length <= 1} className="text-white/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-30">×</button>
-                </span>
-              ))}
-            </div>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="block max-w-xs flex-1 text-sm">Добавить длительность, минут
-                <input type="number" min={15} max={480} step={5} value={newDuration} onChange={(e) => setNewDuration(e.target.value)} className={inputClass} />
-              </label>
-              <button type="button" onClick={addDuration} className="rounded-xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5">Добавить вариант</button>
-            </div>
-            <p className="mt-3 text-xs leading-5 text-white/40">Допустимо от 15 до 480 минут с шагом 5 минут. Удаление длительности из списка не удаляет старые тарифы, но скрывает эту длительность из доступных слотов.</p>
-          </section>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => void save()} disabled={saving} className="rounded-xl bg-violet-500 px-6 py-3 font-semibold transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Сохраняем…" : "Сохранить настройки"}</button>
