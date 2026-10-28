@@ -58,9 +58,9 @@ const dashboardItems: {
   },
   {
     title: "Клиенты",
-    description: "Профили и история посещений",
-    href: null,
-    available: false,
+    description: "Клиентские профили и история бронирований",
+    href: "/admin/customers",
+    available: true,
   },
   {
     title: "Оплаты",
