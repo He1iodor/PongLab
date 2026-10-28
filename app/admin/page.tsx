@@ -1,4 +1,3 @@
-
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -18,7 +17,64 @@ type Screen =
   | "password"
   | "checking"
   | "dashboard"
+  | "staff-dashboard"
   | "error";
+
+const dashboardItems: {
+  title: string;
+  description: string;
+  href: string | null;
+  available: boolean;
+}[] = [
+  {
+    title: "Бронирования",
+    description: "Просмотр, поиск и отмена временных резервов",
+    href: "/admin/bookings",
+    available: true,
+  },
+  {
+    title: "Расписание",
+    description: "Рабочие часы и исключения в расписании",
+    href: "/admin/schedule",
+    available: true,
+  },
+  {
+    title: "Цены",
+    description: "Тарифы и стоимость игровых слотов",
+    href: "/admin/prices",
+    available: true,
+  },
+  {
+    title: "Города и клубы",
+    description: "Управление клубами и их параметрами",
+    href: "/admin/locations",
+    available: true,
+  },
+  {
+    title: "Настройки бронирования",
+    description: "Длительности, шаг слотов и время удержания",
+    href: "/admin/booking-settings",
+    available: true,
+  },
+  {
+    title: "Клиенты",
+    description: "Клиентские профили и история бронирований",
+    href: "/admin/customers",
+    available: true,
+  },
+  {
+    title: "Оплаты",
+    description: "Статусы и история платежей",
+    href: null,
+    available: false,
+  },
+  {
+    title: "Оборудование",
+    description: "Состояние контроллеров и управление доступом",
+    href: null,
+    available: false,
+  },
+];
 
 export default function AdminPage() {
   const [screen, setScreen] = useState<Screen>("loading");
@@ -47,33 +103,35 @@ export default function AdminPage() {
         }
 
         const profileData = await profileResponse.json();
-        const currentProfile = profileData.profile as Profile | undefined;
+        const currentProfile = profileData.profile as
+          | Profile
+          | undefined;
 
         if (!currentProfile) {
           throw new Error("Профиль не найден.");
         }
 
         if (cancelled) return;
+
         setProfile(currentProfile);
 
-        if (
-          currentProfile.role !== "owner" &&
-          currentProfile.role !== "staff"
-        ) {
-          setScreen("forbidden");
-          return;
-        }
-
         if (currentProfile.role === "staff") {
-          // Интерфейс сотрудников подключим отдельным этапом.
+          setScreen("staff-dashboard");
+          return;
+        }
+
+        if (currentProfile.role !== "owner") {
           setScreen("forbidden");
           return;
         }
 
-        const statusResponse = await fetch("/api/admin/owner-status", {
-          cache: "no-store",
-          credentials: "same-origin",
-        });
+        const statusResponse = await fetch(
+          "/api/admin/owner-status",
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          },
+        );
 
         if (cancelled) return;
 
@@ -87,10 +145,14 @@ export default function AdminPage() {
           return;
         }
 
-        throw new Error("Не удалось проверить доступ владельца.");
+        throw new Error(
+          "Не удалось проверить доступ владельца.",
+        );
       } catch {
         if (!cancelled) {
-          setMessage("Не удалось связаться с сервером. Попробуйте обновить страницу.");
+          setMessage(
+            "Не удалось связаться с сервером. Попробуйте обновить страницу.",
+          );
           setScreen("error");
         }
       }
@@ -103,7 +165,9 @@ export default function AdminPage() {
     };
   }, []);
 
-  async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handlePasswordSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
     if (!password || submitting) return;
@@ -128,19 +192,23 @@ export default function AdminPage() {
         setMessage(
           typeof data.error === "string"
             ? data.error
-            : "Не удалось выполнить вход."
+            : "Не удалось выполнить вход.",
         );
         return;
       }
 
-      // Проверяем, что сервер действительно выдал доступ владельца.
-      const statusResponse = await fetch("/api/admin/owner-status", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
+      const statusResponse = await fetch(
+        "/api/admin/owner-status",
+        {
+          cache: "no-store",
+          credentials: "same-origin",
+        },
+      );
 
       if (!statusResponse.ok) {
-        setMessage("Пароль принят, но подтвердить доступ не удалось. Обновите страницу.");
+        setMessage(
+          "Пароль принят, но подтвердить доступ не удалось. Обновите страницу.",
+        );
         return;
       }
 
@@ -153,7 +221,10 @@ export default function AdminPage() {
     }
   }
 
-  function renderPanel(title: string, description: string) {
+  function renderPanel(
+    title: string,
+    description: string,
+  ) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#0b0914] px-5 py-12 text-white">
         <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#151121] p-7 shadow-2xl sm:p-9">
@@ -163,8 +234,15 @@ export default function AdminPage() {
           >
             PONGLAB
           </Link>
-          <h1 className="mt-7 text-2xl font-semibold">{title}</h1>
-          <p className="mt-3 text-sm leading-6 text-white/65">{description}</p>
+
+          <h1 className="mt-7 text-2xl font-semibold">
+            {title}
+          </h1>
+
+          <p className="mt-3 text-sm leading-6 text-white/65">
+            {description}
+          </p>
+
           {message && (
             <p
               role="alert"
@@ -173,6 +251,7 @@ export default function AdminPage() {
               {message}
             </p>
           )}
+
           <Link
             href="/"
             className="mt-7 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[#151121] transition hover:bg-violet-100"
@@ -187,28 +266,28 @@ export default function AdminPage() {
   if (screen === "loading" || screen === "checking") {
     return renderPanel(
       "Проверяем доступ",
-      "Проверяем сессию и права пользователя. Это может занять несколько секунд."
+      "Проверяем сессию и права пользователя. Это может занять несколько секунд.",
     );
   }
 
   if (screen === "login-required") {
     return renderPanel(
       "Войдите в аккаунт",
-      "Сначала откройте личный кабинет на главной странице и подтвердите свой номер телефона. Затем вернитесь сюда."
+      "Сначала откройте личный кабинет на главной странице и подтвердите свой номер телефона. Затем вернитесь сюда.",
     );
   }
 
   if (screen === "forbidden") {
     return renderPanel(
       "Нет доступа",
-      "Эта страница доступна только владельцу. Для сотрудников подготовим отдельный интерфейс с соответствующими правами."
+      "Эта страница доступна только владельцу и назначенным сотрудникам.",
     );
   }
 
   if (screen === "error") {
     return renderPanel(
       "Ошибка проверки",
-      message || "Не удалось проверить доступ."
+      message || "Не удалось проверить доступ.",
     );
   }
 
@@ -230,27 +309,42 @@ export default function AdminPage() {
           <h1 className="mt-6 text-2xl font-semibold">
             Панель владельца
           </h1>
+
           <p className="mt-3 text-sm leading-6 text-white/65">
-            Номер подтверждён. Введите дополнительный пароль для получения доступа к управлению студией.
+            Номер подтверждён. Введите дополнительный пароль для
+            получения доступа к управлению студией.
           </p>
 
           {profile && (
             <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-              <p className="text-xs text-white/45">Вы вошли как</p>
-              <p className="mt-1 text-sm font-medium">{profile.phone}</p>
+              <p className="text-xs text-white/45">
+                Вы вошли как
+              </p>
+              <p className="mt-1 text-sm font-medium">
+                {profile.phone}
+              </p>
             </div>
           )}
 
-          <form onSubmit={handlePasswordSubmit} className="mt-6 space-y-4">
-            <label htmlFor="owner-password" className="block text-sm text-white/80">
+          <form
+            onSubmit={handlePasswordSubmit}
+            className="mt-6 space-y-4"
+          >
+            <label
+              htmlFor="owner-password"
+              className="block text-sm text-white/80"
+            >
               Пароль владельца
             </label>
+
             <input
               id="owner-password"
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) =>
+                setPassword(event.target.value)
+              }
               required
               maxLength={1024}
               disabled={submitting}
@@ -259,7 +353,10 @@ export default function AdminPage() {
             />
 
             {message && (
-              <p role="alert" className="text-sm leading-5 text-red-300">
+              <p
+                role="alert"
+                className="text-sm leading-5 text-red-300"
+              >
                 {message}
               </p>
             )}
@@ -284,6 +381,69 @@ export default function AdminPage() {
     );
   }
 
+  if (screen === "staff-dashboard") {
+    return (
+      <main className="min-h-screen bg-[#0b0914] px-5 py-8 text-white sm:px-8">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
+          <div>
+            <Link
+              href="/"
+              className="text-sm font-semibold tracking-[0.22em] text-violet-300"
+            >
+              PONGLAB
+            </Link>
+
+            <h1 className="mt-3 text-2xl font-semibold">
+              Панель сотрудника
+            </h1>
+
+            <p className="mt-1 text-sm text-white/50">
+              {profile
+                ? `Аккаунт: ${profile.phone}`
+                : "Доступ сотрудника"}
+            </p>
+          </div>
+
+          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs text-emerald-200">
+            Телефон подтверждён
+          </span>
+        </header>
+
+        <section className="mt-8 max-w-3xl">
+          <h2 className="text-lg font-semibold">
+            Рабочая панель
+          </h2>
+
+          <p className="mt-2 text-sm leading-6 text-white/60">
+            Вы вошли как сотрудник. Доступ к клубам и рабочим
+            операциям будет ограничен назначенными вам клубами.
+            Финансовые данные владельца здесь не отображаются.
+          </p>
+
+          <div className="mt-6 rounded-2xl border border-white/10 bg-[#151121] p-5">
+            <h3 className="font-semibold">
+              Рабочие функции
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              Раздел бронирований, расписание и управление
+              посещениями пока не подключены. До подключения
+              серверных проверок этот экран не предоставляет
+              операций изменения данных.
+            </p>
+          </div>
+
+          <Link
+            href="/"
+            className="mt-6 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-semibold text-[#151121] transition hover:bg-violet-100"
+          >
+            Вернуться на сайт
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#0b0914] px-5 py-8 text-white sm:px-8">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
@@ -294,8 +454,14 @@ export default function AdminPage() {
           >
             PONGLAB
           </Link>
-          <h1 className="mt-3 text-2xl font-semibold">Панель управления</h1>
-          <p className="mt-1 text-sm text-white/50">Владелец студии</p>
+
+          <h1 className="mt-3 text-2xl font-semibold">
+            Панель управления
+          </h1>
+
+          <p className="mt-1 text-sm text-white/50">
+            Владелец студии
+          </p>
         </div>
 
         <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs text-emerald-200">
@@ -304,33 +470,62 @@ export default function AdminPage() {
       </header>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Управление PongLab</h2>
+        <h2 className="text-lg font-semibold">
+          Управление PongLab
+        </h2>
+
         <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-          Основа административной панели готова. Следующим этапом подключим расписание, бронирования, клиентов, оплаты и управление оборудованием.
+          Здесь собраны основные настройки и рабочие разделы
+          управления студией.
         </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {[
-            ["Бронирования", "Просмотр и изменение броней"],
-            ["Расписание", "Столы и доступные интервалы"],
-            ["Клиенты", "Профили и история посещений"],
-            ["Оплаты", "Статусы и история платежей"],
-            ["Оборудование", "Состояние контроллеров и доступа"],
-            ["Настройки", "Цены и правила студии"],
-          ].map(([title, description]) => (
-            <article
-              key={title}
-              className="rounded-2xl border border-white/10 bg-[#151121] p-5"
-            >
-              <h3 className="font-semibold">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-white/55">
-                {description}
-              </p>
-              <span className="mt-4 inline-block text-xs text-violet-300/80">
-                Подключим следующим этапом
-              </span>
-            </article>
-          ))}
+          {dashboardItems.map((item) => {
+            const cardContent = (
+              <>
+                <h3 className="font-semibold">
+                  {item.title}
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-white/55">
+                  {item.description}
+                </p>
+
+                <span
+                  className={
+                    item.available
+                      ? "mt-4 inline-block text-xs text-violet-300"
+                      : "mt-4 inline-block text-xs text-white/35"
+                  }
+                >
+                  {item.available
+                    ? "Открыть раздел →"
+                    : "Подключим следующим этапом"}
+                </span>
+              </>
+            );
+
+            if (item.available && item.href) {
+              return (
+                <Link
+                  key={item.title}
+                  href={item.href}
+                  className="group rounded-2xl border border-white/10 bg-[#151121] p-5 transition hover:border-violet-300/30 hover:bg-[#1a1527]"
+                >
+                  {cardContent}
+                </Link>
+              );
+            }
+
+            return (
+              <article
+                key={item.title}
+                className="rounded-2xl border border-white/10 bg-[#151121] p-5"
+              >
+                {cardContent}
+              </article>
+            );
+          })}
         </div>
       </section>
     </main>
