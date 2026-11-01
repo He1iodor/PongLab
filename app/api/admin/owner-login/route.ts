@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const OWNER_COOKIE = "ponglab_owner";
-const OWNER_SESSION_SECONDS = 30 * 60;
+const OWNER_SESSION_SECONDS = 7 * 24 * 60 * 60;
 
 function safeEqual(a: string, b: string): boolean {
   const left = Buffer.from(a, "utf8");
