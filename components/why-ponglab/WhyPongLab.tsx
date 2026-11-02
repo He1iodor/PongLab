@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  Activity,
   CalendarDays,
   ChartNoAxesCombined,
   Check,
@@ -17,12 +16,11 @@ import {
   Target,
   Timer,
   Trophy,
-  Users,
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-const easeOut = [0.22, 1, 0.36, 1] as const;
+const easeSmooth = [0.22, 1, 0.36, 1] as const;
 
 function Reveal({
   children,
@@ -37,14 +35,14 @@ function Reveal({
 
   return (
     <motion.section
-      initial={reduced ? false : { opacity: 0, y: 25, filter: "blur(5px)" }}
-      whileInView={
-        reduced
-          ? undefined
-          : { opacity: 1, y: 0, filter: "blur(0px)" }
-      }
-      viewport={{ once: true, amount: 0.12 }}
-      transition={{ duration: 0.95, delay, ease: easeOut }}
+      initial={reduced ? false : { opacity: 0, y: 14 }}
+      whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.08 }}
+      transition={{
+        duration: 0.85,
+        delay,
+        ease: easeSmooth,
+      }}
       className={className}
     >
       {children}
@@ -54,15 +52,9 @@ function Reveal({
 
 function NumberBlock({ n }: { n: string }) {
   return (
-    <motion.div
-      initial={{ opacity: 0.5, scale: 0.92 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.9, ease: easeOut }}
-      className="w-[52px] shrink-0 text-[54px] font-black leading-[.9] tracking-[-.07em] text-[#B78BFF] drop-shadow-[0_0_17px_rgba(168,121,255,.55)] sm:w-[62px] sm:text-[64px]"
-    >
+    <div className="w-[52px] shrink-0 text-[54px] font-black leading-[.9] tracking-[-.07em] text-[#B78BFF] drop-shadow-[0_0_17px_rgba(168,121,255,.45)] sm:w-[62px] sm:text-[64px]">
       {n}
-    </motion.div>
+    </div>
   );
 }
 
@@ -89,18 +81,22 @@ function SmallCard({
 
   return (
     <motion.div
-      initial={reduced ? false : { opacity: 0, y: 15 }}
+      initial={reduced ? false : { opacity: 0, y: 10 }}
       whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.7, delay: index * 0.07, ease: easeOut }}
-      whileHover={reduced ? undefined : { y: -5, scale: 1.015 }}
-      className="group relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.10] bg-gradient-to-br from-[#1A162A]/95 via-[#11101D]/95 to-[#0B0C16]/95 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.045)] transition-[border-color,box-shadow] duration-700 hover:border-[#B78BFF]/55 hover:shadow-[0_10px_30px_rgba(143,91,255,.13)] sm:p-3.5"
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{
+        duration: 0.65,
+        delay: index * 0.055,
+        ease: easeSmooth,
+      }}
+      whileHover={reduced ? undefined : { y: -3 }}
+      className="group relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.10] bg-gradient-to-br from-[#1A162A]/95 via-[#11101D]/95 to-[#0B0C16]/95 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.045)] transition-[border-color,box-shadow,background-color] duration-500 hover:border-[#B78BFF]/55 hover:shadow-[0_8px_24px_rgba(143,91,255,.12)] sm:p-3.5"
     >
-      <div className="pointer-events-none absolute -right-8 -top-10 h-20 w-20 rounded-full bg-[#A879FF]/0 blur-2xl transition-all duration-700 group-hover:bg-[#A879FF]/25" />
+      <div className="pointer-events-none absolute -right-8 -top-10 h-20 w-20 rounded-full bg-[#A879FF]/0 blur-2xl transition-colors duration-500 group-hover:bg-[#A879FF]/20" />
       <Icon
         size={24}
         strokeWidth={1.9}
-        className="relative mb-2 text-[#C18CFF] drop-shadow-[0_0_9px_rgba(183,139,255,.65)] transition-transform duration-700 group-hover:scale-110"
+        className="relative mb-2 text-[#C18CFF] drop-shadow-[0_0_8px_rgba(183,139,255,.5)] transition-transform duration-500 group-hover:scale-105"
       />
       <div className="relative text-[11px] font-bold leading-[1.2] text-white sm:text-xs">
         {title}
@@ -127,18 +123,22 @@ function SkillCard({
 
   return (
     <motion.div
-      initial={reduced ? false : { opacity: 0, y: 14 }}
+      initial={reduced ? false : { opacity: 0, y: 9 }}
       whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.75, delay: index * 0.08, ease: easeOut }}
-      whileHover={reduced ? undefined : { y: -5, scale: 1.02 }}
-      className="group relative flex min-h-[82px] flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/[0.10] bg-gradient-to-br from-[#19152B] to-[#0C0D18] px-2 py-3 transition-all duration-700 hover:border-[#B78BFF]/60 hover:shadow-[0_0_25px_rgba(143,91,255,.15)] sm:min-h-[86px]"
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{
+        duration: 0.65,
+        delay: index * 0.055,
+        ease: easeSmooth,
+      }}
+      whileHover={reduced ? undefined : { y: -3 }}
+      className="group relative flex min-h-[82px] flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/[0.10] bg-gradient-to-br from-[#19152B] to-[#0C0D18] px-2 py-3 transition-[border-color,box-shadow] duration-500 hover:border-[#B78BFF]/60 hover:shadow-[0_0_20px_rgba(143,91,255,.13)] sm:min-h-[86px]"
     >
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#A879FF]/0 to-[#A879FF]/0 transition-all duration-700 group-hover:from-[#A879FF]/10 group-hover:to-transparent" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#A879FF]/0 to-transparent transition-colors duration-500 group-hover:from-[#A879FF]/10" />
       <Icon
         size={27}
         strokeWidth={1.8}
-        className="relative text-[#C18CFF] drop-shadow-[0_0_9px_rgba(183,139,255,.7)] transition-all duration-700 group-hover:scale-110 group-hover:drop-shadow-[0_0_15px_rgba(183,139,255,.9)]"
+        className="relative text-[#C18CFF] drop-shadow-[0_0_8px_rgba(183,139,255,.55)] transition-transform duration-500 group-hover:scale-105"
       />
       <span className="relative text-center text-[11px] font-bold leading-tight text-white sm:text-xs">
         {title}
@@ -157,73 +157,82 @@ function ComparisonValue({
       <Check
         size={16}
         strokeWidth={3.2}
-        className="mx-auto text-[#C18CFF] drop-shadow-[0_0_7px_rgba(183,139,255,.6)]"
+        className="mx-auto text-[#C18CFF] drop-shadow-[0_0_7px_rgba(183,139,255,.55)]"
       />
     );
   }
 
   if (value === "partial") {
-    return <span className="text-[10px] text-white/75 sm:text-[11px]">Частично</span>;
+    return (
+      <span className="text-[10px] text-white/75 sm:text-[11px]">
+        Частично
+      </span>
+    );
   }
 
   return <span className="text-white/55">—</span>;
 }
 
-/* Детальная векторная сцена: тренер объясняет игроку технику */
+/*
+ * Новая иллюстрация:
+ * тренер показывает ученику положение ракетки и объясняет технику.
+ * Векторная графика встроена в компонент — отдельный файл не нужен.
+ */
 function CoachArtwork() {
   return (
     <svg
-      viewBox="0 0 560 330"
+      viewBox="0 0 560 340"
       className="h-full w-full overflow-visible"
       role="img"
-      aria-label="Тренер объясняет игроку технику игры"
+      aria-label="Тренер показывает ученику технику игры в настольный теннис"
       fill="none"
     >
       <defs>
-        <linearGradient id="coachShirt" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#D6B6FF" />
-          <stop offset=".42" stopColor="#9255D6" />
-          <stop offset="1" stopColor="#39205F" />
+        <linearGradient id="coachClothes" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#D9BDFF" />
+          <stop offset=".45" stopColor="#9256D5" />
+          <stop offset="1" stopColor="#34204F" />
         </linearGradient>
 
-        <linearGradient id="playerShirt" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#B58AF4" />
-          <stop offset=".55" stopColor="#68409B" />
-          <stop offset="1" stopColor="#281B43" />
+        <linearGradient id="studentClothes" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#B994F0" />
+          <stop offset=".5" stopColor="#7045A5" />
+          <stop offset="1" stopColor="#241833" />
         </linearGradient>
 
-        <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#F2C3A0" />
+        <linearGradient id="skinTone" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#F4C7A6" />
           <stop offset=".55" stopColor="#D99B7A" />
           <stop offset="1" stopColor="#A96556" />
         </linearGradient>
 
-        <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#40334C" />
-          <stop offset=".5" stopColor="#171321" />
-          <stop offset="1" stopColor="#080811" />
+        <linearGradient id="hairTone" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#55415E" />
+          <stop offset=".5" stopColor="#211829" />
+          <stop offset="1" stopColor="#090811" />
         </linearGradient>
 
-        <linearGradient id="tablet" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#302342" />
-          <stop offset="1" stopColor="#10101B" />
+        <linearGradient id="racketTone" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#DCC5FF" />
+          <stop offset=".45" stopColor="#8D50C8" />
+          <stop offset="1" stopColor="#43235F" />
         </linearGradient>
 
-        <radialGradient id="coachAura">
-          <stop stopColor="#A879FF" stopOpacity=".48" />
-          <stop offset=".55" stopColor="#7541B8" stopOpacity=".16" />
+        <radialGradient id="peopleAura">
+          <stop stopColor="#A879FF" stopOpacity=".42" />
+          <stop offset=".6" stopColor="#7541B8" stopOpacity=".14" />
           <stop offset="1" stopColor="#A879FF" stopOpacity="0" />
         </radialGradient>
 
-        <filter id="coachBlur">
+        <filter id="peopleBlur">
           <feGaussianBlur stdDeviation="18" />
         </filter>
 
-        <filter id="coachShadow" x="-30%" y="-30%" width="160%" height="180%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation="7" />
-          <feOffset dy="8" />
+        <filter id="figureShadow" x="-30%" y="-30%" width="160%" height="180%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="6" />
+          <feOffset dy="7" />
           <feComponentTransfer>
-            <feFuncA type="linear" slope=".28" />
+            <feFuncA type="linear" slope=".25" />
           </feComponentTransfer>
           <feMerge>
             <feMergeNode />
@@ -232,103 +241,255 @@ function CoachArtwork() {
         </filter>
       </defs>
 
-      {/* Свет и глубина */}
-      <ellipse cx="284" cy="264" rx="250" ry="80" fill="url(#coachAura)" filter="url(#coachBlur)" />
-      <path d="M25 285 C90 80 430 20 535 270" stroke="#B78BFF" strokeOpacity=".35" strokeWidth="1.5" />
-      <path d="M45 302 C170 120 395 105 510 295" stroke="#B78BFF" strokeOpacity=".16" />
-      <circle cx="76" cy="83" r="3" fill="#D8BFFF" />
-      <circle cx="482" cy="65" r="4" fill="#B78BFF" />
-      <circle cx="503" cy="83" r="2" fill="#FFFFFF" />
+      {/* Световой фон */}
+      <ellipse
+        cx="285"
+        cy="272"
+        rx="245"
+        ry="75"
+        fill="url(#peopleAura)"
+        filter="url(#peopleBlur)"
+      />
+      <path
+        d="M25 292 C105 90 430 28 535 278"
+        stroke="#B78BFF"
+        strokeOpacity=".28"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M45 310 C170 130 400 115 515 300"
+        stroke="#B78BFF"
+        strokeOpacity=".13"
+      />
 
-      {/* Игрок: плечи и корпус */}
-      <g filter="url(#coachShadow)">
+      {/* Ученик */}
+      <g filter="url(#figureShadow)">
+        {/* Корпус */}
         <path
-          d="M28 330 C38 245 66 190 126 180 C174 171 213 207 233 330Z"
-          fill="url(#playerShirt)"
+          d="M24 340 C32 255 65 205 124 190 C177 177 216 218 237 340Z"
+          fill="url(#studentClothes)"
           stroke="#C5A4FF"
           strokeOpacity=".55"
           strokeWidth="2"
         />
         <path
-          d="M77 205 C94 188 120 181 143 183 L163 218 L118 254 L68 238Z"
-          fill="#B58AF4"
-          fillOpacity=".28"
+          d="M82 212 C108 190 151 190 179 215 L204 277 L104 295 L57 250Z"
+          fill="#D7B8FF"
+          fillOpacity=".12"
         />
-        <path d="M116 177 L116 205 L151 228" stroke="url(#skin)" strokeWidth="21" strokeLinecap="round" />
-        <path d="M151 228 L210 249" stroke="url(#skin)" strokeWidth="17" strokeLinecap="round" />
-        <path d="M202 246 L231 226" stroke="url(#skin)" strokeWidth="15" strokeLinecap="round" />
+
+        {/* Шея и голова */}
         <path
-          d="M92 176 C71 151 67 114 83 82 C99 50 138 43 165 63 C193 84 187 132 166 165 L143 188Z"
-          fill="url(#skin)"
+          d="M104 178 L107 211 L143 232"
+          stroke="url(#skinTone)"
+          strokeWidth="21"
+          strokeLinecap="round"
         />
         <path
-          d="M79 121 C58 83 81 38 126 33 C166 28 194 55 186 98 C174 78 150 70 128 76 C105 82 96 104 79 121Z"
-          fill="url(#hair)"
+          d="M76 177 C57 150 59 110 77 80 C96 49 137 45 163 66 C190 89 182 136 162 166 L141 187Z"
+          fill="url(#skinTone)"
         />
-        <path d="M88 117 C101 107 110 93 119 82" stroke="#6A536F" strokeOpacity=".5" strokeWidth="5" strokeLinecap="round" />
-        <path d="M116 133 Q131 140 145 132" stroke="#8C514A" strokeWidth="2" strokeLinecap="round" />
-        <path d="M107 112 Q117 106 127 111" stroke="#30212B" strokeWidth="3" strokeLinecap="round" />
-        <path d="M145 110 Q155 105 165 110" stroke="#30212B" strokeWidth="3" strokeLinecap="round" />
-        <path d="M143 157 L151 170" stroke="#A96556" strokeWidth="3" strokeLinecap="round" />
+        <path
+          d="M73 123 C54 85 77 41 122 35 C164 29 192 58 183 100 C168 78 147 70 124 77 C102 83 91 105 73 123Z"
+          fill="url(#hairTone)"
+        />
+        <path
+          d="M86 105 C101 90 111 72 117 57"
+          stroke="#A78AB4"
+          strokeOpacity=".35"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M105 132 Q120 139 135 132"
+          stroke="#8C514A"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <path
+          d="M97 111 Q108 105 119 110"
+          stroke="#30212B"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <path
+          d="M136 109 Q147 104 157 109"
+          stroke="#30212B"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+
+        {/* Рука ученика */}
+        <path
+          d="M151 220 L203 247"
+          stroke="url(#skinTone)"
+          strokeWidth="17"
+          strokeLinecap="round"
+        />
+        <path
+          d="M202 247 L231 226"
+          stroke="url(#skinTone)"
+          strokeWidth="14"
+          strokeLinecap="round"
+        />
       </g>
 
-      {/* Ракетка игрока */}
-      <g transform="rotate(28 244 212)">
-        <rect x="234" y="210" width="12" height="58" rx="5" fill="#B98AF2" />
-        <ellipse cx="240" cy="195" rx="21" ry="29" fill="#25152F" stroke="#D0AEFF" strokeWidth="3" />
-        <ellipse cx="240" cy="195" rx="15" ry="22" fill="#6D3BA5" />
-        <path d="M231 182 L249 207 M229 192 L246 215" stroke="#D9BFFF" strokeOpacity=".45" />
+      {/* Ракетка ученика */}
+      <g transform="rotate(27 244 210)">
+        <rect x="238" y="211" width="12" height="65" rx="5" fill="#A77AE1" />
+        <ellipse
+          cx="244"
+          cy="194"
+          rx="22"
+          ry="29"
+          fill="#26182F"
+          stroke="#D0AEFF"
+          strokeWidth="3"
+        />
+        <ellipse cx="244" cy="194" rx="16" ry="22" fill="url(#racketTone)" />
+        <path
+          d="M233 181 L252 208 M231 193 L248 217"
+          stroke="#E5D4FF"
+          strokeOpacity=".5"
+          strokeWidth="1.5"
+        />
       </g>
 
-      {/* Тренер: корпус */}
-      <g filter="url(#coachShadow)">
+      {/* Тренер */}
+      <g filter="url(#figureShadow)">
+        {/* Корпус */}
         <path
-          d="M250 330 C264 221 305 168 385 164 C468 160 515 218 535 330Z"
-          fill="url(#coachShirt)"
+          d="M250 340 C265 232 307 177 386 171 C468 166 515 226 537 340Z"
+          fill="url(#coachClothes)"
           stroke="#D0B0FF"
           strokeOpacity=".75"
           strokeWidth="2"
         />
         <path
-          d="M323 185 C354 170 391 171 420 190 L444 244 L354 272 L298 226Z"
-          fill="#D8B8FF"
-          fillOpacity=".16"
+          d="M324 196 C355 175 395 179 422 200 L445 260 L350 284 L298 238Z"
+          fill="#E1C9FF"
+          fillOpacity=".13"
         />
-        <path d="M343 162 L343 190 L307 216" stroke="url(#skin)" strokeWidth="21" strokeLinecap="round" />
-        <path d="M307 216 L268 199" stroke="url(#skin)" strokeWidth="17" strokeLinecap="round" />
-        <path d="M268 199 L246 179" stroke="url(#skin)" strokeWidth="14" strokeLinecap="round" />
-        <path d="M424 164 L449 194 L478 177" stroke="url(#skin)" strokeWidth="19" strokeLinecap="round" />
-        <path d="M478 177 L491 169" stroke="url(#skin)" strokeWidth="13" strokeLinecap="round" />
 
-        {/* Голова тренера */}
+        {/* Шея */}
         <path
-          d="M336 158 C311 130 311 91 330 58 C351 25 395 25 422 50 C447 74 438 122 414 154 L389 174Z"
-          fill="url(#skin)"
+          d="M345 159 L346 191 L311 217"
+          stroke="url(#skinTone)"
+          strokeWidth="21"
+          strokeLinecap="round"
+        />
+
+        {/* Голова */}
+        <path
+          d="M337 158 C312 130 312 91 331 58 C352 25 396 25 423 50 C448 74 439 122 415 154 L390 174Z"
+          fill="url(#skinTone)"
         />
         <path
-          d="M326 102 C307 59 336 16 384 13 C430 10 457 44 445 94 C426 65 399 57 373 66 C351 72 342 90 326 102Z"
-          fill="url(#hair)"
+          d="M327 103 C308 59 337 16 385 13 C431 10 458 44 446 95 C427 65 400 57 374 66 C352 72 343 91 327 103Z"
+          fill="url(#hairTone)"
         />
-        <path d="M336 97 C351 83 360 66 367 48" stroke="#78627D" strokeOpacity=".48" strokeWidth="5" strokeLinecap="round" />
-        <path d="M354 120 Q370 128 386 118" stroke="#8C514A" strokeWidth="2" strokeLinecap="round" />
-        <path d="M348 99 Q359 92 369 98" stroke="#30212B" strokeWidth="3" strokeLinecap="round" />
-        <path d="M389 97 Q401 91 412 97" stroke="#30212B" strokeWidth="3" strokeLinecap="round" />
-        <path d="M380 143 L385 155" stroke="#A96556" strokeWidth="3" strokeLinecap="round" />
+        <path
+          d="M339 96 C353 82 362 65 369 48"
+          stroke="#A78AB4"
+          strokeOpacity=".35"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M355 120 Q371 128 387 118"
+          stroke="#8C514A"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <path
+          d="M349 99 Q360 92 370 98"
+          stroke="#30212B"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <path
+          d="M390 97 Q402 91 413 97"
+          stroke="#30212B"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+
+        {/* Рука, указывающая на технику */}
+        <path
+          d="M346 190 L310 220"
+          stroke="url(#skinTone)"
+          strokeWidth="19"
+          strokeLinecap="round"
+        />
+        <path
+          d="M310 220 L270 203"
+          stroke="url(#skinTone)"
+          strokeWidth="16"
+          strokeLinecap="round"
+        />
+        <path
+          d="M270 203 L251 184"
+          stroke="url(#skinTone)"
+          strokeWidth="13"
+          strokeLinecap="round"
+        />
+        <path
+          d="M251 184 L239 169"
+          stroke="url(#skinTone)"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+
+        {/* Вторая рука с планшетом */}
+        <path
+          d="M425 175 L450 201 L481 184"
+          stroke="url(#skinTone)"
+          strokeWidth="19"
+          strokeLinecap="round"
+        />
+        <path
+          d="M481 184 L494 174"
+          stroke="url(#skinTone)"
+          strokeWidth="13"
+          strokeLinecap="round"
+        />
 
         {/* Планшет */}
-        <g transform="rotate(-9 453 218)">
-          <rect x="414" y="190" width="82" height="61" rx="8" fill="url(#tablet)" stroke="#C8A3FF" strokeWidth="2" />
-          <rect x="421" y="197" width="68" height="46" rx="4" fill="#171323" />
-          <path d="M431 211 L476 211 M431 220 L467 220 M431 229 L457 229" stroke="#B78BFF" strokeOpacity=".8" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="481" cy="205" r="2" fill="#E0CCFF" />
+        <g transform="rotate(-9 453 225)">
+          <rect
+            x="412"
+            y="192"
+            width="86"
+            height="65"
+            rx="8"
+            fill="#171222"
+            stroke="#C8A3FF"
+            strokeWidth="2"
+          />
+          <rect
+            x="420"
+            y="200"
+            width="70"
+            height="49"
+            rx="4"
+            fill="#21182F"
+          />
+          <path
+            d="M431 214 L477 214 M431 225 L468 225 M431 236 L458 236"
+            stroke="#B78BFF"
+            strokeOpacity=".85"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <circle cx="482" cy="207" r="2" fill="#E0CCFF" />
         </g>
 
-        {/* Логотип на форме */}
+        {/* Маркировка на форме */}
         <text
-          x="393"
-          y="247"
+          x="392"
+          y="253"
           fill="#F0E6FF"
-          fillOpacity=".8"
+          fillOpacity=".85"
           fontSize="12"
           fontWeight="800"
           letterSpacing="2"
@@ -336,6 +497,11 @@ function CoachArtwork() {
           PL
         </text>
       </g>
+
+      {/* Декоративные световые точки */}
+      <circle cx="75" cy="75" r="3" fill="#D8BFFF" />
+      <circle cx="486" cy="58" r="4" fill="#B78BFF" />
+      <circle cx="506" cy="78" r="2" fill="#FFFFFF" />
     </svg>
   );
 }
@@ -354,26 +520,18 @@ export default function WhyPongLab() {
 
   return (
     <main className="relative mx-auto w-full max-w-[1320px] overflow-hidden text-white">
-      {/* Атмосферное фоновое свечение */}
+      {/* Спокойное фоновое оформление без постоянно движущихся слоёв */}
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <motion.div
-          animate={reduced ? undefined : { x: [0, 35, 0], y: [0, -20, 0] }}
-          transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -left-40 top-20 h-[430px] w-[430px] rounded-full bg-[#7B42D2]/10 blur-[130px]"
-        />
-        <motion.div
-          animate={reduced ? undefined : { x: [0, -30, 0], y: [0, 25, 0] }}
-          transition={{ duration: 26, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -right-32 top-[35%] h-[450px] w-[450px] rounded-full bg-[#8F5BFF]/10 blur-[150px]"
-        />
+        <div className="absolute -left-40 top-20 h-[430px] w-[430px] rounded-full bg-[#7B42D2]/10 blur-[130px]" />
+        <div className="absolute -right-32 top-[35%] h-[450px] w-[450px] rounded-full bg-[#8F5BFF]/10 blur-[150px]" />
         <div className="absolute bottom-0 left-1/3 h-[350px] w-[350px] rounded-full bg-[#6E42B2]/10 blur-[130px]" />
       </div>
 
       <div className="flex flex-col gap-2 sm:gap-2.5">
 
-        {/* Шапка и заголовок */}
+        {/* Верхний блок: заголовок, пояснение, робот */}
         <Reveal className="relative overflow-hidden border-b border-white/[0.10] px-3 pb-5 pt-1 sm:px-6 sm:pb-6">
-          <div className="relative z-20 mb-4 flex items-center gap-3">
+          <div className="relative z-10 mb-4 flex items-center gap-3">
             <span className="text-lg font-black tracking-tight text-white">
               PongLab
             </span>
@@ -382,8 +540,9 @@ export default function WhyPongLab() {
             </span>
           </div>
 
-          <div className="relative grid gap-4 md:grid-cols-[1.1fr_.9fr] md:items-center">
-            <div className="relative z-20 max-w-[620px]">
+          <div className="grid items-center gap-5 md:grid-cols-[1.05fr_.9fr_1fr] md:gap-4 lg:gap-6">
+            {/* Заголовок */}
+            <div className="relative z-10 max-w-[620px]">
               <h1 className="text-[clamp(2rem,4vw,3.1rem)] font-black leading-[1.02] tracking-[-.045em]">
                 До 10 раз больше
                 <span className="block bg-gradient-to-r from-[#C58DFF] to-[#8F55E8] bg-clip-text text-transparent">
@@ -393,48 +552,40 @@ export default function WhyPongLab() {
               </h1>
             </div>
 
-            <p className="relative z-20 max-w-[390px] border-l border-[#A879FF]/40 pl-5 text-sm leading-[1.55] text-white/75 sm:text-[15px] md:ml-2">
+            {/* Текст теперь находится между заголовком и изображением */}
+            <p className="relative z-10 max-w-[390px] border-l border-[#A879FF]/40 py-2 pl-4 text-sm leading-[1.6] text-white/75 sm:text-[15px] md:ml-1 md:pl-5">
               Каждая подача превращается
-              <br className="hidden sm:block" />
+              <br />
               в возможность отработать технику,
-              <br className="hidden sm:block" />
+              <br />
               скорость реакции и стабильность
-              <br className="hidden sm:block" />
+              <br />
               без пауз и ожидания.
             </p>
 
-            {/* Робот интегрирован в фон: нет прямоугольной рамки */}
+            {/* Робот: отдельная колонка без наложения на текст */}
             <motion.div
-              animate={reduced ? undefined : { y: [0, -7, 0], rotate: [0, 0.5, 0] }}
-              transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-              className="pointer-events-none absolute -right-8 -top-20 hidden h-[340px] w-[55%] md:block lg:-right-3 lg:h-[370px]"
+              initial={reduced ? false : { opacity: 0, scale: 0.96 }}
+              whileInView={reduced ? undefined : { opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 1.1, ease: easeSmooth }}
+              className="relative mx-auto h-[190px] w-full max-w-[390px] md:h-[220px] lg:h-[245px]"
             >
-              <div className="absolute inset-0 rounded-full bg-[#8F5BFF]/20 blur-[75px]" />
+              <div className="pointer-events-none absolute inset-[12%] rounded-full bg-[#8F5BFF]/20 blur-[55px]" />
               <Image
                 src="/why-ponglab/robot-serve.webp"
                 alt="Робот PongLab выполняет подачу"
                 fill
                 priority
-                sizes="55vw"
-                className="object-contain object-center [mask-image:radial-gradient(ellipse_at_52%_50%,black_38%,rgba(0,0,0,.8)_58%,transparent_78%)] mix-blend-screen drop-shadow-[0_0_35px_rgba(143,91,255,.4)]"
+                sizes="(max-width: 768px) 100vw, 32vw"
+                className="object-contain object-center drop-shadow-[0_0_28px_rgba(143,91,255,.38)]"
               />
             </motion.div>
-          </div>
-
-          <div className="relative mt-3 h-[185px] w-full md:hidden">
-            <div className="absolute inset-0 rounded-full bg-[#8F5BFF]/20 blur-[60px]" />
-            <Image
-              src="/why-ponglab/robot-serve.webp"
-              alt="Робот PongLab выполняет подачу"
-              fill
-              sizes="100vw"
-              className="object-contain object-center [mask-image:radial-gradient(ellipse_at_50%_50%,black_45%,transparent_82%)] mix-blend-screen"
-            />
           </div>
         </Reveal>
 
         {/* Пункт 1 */}
-        <Reveal className="group relative grid gap-4 overflow-hidden border-b border-white/[0.09] px-3 py-3 transition-colors duration-700 hover:bg-white/[0.018] sm:grid-cols-[.95fr_2fr] sm:items-center sm:px-6">
+        <Reveal className="group relative grid gap-4 overflow-hidden border-b border-white/[0.09] px-3 py-3 transition-colors duration-500 hover:bg-white/[0.018] sm:grid-cols-[.95fr_2fr] sm:items-center sm:px-6">
           <div className="flex items-start gap-4">
             <NumberBlock n="1" />
             <div>
@@ -453,9 +604,9 @@ export default function WhyPongLab() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <motion.div
-              whileHover={{ y: -3 }}
-              transition={{ duration: 0.5 }}
-              className="rounded-2xl border border-[#8F5BFF]/25 bg-gradient-to-br from-[#19152B] to-[#0B0C17] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.04)]"
+              whileHover={reduced ? undefined : { y: -2 }}
+              transition={{ duration: 0.45, ease: easeSmooth }}
+              className="rounded-2xl border border-[#8F5BFF]/25 bg-gradient-to-br from-[#19152B] to-[#0B0C17] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] transition-shadow duration-500 hover:shadow-[0_8px_25px_rgba(143,91,255,.1)]"
             >
               <div className="flex items-center gap-3">
                 <Timer className="text-[#C18CFF]" size={23} />
@@ -479,9 +630,9 @@ export default function WhyPongLab() {
             </motion.div>
 
             <motion.div
-              whileHover={{ y: -3 }}
-              transition={{ duration: 0.5 }}
-              className="rounded-2xl border border-[#B78BFF]/80 bg-gradient-to-br from-[#2B1B46] to-[#151022] p-4 shadow-[0_0_25px_rgba(143,91,255,.18)]"
+              whileHover={reduced ? undefined : { y: -2 }}
+              transition={{ duration: 0.45, ease: easeSmooth }}
+              className="rounded-2xl border border-[#B78BFF]/65 bg-gradient-to-br from-[#2B1B46] to-[#151022] p-4 shadow-[0_0_22px_rgba(143,91,255,.13)] transition-shadow duration-500 hover:shadow-[0_8px_28px_rgba(143,91,255,.2)]"
             >
               <div className="flex items-center gap-3">
                 <Zap className="text-[#D3B0FF]" size={23} />
@@ -489,13 +640,9 @@ export default function WhyPongLab() {
               </div>
               <div className="mt-4 flex gap-1">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <motion.div
+                  <div
                     key={i}
-                    initial={reduced ? false : { opacity: 0.2 }}
-                    whileInView={{ opacity: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.09, duration: 0.8 }}
-                    className="h-2.5 flex-1 rounded-full bg-gradient-to-r from-[#C18CFF] to-[#E1C6FF] shadow-[0_0_10px_rgba(183,139,255,.4)]"
+                    className="h-2.5 flex-1 rounded-full bg-gradient-to-r from-[#C18CFF] to-[#E1C6FF] shadow-[0_0_8px_rgba(183,139,255,.35)]"
                   />
                 ))}
               </div>
@@ -507,7 +654,7 @@ export default function WhyPongLab() {
         </Reveal>
 
         {/* Пункт 2 */}
-        <Reveal className="group relative grid gap-4 overflow-hidden border-b border-white/[0.09] px-3 py-3 transition-colors duration-700 hover:bg-white/[0.018] sm:grid-cols-[.95fr_2fr] sm:items-center sm:px-6">
+        <Reveal className="group relative grid gap-4 overflow-hidden border-b border-white/[0.09] px-3 py-3 transition-colors duration-500 hover:bg-white/[0.018] sm:grid-cols-[.95fr_2fr] sm:items-center sm:px-6">
           <div className="flex items-start gap-4">
             <NumberBlock n="2" />
             <div>
@@ -535,7 +682,7 @@ export default function WhyPongLab() {
         </Reveal>
 
         {/* Пункт 3 */}
-        <Reveal className="group relative grid gap-4 overflow-hidden border-b border-white/[0.09] px-3 py-3 transition-colors duration-700 hover:bg-white/[0.018] sm:grid-cols-[.95fr_2fr] sm:items-center sm:px-6">
+        <Reveal className="group relative grid gap-4 overflow-hidden border-b border-white/[0.09] px-3 py-3 transition-colors duration-500 hover:bg-white/[0.018] sm:grid-cols-[.95fr_2fr] sm:items-center sm:px-6">
           <div className="flex items-start gap-4">
             <NumberBlock n="3" />
             <div>
@@ -566,23 +713,16 @@ export default function WhyPongLab() {
 
         {/* Пункт 4 */}
         <Reveal className="relative grid grid-cols-[52px_1fr] items-center gap-3 overflow-hidden border-b border-white/[0.09] px-3 py-4 sm:grid-cols-[70px_1fr_250px] sm:px-6 sm:py-3">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,rgba(143,91,255,.12),transparent_65%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,rgba(143,91,255,.11),transparent_65%)]" />
+
           <div className="relative z-10">
             <NumberBlock n="4" />
           </div>
 
           <div className="relative z-10 text-center">
-            <motion.div
-              animate={reduced ? undefined : { textShadow: [
-                "0 0 18px rgba(168,121,255,.35)",
-                "0 0 38px rgba(168,121,255,.75)",
-                "0 0 18px rgba(168,121,255,.35)",
-              ] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-              className="text-[clamp(3.7rem,9vw,5.8rem)] font-black italic leading-[.9] tracking-[-.065em] text-transparent bg-gradient-to-b from-white via-[#D9B8FF] to-[#9D5BEF] bg-clip-text"
-            >
+            <div className="text-[clamp(3.7rem,9vw,5.8rem)] font-black italic leading-[.9] tracking-[-.065em] text-transparent bg-gradient-to-b from-white via-[#D9B8FF] to-[#9D5BEF] bg-clip-text drop-shadow-[0_0_22px_rgba(168,121,255,.35)]">
               1000+
-            </motion.div>
+            </div>
             <div className="mt-2 text-sm font-extrabold uppercase tracking-wide text-white sm:text-lg">
               Ударов за тренировку
             </div>
@@ -596,7 +736,7 @@ export default function WhyPongLab() {
         </Reveal>
 
         {/* Пункт 5 */}
-        <Reveal className="group relative grid gap-4 overflow-hidden border-b border-white/[0.09] px-3 py-3 transition-colors duration-700 hover:bg-white/[0.018] sm:grid-cols-[.95fr_2fr] sm:items-start sm:px-6">
+        <Reveal className="group relative grid gap-4 overflow-hidden border-b border-white/[0.09] px-3 py-3 transition-colors duration-500 hover:bg-white/[0.018] sm:grid-cols-[.95fr_2fr] sm:items-start sm:px-6">
           <div className="flex items-start gap-4">
             <NumberBlock n="5" />
             <Heading>
@@ -659,19 +799,25 @@ export default function WhyPongLab() {
           </div>
 
           <div className="grid items-center gap-3 lg:grid-cols-[1.2fr_.9fr]">
-            <div className="relative overflow-hidden rounded-xl border border-white/15 bg-gradient-to-br from-[#171329] to-[#090B15] p-2 shadow-[0_0_25px_rgba(143,91,255,.08)]">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_90%,rgba(143,91,255,.2),transparent_65%)]" />
+            {/* Сравнительная таблица */}
+            <div className="relative overflow-hidden rounded-xl border border-white/15 bg-gradient-to-br from-[#171329] to-[#090B15] p-2 shadow-[0_0_22px_rgba(143,91,255,.07)]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_90%,rgba(143,91,255,.13),transparent_65%)]" />
+
               <div className="relative">
                 <div className="grid grid-cols-[1.5fr_.8fr_.8fr] border-b border-white/15 text-[10px] font-bold text-white/90 sm:text-[11px]">
                   <div className="p-2">Задача</div>
-                  <div className="border-l border-white/10 p-2 text-center">PongLab</div>
-                  <div className="border-l border-white/10 p-2 text-center">Тренер</div>
+                  <div className="border-l border-white/10 p-2 text-center">
+                    PongLab
+                  </div>
+                  <div className="border-l border-white/10 p-2 text-center">
+                    Тренер
+                  </div>
                 </div>
 
                 {comparison.map(([name, pong, coach]) => (
                   <div
                     key={name}
-                    className="grid grid-cols-[1.5fr_.8fr_.8fr] border-b border-white/[0.08] last:border-0 text-[10px] sm:text-[11px]"
+                    className="grid grid-cols-[1.5fr_.8fr_.8fr] border-b border-white/[0.08] text-[10px] last:border-0 sm:text-[11px]"
                   >
                     <div className="flex items-center px-2 py-[5px] text-white/85">
                       {name}
@@ -687,21 +833,18 @@ export default function WhyPongLab() {
               </div>
             </div>
 
+            {/* Новая векторная иллюстрация */}
             <motion.div
-              initial={reduced ? false : { opacity: 0, x: 22, scale: 0.97 }}
-              whileInView={reduced ? undefined : { opacity: 1, x: 0, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 1.1, ease: easeOut }}
-              className="relative mx-auto w-full max-w-[380px]"
+              initial={reduced ? false : { opacity: 0, x: 12 }}
+              whileInView={reduced ? undefined : { opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{ duration: 0.9, ease: easeSmooth }}
+              className="relative mx-auto w-full max-w-[390px]"
             >
-              <div className="pointer-events-none absolute inset-[12%] rounded-full bg-[#8F5BFF]/25 blur-[55px]" />
-              <motion.div
-                animate={reduced ? undefined : { y: [0, -4, 0] }}
-                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-                className="relative"
-              >
+              <div className="pointer-events-none absolute inset-[12%] rounded-full bg-[#8F5BFF]/20 blur-[48px]" />
+              <div className="relative">
                 <CoachArtwork />
-              </motion.div>
+              </div>
             </motion.div>
           </div>
         </Reveal>
@@ -724,9 +867,9 @@ export default function WhyPongLab() {
 
           <Link
             href="/pricing"
-            className="group relative inline-flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#8747DB] to-[#A66AFF] px-6 py-3.5 text-sm font-extrabold text-white shadow-[0_6px_25px_rgba(143,91,255,.3)] transition-all duration-700 hover:-translate-y-1 hover:shadow-[0_10px_35px_rgba(143,91,255,.5)]"
+            className="group relative inline-flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#8747DB] to-[#A66AFF] px-6 py-3.5 text-sm font-extrabold text-white shadow-[0_6px_25px_rgba(143,91,255,.3)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_10px_35px_rgba(143,91,255,.45)]"
           >
-            <span className="pointer-events-none absolute inset-0 rounded-xl bg-white/0 transition-colors duration-700 group-hover:bg-white/[0.09]" />
+            <span className="pointer-events-none absolute inset-0 rounded-xl bg-white/0 transition-colors duration-500 group-hover:bg-white/[0.09]" />
             <span className="relative">Выбрать тариф</span>
             <span className="relative text-lg transition-transform duration-500 group-hover:translate-x-1">
               →
