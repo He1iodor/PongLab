@@ -1,5 +1,7 @@
+
 "use client";
 
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   ArrowUpRight,
@@ -90,7 +92,14 @@ export default function TariffsContent() {
           className="relative"
         >
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#8F5BFF]/30 bg-[#8F5BFF]/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[.16em] text-[#CDB4FF]">
-            <Sparkles size={14} /> Тарифы PongLab
+            <Image
+              src="/logo2.png"
+              alt="PongLab"
+              width={18}
+              height={18}
+              className="h-[18px] w-[18px] shrink-0 object-contain"
+            />
+            Тарифы PongLab
           </div>
           <h2 className="max-w-[560px] text-[clamp(2.5rem,5vw,5rem)] font-black leading-[.96] tracking-[-.055em]">
             Выбирайте свой
