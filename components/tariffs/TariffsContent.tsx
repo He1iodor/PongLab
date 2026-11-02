@@ -95,9 +95,10 @@ export default function TariffsContent() {
             <Image
               src="/logo2.png"
               alt="PongLab"
-              width={14}
-              height={14}
-              className="h-[14px] w-[14px] shrink-0 object-contain"
+              width={32}
+              height={32}
+              priority
+              className="relative z-10 h-8 w-8 shrink-0 object-contain"
             /> Тарифы PongLab
           </div>
           <h2 className="max-w-[560px] text-[clamp(2.5rem,5vw,5rem)] font-black leading-[.96] tracking-[-.055em]">
