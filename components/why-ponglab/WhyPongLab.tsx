@@ -9,7 +9,6 @@ import {
   CalendarDays,
   ChartNoAxesCombined,
   Check,
-  Clock3,
   Footprints,
   Moon,
   Sun,
@@ -20,17 +19,17 @@ import {
   SlidersHorizontal,
   Activity,
   Timer,
-  CircleDot,
 } from "lucide-react";
-
-const purple = "#A879FF";
 
 const sectionMotion = {
   hidden: { opacity: 0, y: 35 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.75, ease: [0.22, 1, 0.36, 1] },
+    transition: {
+      duration: 0.75,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
   },
 };
 
@@ -81,9 +80,9 @@ function FeatureTile({
 }) {
   return (
     <motion.div
-      whileHover={{ y: -5, borderColor: "rgba(168,121,255,.42)" }}
+      whileHover={{ y: -5 }}
       transition={{ duration: 0.35 }}
-      className="group flex min-h-[142px] flex-col rounded-2xl border border-white/[0.09] bg-white/[0.035] p-4 transition-colors hover:bg-[#A879FF]/[0.07]"
+      className="group flex min-h-[142px] flex-col rounded-2xl border border-white/[0.09] bg-white/[0.035] p-4 transition-colors duration-500 hover:border-[#A879FF]/40 hover:bg-[#A879FF]/[0.07]"
     >
       <Icon
         size={25}
@@ -111,7 +110,7 @@ function ScheduleTile({
     <motion.div
       whileHover={{ y: -4 }}
       transition={{ duration: 0.35 }}
-      className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.09] bg-white/[0.035] px-3 py-5 transition-colors hover:border-[#A879FF]/40 hover:bg-[#A879FF]/[0.07]"
+      className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.09] bg-white/[0.035] px-3 py-5 transition-colors duration-500 hover:border-[#A879FF]/40 hover:bg-[#A879FF]/[0.07]"
     >
       <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#A879FF]/55 bg-[#A879FF]/[0.07] shadow-[0_0_25px_rgba(168,121,255,.08)]">
         <Icon size={26} strokeWidth={1.6} className="text-[#C6A5FF]" />
@@ -314,12 +313,6 @@ function CoachIllustration() {
         strokeWidth="12"
         strokeLinecap="round"
       />
-      <path
-        d="M280 185 L263 171"
-        stroke="#DFA783"
-        strokeWidth="12"
-        strokeLinecap="round"
-      />
 
       {/* Планшет тренера */}
       <rect
@@ -340,7 +333,6 @@ function CoachIllustration() {
         strokeLinecap="round"
       />
 
-      {/* Акцентные элементы */}
       <circle cx="80" cy="68" r="4" fill="#C6A5FF" />
       <circle cx="457" cy="83" r="5" fill="#A879FF" />
       <circle cx="468" cy="96" r="2" fill="#E4D5FF" />
@@ -403,12 +395,14 @@ export default function WhyPongLab() {
       </div>
 
       <div className="flex flex-col gap-5 sm:gap-7">
-
         {/* HERO */}
         <motion.section
           initial={reducedMotion ? false : { opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          transition={{
+            duration: 0.8,
+            ease: [0.22, 1, 0.36, 1],
+          }}
           className="relative isolate overflow-hidden rounded-[26px] border border-white/10 bg-[#0B0D19]/90"
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_78%_48%,rgba(143,91,255,.20),transparent_48%),linear-gradient(115deg,rgba(255,255,255,.035),transparent_55%)]" />
@@ -432,7 +426,11 @@ export default function WhyPongLab() {
 
             <motion.div
               animate={reducedMotion ? undefined : { y: [0, -7, 0] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              transition={{
+                duration: 6,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
               className="relative mx-auto h-[210px] w-full max-w-[440px] md:absolute md:inset-y-0 md:right-0 md:h-full md:w-[48%] md:max-w-none"
             >
               <div className="pointer-events-none absolute right-[8%] top-1/2 aspect-square w-[78%] -translate-y-1/2 rounded-full border border-[#9C6BFF]/20 shadow-[0_0_70px_rgba(143,91,255,.13)]" />
@@ -487,6 +485,7 @@ export default function WhyPongLab() {
                   (item, index) => (
                     <div
                       key={index}
+                      title={item}
                       className={`flex h-3 flex-1 items-center justify-center rounded-full ${
                         index === 0 || index === 3
                           ? "bg-gradient-to-r from-[#A879FF] to-[#7542C5]"
@@ -708,7 +707,7 @@ export default function WhyPongLab() {
                 </div>
               </div>
 
-              {comparisonRows.map((row, index) => (
+              {comparisonRows.map((row) => (
                 <div
                   key={row.name}
                   className="grid grid-cols-[1.5fr_.8fr_.8fr] border-t border-white/[0.08] text-[10px] sm:text-[11px]"
