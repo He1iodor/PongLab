@@ -178,61 +178,63 @@ function ComparisonValue({
  * тренер показывает ученику положение ракетки и объясняет технику.
  * Векторная графика встроена в компонент — отдельный файл не нужен.
  */
+
 function CoachArtwork() {
   return (
     <svg
       viewBox="0 0 560 340"
       className="h-full w-full overflow-visible"
       role="img"
-      aria-label="Тренер показывает ученику технику игры в настольный теннис"
+      aria-label="Тренер объясняет ученику правильное положение ракетки для настольного тенниса"
       fill="none"
+      xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <linearGradient id="coachClothes" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#D9BDFF" />
-          <stop offset=".45" stopColor="#9256D5" />
-          <stop offset="1" stopColor="#34204F" />
+        <linearGradient id="coach-jacket" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#CBA8FF" />
+          <stop offset=".45" stopColor="#7143A9" />
+          <stop offset="1" stopColor="#21162F" />
         </linearGradient>
 
-        <linearGradient id="studentClothes" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#B994F0" />
-          <stop offset=".5" stopColor="#7045A5" />
-          <stop offset="1" stopColor="#241833" />
+        <linearGradient id="student-jacket" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#A987E8" />
+          <stop offset=".48" stopColor="#513477" />
+          <stop offset="1" stopColor="#171322" />
         </linearGradient>
 
-        <linearGradient id="skinTone" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#F4C7A6" />
-          <stop offset=".55" stopColor="#D99B7A" />
-          <stop offset="1" stopColor="#A96556" />
+        <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#F3C5A5" />
+          <stop offset=".55" stopColor="#D99A78" />
+          <stop offset="1" stopColor="#995D50" />
         </linearGradient>
 
-        <linearGradient id="hairTone" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#55415E" />
-          <stop offset=".5" stopColor="#211829" />
+        <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#59465D" />
+          <stop offset=".5" stopColor="#211A29" />
           <stop offset="1" stopColor="#090811" />
         </linearGradient>
 
-        <linearGradient id="racketTone" x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="#DCC5FF" />
-          <stop offset=".45" stopColor="#8D50C8" />
-          <stop offset="1" stopColor="#43235F" />
+        <linearGradient id="racket" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#D9B9FF" />
+          <stop offset=".5" stopColor="#9859D7" />
+          <stop offset="1" stopColor="#42245F" />
         </linearGradient>
 
-        <radialGradient id="peopleAura">
-          <stop stopColor="#A879FF" stopOpacity=".42" />
-          <stop offset=".6" stopColor="#7541B8" stopOpacity=".14" />
-          <stop offset="1" stopColor="#A879FF" stopOpacity="0" />
+        <radialGradient id="scene-light">
+          <stop stopColor="#A879FF" stopOpacity=".38" />
+          <stop offset=".65" stopColor="#7541B8" stopOpacity=".12" />
+          <stop offset="1" stopColor="#7541B8" stopOpacity="0" />
         </radialGradient>
 
-        <filter id="peopleBlur">
-          <feGaussianBlur stdDeviation="18" />
+        <filter id="scene-blur" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="20" />
         </filter>
 
-        <filter id="figureShadow" x="-30%" y="-30%" width="160%" height="180%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation="6" />
-          <feOffset dy="7" />
+        <filter id="figure-shadow" x="-30%" y="-30%" width="160%" height="180%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="5" />
+          <feOffset dy="6" />
           <feComponentTransfer>
-            <feFuncA type="linear" slope=".25" />
+            <feFuncA type="linear" slope=".28" />
           </feComponentTransfer>
           <feMerge>
             <feMergeNode />
@@ -241,253 +243,287 @@ function CoachArtwork() {
         </filter>
       </defs>
 
-      {/* Световой фон */}
+      {/* Фоновое освещение */}
       <ellipse
         cx="285"
-        cy="272"
+        cy="275"
         rx="245"
         ry="75"
-        fill="url(#peopleAura)"
-        filter="url(#peopleBlur)"
+        fill="url(#scene-light)"
+        filter="url(#scene-blur)"
       />
+
       <path
-        d="M25 292 C105 90 430 28 535 278"
+        d="M35 286 C120 105 405 55 530 275"
         stroke="#B78BFF"
-        strokeOpacity=".28"
+        strokeOpacity=".22"
         strokeWidth="1.5"
       />
+
       <path
-        d="M45 310 C170 130 400 115 515 300"
+        d="M65 300 C180 160 390 125 500 295"
         stroke="#B78BFF"
-        strokeOpacity=".13"
+        strokeOpacity=".12"
       />
 
       {/* Ученик */}
-      <g filter="url(#figureShadow)">
+      <g filter="url(#figure-shadow)">
         {/* Корпус */}
         <path
-          d="M24 340 C32 255 65 205 124 190 C177 177 216 218 237 340Z"
-          fill="url(#studentClothes)"
-          stroke="#C5A4FF"
+          d="M25 340 C34 268 58 217 112 198 C151 184 194 205 220 246 L245 340Z"
+          fill="url(#student-jacket)"
+          stroke="#C4A1FF"
           strokeOpacity=".55"
           strokeWidth="2"
         />
+
         <path
-          d="M82 212 C108 190 151 190 179 215 L204 277 L104 295 L57 250Z"
-          fill="#D7B8FF"
+          d="M75 224 C108 200 151 204 180 226 L205 290 L105 310 L55 264Z"
+          fill="#D5B8FF"
           fillOpacity=".12"
-        />
-
-        {/* Шея и голова */}
-        <path
-          d="M104 178 L107 211 L143 232"
-          stroke="url(#skinTone)"
-          strokeWidth="21"
-          strokeLinecap="round"
-        />
-        <path
-          d="M76 177 C57 150 59 110 77 80 C96 49 137 45 163 66 C190 89 182 136 162 166 L141 187Z"
-          fill="url(#skinTone)"
-        />
-        <path
-          d="M73 123 C54 85 77 41 122 35 C164 29 192 58 183 100 C168 78 147 70 124 77 C102 83 91 105 73 123Z"
-          fill="url(#hairTone)"
-        />
-        <path
-          d="M86 105 C101 90 111 72 117 57"
-          stroke="#A78AB4"
-          strokeOpacity=".35"
-          strokeWidth="5"
-          strokeLinecap="round"
-        />
-        <path
-          d="M105 132 Q120 139 135 132"
-          stroke="#8C514A"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <path
-          d="M97 111 Q108 105 119 110"
-          stroke="#30212B"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-        <path
-          d="M136 109 Q147 104 157 109"
-          stroke="#30212B"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-
-        {/* Рука ученика */}
-        <path
-          d="M151 220 L203 247"
-          stroke="url(#skinTone)"
-          strokeWidth="17"
-          strokeLinecap="round"
-        />
-        <path
-          d="M202 247 L231 226"
-          stroke="url(#skinTone)"
-          strokeWidth="14"
-          strokeLinecap="round"
-        />
-      </g>
-
-      {/* Ракетка ученика */}
-      <g transform="rotate(27 244 210)">
-        <rect x="238" y="211" width="12" height="65" rx="5" fill="#A77AE1" />
-        <ellipse
-          cx="244"
-          cy="194"
-          rx="22"
-          ry="29"
-          fill="#26182F"
-          stroke="#D0AEFF"
-          strokeWidth="3"
-        />
-        <ellipse cx="244" cy="194" rx="16" ry="22" fill="url(#racketTone)" />
-        <path
-          d="M233 181 L252 208 M231 193 L248 217"
-          stroke="#E5D4FF"
-          strokeOpacity=".5"
-          strokeWidth="1.5"
-        />
-      </g>
-
-      {/* Тренер */}
-      <g filter="url(#figureShadow)">
-        {/* Корпус */}
-        <path
-          d="M250 340 C265 232 307 177 386 171 C468 166 515 226 537 340Z"
-          fill="url(#coachClothes)"
-          stroke="#D0B0FF"
-          strokeOpacity=".75"
-          strokeWidth="2"
-        />
-        <path
-          d="M324 196 C355 175 395 179 422 200 L445 260 L350 284 L298 238Z"
-          fill="#E1C9FF"
-          fillOpacity=".13"
         />
 
         {/* Шея */}
         <path
-          d="M345 159 L346 191 L311 217"
-          stroke="url(#skinTone)"
-          strokeWidth="21"
+          d="M107 170 L110 205"
+          stroke="url(#skin)"
+          strokeWidth="25"
           strokeLinecap="round"
         />
 
         {/* Голова */}
         <path
-          d="M337 158 C312 130 312 91 331 58 C352 25 396 25 423 50 C448 74 439 122 415 154 L390 174Z"
-          fill="url(#skinTone)"
+          d="M77 143 C65 119 68 80 88 59 C107 38 145 40 165 61 C184 83 179 122 161 153 L139 174 L105 166Z"
+          fill="url(#skin)"
         />
+
+        {/* Волосы */}
         <path
-          d="M327 103 C308 59 337 16 385 13 C431 10 458 44 446 95 C427 65 400 57 374 66 C352 72 343 91 327 103Z"
-          fill="url(#hairTone)"
+          d="M72 112 C61 74 86 35 124 31 C161 26 188 53 180 93 C168 73 148 66 127 70 C105 74 91 98 72 112Z"
+          fill="url(#hair)"
         />
+
         <path
-          d="M339 96 C353 82 362 65 369 48"
-          stroke="#A78AB4"
-          strokeOpacity=".35"
+          d="M84 91 C100 76 111 58 116 43"
+          stroke="#B99BC8"
+          strokeOpacity=".28"
           strokeWidth="5"
           strokeLinecap="round"
         />
+
+        {/* Лицо */}
         <path
-          d="M355 120 Q371 128 387 118"
-          stroke="#8C514A"
+          d="M91 111 Q103 104 114 110"
+          stroke="#34212D"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+
+        <path
+          d="M139 109 Q151 103 161 109"
+          stroke="#34212D"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+
+        <path
+          d="M116 137 Q130 145 145 136"
+          stroke="#965D55"
           strokeWidth="2"
           strokeLinecap="round"
         />
+
+        {/* Рука ученика, держащая ракетку */}
         <path
-          d="M349 99 Q360 92 370 98"
-          stroke="#30212B"
-          strokeWidth="3"
+          d="M154 225 L208 250 L238 226"
+          stroke="url(#skin)"
+          strokeWidth="18"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        <path
+          d="M235 225 L248 215"
+          stroke="url(#skin)"
+          strokeWidth="13"
           strokeLinecap="round"
         />
+      </g>
+
+      {/* Ракетка ученика */}
+      <g transform="rotate(27 258 190)">
+        <rect
+          x="253"
+          y="192"
+          width="12"
+          height="72"
+          rx="5"
+          fill="#9A6ACD"
+          stroke="#D9B9FF"
+          strokeOpacity=".45"
+        />
+
+        <ellipse
+          cx="259"
+          cy="177"
+          rx="23"
+          ry="31"
+          fill="#26172F"
+          stroke="#D9B9FF"
+          strokeWidth="2.5"
+        />
+
+        <ellipse
+          cx="259"
+          cy="177"
+          rx="17"
+          ry="24"
+          fill="url(#racket)"
+        />
+
         <path
-          d="M390 97 Q402 91 413 97"
-          stroke="#30212B"
+          d="M248 160 L269 192 M245 174 L265 201"
+          stroke="#E5D4FF"
+          strokeOpacity=".48"
+          strokeWidth="1.5"
+        />
+      </g>
+
+      {/* Тренер */}
+      <g filter="url(#figure-shadow)">
+        {/* Корпус */}
+        <path
+          d="M278 340 C290 254 317 206 369 188 C420 170 469 199 497 245 L535 340Z"
+          fill="url(#coach-jacket)"
+          stroke="#D1B2FF"
+          strokeOpacity=".65"
+          strokeWidth="2"
+        />
+
+        <path
+          d="M325 220 C358 190 410 187 441 211 L466 277 L365 306 L305 265Z"
+          fill="#E5D1FF"
+          fillOpacity=".12"
+        />
+
+        {/* Шея */}
+        <path
+          d="M368 158 L370 194"
+          stroke="url(#skin)"
+          strokeWidth="25"
+          strokeLinecap="round"
+        />
+
+        {/* Голова */}
+        <path
+          d="M336 139 C322 113 324 75 345 51 C367 26 405 29 427 51 C448 74 442 118 421 150 L398 168 L361 164Z"
+          fill="url(#skin)"
+        />
+
+        {/* Волосы */}
+        <path
+          d="M328 108 C314 66 340 27 380 21 C419 15 450 43 443 86 C427 63 405 56 384 61 C360 65 346 91 328 108Z"
+          fill="url(#hair)"
+        />
+
+        <path
+          d="M343 83 C358 68 369 48 373 34"
+          stroke="#B99BC8"
+          strokeOpacity=".28"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+
+        {/* Лицо */}
+        <path
+          d="M354 108 Q366 101 378 107"
+          stroke="#34212D"
           strokeWidth="3"
           strokeLinecap="round"
         />
 
-        {/* Рука, указывающая на технику */}
         <path
-          d="M346 190 L310 220"
-          stroke="url(#skinTone)"
-          strokeWidth="19"
-          strokeLinecap="round"
-        />
-        <path
-          d="M310 220 L270 203"
-          stroke="url(#skinTone)"
-          strokeWidth="16"
-          strokeLinecap="round"
-        />
-        <path
-          d="M270 203 L251 184"
-          stroke="url(#skinTone)"
-          strokeWidth="13"
-          strokeLinecap="round"
-        />
-        <path
-          d="M251 184 L239 169"
-          stroke="url(#skinTone)"
-          strokeWidth="8"
+          d="M399 107 Q411 101 422 107"
+          stroke="#34212D"
+          strokeWidth="3"
           strokeLinecap="round"
         />
 
-        {/* Вторая рука с планшетом */}
         <path
-          d="M425 175 L450 201 L481 184"
-          stroke="url(#skinTone)"
-          strokeWidth="19"
+          d="M378 137 Q393 145 408 136"
+          stroke="#965D55"
+          strokeWidth="2"
           strokeLinecap="round"
         />
+
+        {/* Рука тренера: объясняет положение ракетки */}
         <path
-          d="M481 184 L494 174"
-          stroke="url(#skinTone)"
+          d="M354 199 L321 223 L294 211"
+          stroke="url(#skin)"
+          strokeWidth="19"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        <path
+          d="M294 211 L279 202"
+          stroke="url(#skin)"
           strokeWidth="13"
+          strokeLinecap="round"
+        />
+
+        <path
+          d="M279 202 L266 191"
+          stroke="url(#skin)"
+          strokeWidth="9"
+          strokeLinecap="round"
+        />
+
+        {/* Вторая рука */}
+        <path
+          d="M432 198 L457 221 L479 205"
+          stroke="url(#skin)"
+          strokeWidth="19"
           strokeLinecap="round"
         />
 
         {/* Планшет */}
-        <g transform="rotate(-9 453 225)">
+        <g transform="rotate(-8 475 237)">
           <rect
-            x="412"
-            y="192"
-            width="86"
-            height="65"
+            x="440"
+            y="207"
+            width="75"
+            height="57"
             rx="8"
-            fill="#171222"
+            fill="#15101F"
             stroke="#C8A3FF"
             strokeWidth="2"
           />
+
           <rect
-            x="420"
-            y="200"
-            width="70"
-            height="49"
+            x="447"
+            y="214"
+            width="61"
+            height="43"
             rx="4"
-            fill="#21182F"
+            fill="#251A34"
           />
+
           <path
-            d="M431 214 L477 214 M431 225 L468 225 M431 236 L458 236"
+            d="M456 227 L498 227 M456 237 L491 237 M456 247 L481 247"
             stroke="#B78BFF"
-            strokeOpacity=".85"
             strokeWidth="2"
             strokeLinecap="round"
+            strokeOpacity=".85"
           />
-          <circle cx="482" cy="207" r="2" fill="#E0CCFF" />
+
+          <circle cx="501" cy="220" r="2" fill="#E0CCFF" />
         </g>
 
-        {/* Маркировка на форме */}
+        {/* Логотип на форме */}
         <text
-          x="392"
-          y="253"
+          x="391"
+          y="271"
           fill="#F0E6FF"
           fillOpacity=".85"
           fontSize="12"
@@ -498,10 +534,10 @@ function CoachArtwork() {
         </text>
       </g>
 
-      {/* Декоративные световые точки */}
-      <circle cx="75" cy="75" r="3" fill="#D8BFFF" />
-      <circle cx="486" cy="58" r="4" fill="#B78BFF" />
-      <circle cx="506" cy="78" r="2" fill="#FFFFFF" />
+      {/* Мягкие декоративные блики */}
+      <circle cx="65" cy="72" r="3" fill="#D8BFFF" />
+      <circle cx="482" cy="58" r="4" fill="#B78BFF" />
+      <circle cx="505" cy="80" r="2" fill="#FFFFFF" />
     </svg>
   );
 }
