@@ -1,3 +1,4 @@
+
 "use client";
 
 import Image from "next/image";
@@ -90,22 +91,19 @@ export default function TariffsContent() {
           transition={{ duration: 0.55 }}
           className="relative"
         >
-          <div className="mb-5 inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold uppercase tracking-[.16em] text-[#CDB4FF]">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#8F5BFF]/30 bg-[#8F5BFF]/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[.16em] text-[#CDB4FF]">
             <Image
               src="/logo2.png"
               alt="PongLab"
               width={14}
               height={14}
               className="h-[14px] w-[14px] shrink-0 object-contain"
-            />
-            Тарифы PongLab
+            /> Тарифы PongLab
           </div>
-
           <h2 className="max-w-[560px] text-[clamp(2.5rem,5vw,5rem)] font-black leading-[.96] tracking-[-.055em]">
             Выбирайте свой
             <span className="block bg-gradient-to-r from-[#B99AFF] via-[#8F5BFF] to-[#6B9CFF] bg-clip-text text-transparent">ритм игры</span>
           </h2>
-
           <p className="mt-6 max-w-[470px] text-base leading-7 text-white/55 sm:text-lg">
             От первой тренировки до системной работы над техникой. Выберите формат, который подходит вашей цели.
           </p>
