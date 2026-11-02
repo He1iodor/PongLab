@@ -1,7 +1,5 @@
-
 "use client";
 
-import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   ArrowUpRight,
@@ -91,15 +89,8 @@ export default function TariffsContent() {
           transition={{ duration: 0.55 }}
           className="relative"
         >
-          <div className="mb-5 flex items-center">
-            <Image
-              src="/logo.png"
-              alt="PongLab"
-              width={140}
-              height={60}
-              priority
-              className="h-[60px] w-auto object-contain object-left"
-            />
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#8F5BFF]/30 bg-[#8F5BFF]/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[.16em] text-[#CDB4FF]">
+            <Sparkles size={14} /> Тарифы PongLab
           </div>
           <h2 className="max-w-[560px] text-[clamp(2.5rem,5vw,5rem)] font-black leading-[.96] tracking-[-.055em]">
             Выбирайте свой
@@ -142,23 +133,11 @@ export default function TariffsContent() {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.08 * index }}
-              whileHover={{
-                y: -7,
-                boxShadow: "0 18px 55px rgba(244,245,250,.18)",
-                borderColor: "rgba(244,245,250,.55)",
-                transition: { duration: 0.2 },
-              }}
-              className={`group relative flex min-h-[390px] flex-col overflow-hidden rounded-[25px] border bg-[#111427]/80 p-5 backdrop-blur-xl transition-colors duration-300 sm:p-6 ${plan.popular ? "border-[#9A75FF]/65 shadow-[0_0_45px_rgba(143,91,255,.13)]" : "border-white/10"}`}
+              whileHover={{ y: -7, transition: { duration: 0.2 } }}
+              className={`relative flex min-h-[390px] flex-col overflow-hidden rounded-[25px] border bg-[#111427]/80 p-5 backdrop-blur-xl sm:p-6 ${plan.popular ? "border-[#9A75FF]/65 shadow-[0_0_45px_rgba(143,91,255,.13)]" : "border-white/10"}`}
               style={{ boxShadow: plan.popular ? undefined : `0 18px 55px ${plan.glow}` }}
             >
               <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full blur-[65px]" style={{ background: plan.glow }} />
-
-              {plan.popular && (
-                <div className="pointer-events-none absolute right-5 top-5 z-20 rounded-full border border-[#A987FF]/40 bg-[#8F5BFF]/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#DCCBFF] opacity-0 shadow-[0_0_20px_rgba(143,91,255,.25)] transition-opacity duration-300 group-hover:opacity-100">
-                  Самый популярный
-                </div>
-              )}
-
               <div className="relative flex items-start justify-between gap-2">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[.2em]" style={{ color: plan.color }}>{plan.note}</p>
@@ -189,20 +168,9 @@ export default function TariffsContent() {
                   </li>
                 ))}
               </ul>
-
-              <div
-                className={`relative mt-6 flex items-center justify-between rounded-xl border px-3.5 py-3 text-xs font-semibold transition-all duration-300 ease-out ${
-                  plan.popular
-                    ? "border-[#A987FF]/35 bg-[#8F5BFF]/10 text-white/85 shadow-[0_0_12px_rgba(143,91,255,.08)] group-hover:border-[#A987FF]/70 group-hover:bg-[#8F5BFF]/25 group-hover:text-white group-hover:shadow-[0_0_24px_rgba(143,91,255,.28)]"
-                    : "border-white/10 bg-white/[.035] text-white/50 group-hover:border-white/25 group-hover:bg-white/[.09] group-hover:text-white/90"
-                }`}
-              >
-                <span>{plan.popular ? "Выбрать" : plan.name === "Start" ? "Без подписки" : "Оплата за месяц"}</span>
-                <ArrowUpRight
-                  size={17}
-                  className="transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1"
-                  style={{ color: plan.color }}
-                />
+              <div className="relative mt-6 flex items-center justify-between border-t border-white/10 pt-4 text-xs text-white/35">
+                <span>{plan.name === "Start" ? "Без подписки" : "Оплата за месяц"}</span>
+                <ArrowUpRight size={16} style={{ color: plan.color }} />
               </div>
             </motion.article>
           ))}
@@ -219,7 +187,7 @@ export default function TariffsContent() {
           <p className="max-w-md text-xs leading-5 text-white/40">В таблице отмечены только условия, указанные для каждого тарифа.</p>
         </div>
 
-        <div className="overflow-x-auto rounded-[22px] border border-white/10 bg-white/[.025]">
+        <div className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden rounded-[22px] border border-white/10 bg-white/[.025]">
           <table className="w-full min-w-[760px] border-collapse text-left">
             <thead>
               <tr className="bg-white/[.045]">
