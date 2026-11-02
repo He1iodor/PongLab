@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import TariffsContent from "./tariffs/TariffsContent";
+import TariffsContent from "./TariffsContent";
 
 type Props = {
   open: boolean;
