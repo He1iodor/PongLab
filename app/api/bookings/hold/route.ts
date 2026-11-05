@@ -100,12 +100,82 @@ async function expireOldHolds(
   key: string,
   nowIso: string,
 ) {
-  const target = new URL(`${url}/rest/v1/bookings`);
+  // Освобождаем только группы, для которых платёж точно ещё не запускался.
+  // Если инициализация платежа началась или его ID уже получен, результат
+  // может быть неизвестен — такие брони автоматически не освобождаем.
+  const groupsUrl = new URL(`${url}/rest/v1/payment_groups`);
+  groupsUrl.searchParams.set("select", "id");
+  groupsUrl.searchParams.set("status", "eq.pending");
+  groupsUrl.searchParams.set("hold_expires_at", `lte.${nowIso}`);
+  groupsUrl.searchParams.set("payment_init_started_at", "is.null");
+  groupsUrl.searchParams.set("provider_payment_id", "is.null");
 
-  target.searchParams.set("status", "eq.pending_payment");
-  target.searchParams.set("hold_expires_at", `lte.${nowIso}`);
+  const groupsResponse = await fetch(groupsUrl, {
+    headers: headers(key),
+    cache: "no-store",
+  });
 
-  const response = await fetch(target, {
+  if (!groupsResponse.ok) {
+    console.error(
+      "Expired payment groups query failed:",
+      groupsResponse.status,
+      await groupsResponse.text(),
+    );
+    throw new Error(
+      "Не удалось проверить истёкшие бронирования. Повторите попытку.",
+    );
+  }
+
+  const groups = await groupsResponse.json();
+  const groupIds = Array.isArray(groups)
+    ? groups.map((group) => group?.id).filter(
+        (id): id is string => typeof id === "string",
+      )
+    : [];
+
+  // Новые брони: обновляем только записи из групп без начатой оплаты.
+  if (groupIds.length > 0) {
+    const bookingsUrl = new URL(`${url}/rest/v1/bookings`);
+    bookingsUrl.searchParams.set("status", "eq.pending_payment");
+    bookingsUrl.searchParams.set("hold_expires_at", `lte.${nowIso}`);
+    bookingsUrl.searchParams.set(
+      "payment_group_id",
+      `in.(${groupIds.join(",")})`,
+    );
+
+    const bookingsResponse = await fetch(bookingsUrl, {
+      method: "PATCH",
+      headers: {
+        ...headers(key),
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({ status: "expired" }),
+      cache: "no-store",
+    });
+
+    if (!bookingsResponse.ok) {
+      console.error(
+        "Expired grouped booking cleanup failed:",
+        bookingsResponse.status,
+        await bookingsResponse.text(),
+      );
+      throw new Error(
+        "Не удалось освободить истёкшие бронирования. Повторите попытку.",
+      );
+    }
+  }
+
+  // Совместимость со старыми бронями без payment_group_id.
+  // Не трогаем их, если для них уже начиналась инициализация оплаты.
+  const legacyUrl = new URL(`${url}/rest/v1/bookings`);
+  legacyUrl.searchParams.set("status", "eq.pending_payment");
+  legacyUrl.searchParams.set("hold_expires_at", `lte.${nowIso}`);
+  legacyUrl.searchParams.set("payment_group_id", "is.null");
+  legacyUrl.searchParams.set("payment_init_started_at", "is.null");
+  legacyUrl.searchParams.set("payment_id", "is.null");
+
+  const legacyResponse = await fetch(legacyUrl, {
     method: "PATCH",
     headers: {
       ...headers(key),
@@ -116,13 +186,12 @@ async function expireOldHolds(
     cache: "no-store",
   });
 
-  if (!response.ok) {
+  if (!legacyResponse.ok) {
     console.error(
-      "Expired booking holds cleanup failed:",
-      response.status,
-      await response.text(),
+      "Expired legacy booking cleanup failed:",
+      legacyResponse.status,
+      await legacyResponse.text(),
     );
-
     throw new Error(
       "Не удалось освободить истёкшие бронирования. Повторите попытку.",
     );
@@ -435,22 +504,10 @@ export async function POST(request: NextRequest) {
       Date.now() + holdMinutes * 60_000,
     ).toISOString();
 
-    // Создаём все брони одним пакетным запросом.
-    // Ограничения базы данных должны отклонять пересечения по времени.
-    const rowsToInsert = validated.map((item) => ({
-      user_id: userId,
-      table_id: item.table_id,
-      start_at: item.start_at,
-      end_at: item.end_at,
-      price_rub: item.price_rub,
-      status: "pending_payment",
-      payment_provider: "tbank",
-      payment_status: "pending",
-      hold_expires_at: holdExpiresAt,
-    }));
-
-    const insertResponse = await fetch(
-      `${config.url}/rest/v1/bookings`,
+    // Создаём группу платежа и все связанные брони одной транзакцией PostgreSQL.
+    // Платёжный провайдер — YooKassa. Сам платёж подключим следующим этапом.
+    const rpcResponse = await fetch(
+      `${config.url}/rest/v1/rpc/create_payment_group_with_bookings`,
       {
         method: "POST",
         headers: {
@@ -458,22 +515,32 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Prefer: "return=representation",
         },
-        body: JSON.stringify(rowsToInsert),
+        body: JSON.stringify({
+          p_user_id: userId,
+          p_provider: "yookassa",
+          p_hold_expires_at: holdExpiresAt,
+          p_bookings: validated.map((item) => ({
+            table_id: item.table_id,
+            start_at: item.start_at,
+            end_at: item.end_at,
+            price_rub: item.price_rub,
+          })),
+        }),
         cache: "no-store",
       },
     );
 
-    if (!insertResponse.ok) {
-      const details = await insertResponse.text();
+    if (!rpcResponse.ok) {
+      const details = await rpcResponse.text();
 
       console.error(
-        "Booking hold insert failed:",
-        insertResponse.status,
+        "Atomic payment group creation failed:",
+        rpcResponse.status,
         details,
       );
 
       if (
-        insertResponse.status === 409 ||
+        rpcResponse.status === 409 ||
         details.includes("bookings_no_overlap") ||
         details.includes("23P01")
       ) {
@@ -483,38 +550,42 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (details.includes("bookings_payment_provider_check")) {
-        return errorResponse(
-          "База данных ещё не обновлена для выбранного платёжного провайдера. Проверьте SQL-миграцию.",
-          503,
-        );
-      }
-
       return errorResponse(
-        "Не удалось создать временную бронь. Повторите попытку.",
+        "Не удалось создать группу бронирования. Повторите попытку.",
         503,
       );
     }
 
-    const createdRows = await insertResponse.json();
+    const createdGroup = await rpcResponse.json().catch(() => null);
 
     if (
-      !Array.isArray(createdRows) ||
-      createdRows.length !== rowsToInsert.length ||
-      createdRows.some((row) => !row?.id)
+      !createdGroup ||
+      typeof createdGroup !== "object" ||
+      !createdGroup.payment_group_id ||
+      !Array.isArray(createdGroup.bookings) ||
+      createdGroup.bookings.length !== validated.length ||
+      Number(createdGroup.total_price_rub) <= 0
     ) {
       console.error(
-        "Booking hold insert returned an unexpected response.",
-        createdRows,
+        "Atomic payment group creation returned an unexpected response:",
+        createdGroup,
       );
 
       return errorResponse(
-        "Сервер не подтвердил создание всех временных броней.",
+        "Сервер не подтвердил создание всей группы бронирования.",
         503,
       );
     }
 
-    const bookings = createdRows.map((row) => ({
+    const bookings = createdGroup.bookings.map((row: {
+      id: string;
+      start_at: string;
+      end_at: string;
+      price_rub: number;
+      status: string;
+      hold_expires_at: string;
+      table_id: string;
+    }) => ({
       id: row.id,
       start_at: row.start_at,
       end_at: row.end_at,
@@ -524,16 +595,12 @@ export async function POST(request: NextRequest) {
       table_id: row.table_id,
     }));
 
-    const totalPrice = bookings.reduce(
-      (total, booking) => total + Number(booking.price_rub),
-      0,
-    );
-
     return NextResponse.json(
       {
+        payment_group_id: createdGroup.payment_group_id,
         bookings,
-        total_price_rub: totalPrice,
-        hold_expires_at: holdExpiresAt,
+        total_price_rub: Number(createdGroup.total_price_rub),
+        hold_expires_at: createdGroup.hold_expires_at ?? holdExpiresAt,
         next_step: "payment",
         ...(parsedGroups.legacySingleGroup
           ? { booking: bookings[0] }
