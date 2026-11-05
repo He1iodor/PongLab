@@ -79,6 +79,7 @@ export default function AdminEquipmentPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [testBusyId, setTestBusyId] = useState<string | null>(null);
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -213,6 +214,63 @@ export default function AdminEquipmentPage() {
     }
   }
 
+  async function sendTestUnlock(device: Device) {
+    if (
+      device.status !== "active" ||
+      !isOnline(device.last_seen_at) ||
+      testBusyId ||
+      busyId
+    ) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Отправить контроллеру тестовую команду unlock? Сейчас прошивка работает в TEST MODE: физическое реле НЕ включится и замок не откроется. Проверяется только передача команды."
+    );
+
+    if (!confirmed) return;
+
+    setTestBusyId(device.id);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/equipment/test-unlock", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          device_id: device.id,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Не удалось отправить тестовую команду."
+        );
+      }
+
+      setMessage(
+        `Тестовая команда создана. ID: ${data.command_id}. Контроллер должен получить её в течение 15 секунд. Физическое реле не включается — прошивка TEST MODE.`
+      );
+
+      await load({ silent: true });
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Ошибка отправки тестовой команды."
+      );
+    } finally {
+      setTestBusyId(null);
+    }
+  }
+
   async function disableDevice(device: Device) {
     if (device.status !== "active" || busyId) return;
 
@@ -299,8 +357,9 @@ export default function AdminEquipmentPage() {
 
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
               Регистрация контроллеров ESP32, контроль heartbeat
-              и состояния датчиков двери. Команда открытия двери
-              пока намеренно не реализована.
+              и состояния датчиков двери. Доступна тестовая отправка
+              команды unlock; физическое управление замком отключено
+              в прошивке TEST MODE.
             </p>
           </div>
 
@@ -586,16 +645,34 @@ export default function AdminEquipmentPage() {
                   </div>
 
                   {device.status === "active" && (
-                    <button
-                      type="button"
-                      onClick={() => void disableDevice(device)}
-                      disabled={busyId !== null}
-                      className="mt-5 rounded-xl border border-red-300/20 px-4 py-2.5 text-sm font-medium text-red-200 transition hover:bg-red-300/10 disabled:opacity-50"
-                    >
-                      {busyId === device.id
-                        ? "Отключаем…"
-                        : "Отключить устройство"}
-                    </button>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => void sendTestUnlock(device)}
+                        disabled={!online || testBusyId !== null || busyId !== null}
+                        className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
+                        title={
+                          !online
+                            ? "Контроллер должен быть на связи"
+                            : "Отправить тестовую команду unlock"
+                        }
+                      >
+                        {testBusyId === device.id
+                          ? "Отправляем команду…"
+                          : "Тест команды unlock"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void disableDevice(device)}
+                        disabled={busyId !== null || testBusyId !== null}
+                        className="rounded-xl border border-red-300/20 px-4 py-2.5 text-sm font-medium text-red-200 transition hover:bg-red-300/10 disabled:opacity-50"
+                      >
+                        {busyId === device.id
+                          ? "Отключаем…"
+                          : "Отключить устройство"}
+                      </button>
+                    </div>
                   )}
                 </article>
               );

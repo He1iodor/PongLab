@@ -6,6 +6,7 @@ import Image from "next/image";
 import PersonalAccountModal from "@/components/PersonalAccountModal";
 import HowItWorksModal from "@/components/HowItWorksModal";
 import WhyPongLabModal from "@/components/WhyPongLabModal";
+import TariffsModal from "@/components/tariffs/TariffsModal";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
@@ -22,6 +23,7 @@ export default function Navbar() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
+  const [tariffsOpen, setTariffsOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -36,6 +38,11 @@ export default function Navbar() {
   const openAccount = () => {
     setMobileOpen(false);
     setAccountOpen(true);
+  };
+
+  const openTariffs = () => {
+    setMobileOpen(false);
+    setTariffsOpen(true);
   };
 
   return (
@@ -110,6 +117,24 @@ export default function Navbar() {
                     key={item.href}
                     type="button"
                     onClick={() => setWhyOpen(true)}
+                    className="
+                      relative text-sm text-white/70
+                      transition-all duration-300 hover:text-white
+                      group
+                    "
+                  >
+                    {item.title}
+                    <span className="absolute -bottom-2 left-0 h-[2px] w-0 bg-[#8F5BFF] transition-all duration-300 group-hover:w-full" />
+                  </button>
+                );
+              }
+
+              if (item.href === "/pricing") {
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    onClick={openTariffs}
                     className="
                       relative text-sm text-white/70
                       transition-all duration-300 hover:text-white
@@ -251,6 +276,19 @@ export default function Navbar() {
                 );
               }
 
+              if (item.href === "/pricing") {
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    onClick={openTariffs}
+                    className="text-left text-white/75 transition hover:text-white"
+                  >
+                    {item.title}
+                  </button>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
@@ -299,6 +337,11 @@ export default function Navbar() {
       <WhyPongLabModal
         open={whyOpen}
         onClose={() => setWhyOpen(false)}
+      />
+
+      <TariffsModal
+        open={tariffsOpen}
+        onClose={() => setTariffsOpen(false)}
       />
     </>
   );
