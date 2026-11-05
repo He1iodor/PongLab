@@ -84,7 +84,6 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    // Проверяем действующую сессию телефона.
     const tokenHash = createHash("sha256")
       .update(sessionToken)
       .digest("hex");
@@ -116,7 +115,6 @@ export async function POST(request: NextRequest) {
 
     const userId = sessions[0].user_id;
 
-    // Проверяем роль пользователя в базе, а не в браузере.
     const userUrl = new URL(`${supabaseUrl}/rest/v1/users`);
     userUrl.searchParams.set("select", "id,role");
     userUrl.searchParams.set("id", `eq.${userId}`);
@@ -138,74 +136,57 @@ export async function POST(request: NextRequest) {
       return errorResponse("Недостаточно прав для доступа.", 403);
     }
 
-    // Проверяем, не заблокированы ли попытки входа.
-    const beginResponse = await fetch(
-      `${supabaseUrl}/rest/v1/rpc/owner_login_begin`,
+    // Пароль проверяется на сервере. Результат проверки
+    // передаётся в одну атомарную SQL-функцию.
+    const passwordValid = safeEqual(body.password, ownerPassword);
+
+    const attemptResponse = await fetch(
+      `${supabaseUrl}/rest/v1/rpc/owner_login_attempt`,
       {
         method: "POST",
         headers,
-        body: JSON.stringify({ p_user_id: userId }),
+        body: JSON.stringify({
+          p_user_id: userId,
+          p_password_valid: passwordValid,
+        }),
         cache: "no-store",
       }
     );
 
-    if (!beginResponse.ok) {
-      console.error("Owner login: rate-limit check failed:", beginResponse.status);
-      return errorResponse("Не удалось проверить ограничение попыток.", 503);
+    if (!attemptResponse.ok) {
+      console.error("Owner login: atomic attempt failed:", attemptResponse.status);
+      return errorResponse("Не удалось проверить пароль. Попробуйте позже.", 503);
     }
 
-    const limits = await beginResponse.json();
-    const limit = Array.isArray(limits) ? limits[0] : null;
+    const attempts = await attemptResponse.json();
+    const attempt = Array.isArray(attempts) ? attempts[0] : null;
 
-    if (!limit || typeof limit.allowed !== "boolean") {
-      console.error("Owner login: unexpected rate-limit response.");
-      return errorResponse("Не удалось проверить ограничение попыток.", 503);
+    if (
+      !attempt ||
+      typeof attempt.allowed !== "boolean" ||
+      typeof attempt.authenticated !== "boolean"
+    ) {
+      console.error("Owner login: unexpected atomic attempt response.");
+      return errorResponse("Не удалось проверить пароль.", 503);
     }
 
-    if (!limit.allowed) {
-      const retryAfter = Number(limit.retry_after_seconds) || 900;
+    if (!attempt.allowed) {
+      const retryAfter = Math.max(
+        1,
+        Number(attempt.retry_after_seconds) || 900
+      );
+
       const response = errorResponse(
         `Слишком много попыток. Повторите через ${Math.ceil(retryAfter / 60)} мин.`,
         429
       );
+
       response.headers.set("Retry-After", String(retryAfter));
       return response;
     }
 
-    // Сравниваем пароль только на сервере.
-    if (!safeEqual(body.password, ownerPassword)) {
-      const failResponse = await fetch(
-        `${supabaseUrl}/rest/v1/rpc/owner_login_fail`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ p_user_id: userId }),
-          cache: "no-store",
-        }
-      );
-
-      if (!failResponse.ok) {
-        console.error("Owner login: failed-attempt recording failed:", failResponse.status);
-        return errorResponse("Не удалось проверить пароль. Попробуйте позже.", 503);
-      }
-
+    if (!attempt.authenticated) {
       return errorResponse("Неверный пароль.", 401);
-    }
-
-    // Сбрасываем счётчик после успешной проверки.
-    const resetResponse = await fetch(
-      `${supabaseUrl}/rest/v1/rpc/owner_login_reset`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ p_user_id: userId }),
-        cache: "no-store",
-      }
-    );
-
-    if (!resetResponse.ok) {
-      console.error("Owner login: failed to reset rate limit:", resetResponse.status);
-      return errorResponse("Не удалось завершить вход. Попробуйте позже.", 503);
     }
 
     const expiresAt = Math.floor(Date.now() / 1000) + OWNER_SESSION_SECONDS;
