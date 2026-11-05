@@ -448,21 +448,24 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const target = new URL(
-      `${config.url}/rest/v1/studio_date_exceptions`
+    const response = await fetch(
+      `${config.url}/rest/v1/rpc/delete_date_exception_atomic`,
+      {
+        method: "POST",
+        headers: {
+          ...headers(config.key),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_exception_id: id,
+        }),
+        cache: "no-store",
+      }
     );
-
-    target.searchParams.set("id", `eq.${id}`);
-
-    const response = await fetch(target, {
-      method: "DELETE",
-      headers: headers(config.key),
-      cache: "no-store",
-    });
 
     if (!response.ok) {
       console.error(
-        "Exception DELETE failed:",
+        "Atomic exception DELETE failed:",
         response.status,
         await response.text()
       );
@@ -473,17 +476,24 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    const deleted = await response.json();
+
+    if (deleted !== true) {
+      return errorResponse(
+        "Исключение не найдено или уже удалено.",
+        404
+      );
+    }
+
     return NextResponse.json(
       { success: true },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
-    console.error("Exception DELETE error:", error);
+    console.error("Exceptions DELETE error:", error);
 
     return errorResponse(
-      error instanceof Error
-        ? error.message
-        : "Ошибка удаления исключения.",
+      "Ошибка удаления исключения.",
       503
     );
   }
