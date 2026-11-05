@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -205,7 +206,7 @@ export async function GET(request: NextRequest) {
     const dayEnd = localDateTimeToUtc(nextDate, "00:00", timezone);
     const tableIds = tables.map((table: { id: string }) => table.id);
     const bookings = await fetchRows(config.url, config.key, "bookings", {
-      select: "table_id,start_at,end_at,status,payment_status,hold_expires_at",
+      select: "table_id,start_at,end_at,status,payment_status,hold_expires_at,payment_init_started_at,payment_id",
       table_id: `in.(${tableIds.join(",")})`,
       status: "in.(pending_payment,confirmed)",
       start_at: `lt.${dayEnd.toISOString()}`,
@@ -213,9 +214,27 @@ export async function GET(request: NextRequest) {
     });
 
     const now = Date.now();
-    const blockingBookings = bookings.filter((booking: { status: string; hold_expires_at: string | null }) => {
+
+    // Важно: если инициализация оплаты началась или у брони уже есть ID
+    // платежа, удерживаем стол даже после hold_expires_at.
+    // Это защищает от повторного бронирования при неизвестном результате оплаты.
+    const blockingBookings = bookings.filter((booking: {
+      status: string;
+      hold_expires_at: string | null;
+      payment_init_started_at: string | null;
+      payment_id: string | null;
+    }) => {
       if (booking.status === "confirmed") return true;
+
+      if (
+        booking.payment_init_started_at !== null ||
+        booking.payment_id !== null
+      ) {
+        return true;
+      }
+
       if (!booking.hold_expires_at) return true;
+
       return new Date(booking.hold_expires_at).getTime() > now;
     });
 
