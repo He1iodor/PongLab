@@ -100,70 +100,33 @@ async function expireOldHolds(
   key: string,
   nowIso: string,
 ) {
-  // Освобождаем только группы, для которых платёж точно ещё не запускался.
-  // Если инициализация платежа началась или его ID уже получен, результат
-  // может быть неизвестен — такие брони автоматически не освобождаем.
-  const groupsUrl = new URL(`${url}/rest/v1/payment_groups`);
-  groupsUrl.searchParams.set("select", "id");
-  groupsUrl.searchParams.set("status", "eq.pending");
-  groupsUrl.searchParams.set("hold_expires_at", `lte.${nowIso}`);
-  groupsUrl.searchParams.set("payment_init_started_at", "is.null");
-  groupsUrl.searchParams.set("provider_payment_id", "is.null");
-
-  const groupsResponse = await fetch(groupsUrl, {
-    headers: headers(key),
-    cache: "no-store",
-  });
-
-  if (!groupsResponse.ok) {
-    console.error(
-      "Expired payment groups query failed:",
-      groupsResponse.status,
-      await groupsResponse.text(),
-    );
-    throw new Error(
-      "Не удалось проверить истёкшие бронирования. Повторите попытку.",
-    );
-  }
-
-  const groups = await groupsResponse.json();
-  const groupIds = Array.isArray(groups)
-    ? groups.map((group) => group?.id).filter(
-        (id): id is string => typeof id === "string",
-      )
-    : [];
-
-  // Новые брони: обновляем только записи из групп без начатой оплаты.
-  if (groupIds.length > 0) {
-    const bookingsUrl = new URL(`${url}/rest/v1/bookings`);
-    bookingsUrl.searchParams.set("status", "eq.pending_payment");
-    bookingsUrl.searchParams.set("hold_expires_at", `lte.${nowIso}`);
-    bookingsUrl.searchParams.set(
-      "payment_group_id",
-      `in.(${groupIds.join(",")})`,
-    );
-
-    const bookingsResponse = await fetch(bookingsUrl, {
-      method: "PATCH",
+  // Групповые бронирования очищаются одной PostgreSQL-функцией.
+  // Она атомарно переводит payment_groups в cancelled и связанные
+  // неоплаченные бронирования в expired.
+  // Группы с начатой инициализацией платежа не затрагиваются.
+  const groupedResponse = await fetch(
+    `${url}/rest/v1/rpc/expire_unpaid_payment_holds`,
+    {
+      method: "POST",
       headers: {
         ...headers(key),
         "Content-Type": "application/json",
-        Prefer: "return=minimal",
       },
-      body: JSON.stringify({ status: "expired" }),
+      body: JSON.stringify({}),
       cache: "no-store",
-    });
+    },
+  );
 
-    if (!bookingsResponse.ok) {
-      console.error(
-        "Expired grouped booking cleanup failed:",
-        bookingsResponse.status,
-        await bookingsResponse.text(),
-      );
-      throw new Error(
-        "Не удалось освободить истёкшие бронирования. Повторите попытку.",
-      );
-    }
+  if (!groupedResponse.ok) {
+    console.error(
+      "Expired grouped payment cleanup failed:",
+      groupedResponse.status,
+      await groupedResponse.text(),
+    );
+
+    throw new Error(
+      "Не удалось освободить истёкшие групповые бронирования. Повторите попытку.",
+    );
   }
 
   // Совместимость со старыми бронями без payment_group_id.
@@ -192,6 +155,7 @@ async function expireOldHolds(
       legacyResponse.status,
       await legacyResponse.text(),
     );
+
     throw new Error(
       "Не удалось освободить истёкшие бронирования. Повторите попытку.",
     );
@@ -271,10 +235,11 @@ function parseRequestedGroups(
 
 export async function POST(request: NextRequest) {
   console.log("[PONGLAB_HOLD] POST reached", {
-  path: new URL(request.url).pathname,
-  origin: request.headers.get("origin"),
-  environment: process.env.VERCEL_ENV ?? "local",
-});
+    path: new URL(request.url).pathname,
+    origin: request.headers.get("origin"),
+    environment: process.env.VERCEL_ENV ?? "local",
+  });
+
   // Не принимаем запросы с посторонних сайтов.
   const origin = request.headers.get("origin");
 
@@ -414,8 +379,15 @@ export async function POST(request: NextRequest) {
     }
 
     for (const group of groups) {
-      if (group.duration_minutes < 60 || group.duration_minutes > 480 || group.duration_minutes % 60 !== 0) {
-        return errorResponse("Бронирование должно состоять из целого количества часовых слотов.", 400);
+      if (
+        group.duration_minutes < 60 ||
+        group.duration_minutes > 480 ||
+        group.duration_minutes % 60 !== 0
+      ) {
+        return errorResponse(
+          "Бронирование должно состоять из целого количества часовых слотов.",
+          400,
+        );
       }
     }
 
@@ -449,19 +421,32 @@ export async function POST(request: NextRequest) {
       let finalEndAt = "";
 
       for (let index = 0; index < hours; index++) {
-        const segmentStart = new Date(groupStartMs + index * 60 * 60_000);
-        const availabilityUrl = new URL("/api/availability", request.url);
+        const segmentStart = new Date(
+          groupStartMs + index * 60 * 60_000,
+        );
+
+        const availabilityUrl = new URL(
+          "/api/availability",
+          request.url,
+        );
+
         availabilityUrl.searchParams.set("studio_id", studioId);
         availabilityUrl.searchParams.set("date", date);
         availabilityUrl.searchParams.set("duration_minutes", "60");
 
         // Вызов внутреннего обработчика, чтобы не зависеть от домена preview.
-        const availabilityResponse = await getAvailability(new NextRequest(availabilityUrl));
-        const availabilityData = await availabilityResponse.json().catch(() => ({}));
+        const availabilityResponse = await getAvailability(
+          new NextRequest(availabilityUrl),
+        );
+
+        const availabilityData = await availabilityResponse
+          .json()
+          .catch(() => ({}));
 
         if (!availabilityResponse.ok) {
           return errorResponse(
-            availabilityData.error || "Не удалось проверить доступность слота.",
+            availabilityData.error ||
+              "Не удалось проверить доступность слота.",
             availabilityResponse.status,
           );
         }
@@ -469,25 +454,35 @@ export async function POST(request: NextRequest) {
         const slots = Array.isArray(availabilityData.slots)
           ? (availabilityData.slots as AvailableSlot[])
           : [];
-        const slot = slots.find((candidate) =>
-          Date.parse(candidate.start_at) === segmentStart.getTime() &&
-          Number(candidate.duration_minutes) === 60 &&
-          candidate.available_tables.some((table) => table.id === group.table_id)
+
+        const slot = slots.find(
+          (candidate) =>
+            Date.parse(candidate.start_at) === segmentStart.getTime() &&
+            Number(candidate.duration_minutes) === 60 &&
+            candidate.available_tables.some(
+              (table) => table.id === group.table_id,
+            ),
         );
 
         if (!slot) {
           console.error("Booking hold hourly segment mismatch:", {
-            studioId, date, table_id: group.table_id,
+            studioId,
+            date,
+            table_id: group.table_id,
             segment_start_at: segmentStart.toISOString(),
             group_duration_minutes: group.duration_minutes,
           });
+
           return errorResponse(
             "Один из выбранных часовых слотов уже недоступен или тариф изменился. Обновите календарь.",
             409,
           );
         }
 
-        if (index === 0) firstStartAt = slot.start_at;
+        if (index === 0) {
+          firstStartAt = slot.start_at;
+        }
+
         finalEndAt = slot.end_at;
         totalPrice += Number(slot.price_rub);
       }
