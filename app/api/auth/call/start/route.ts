@@ -227,7 +227,9 @@ export async function POST(request: NextRequest) {
     if (!smsResponse.ok) {
       console.error("SMS.RU HTTP error:", smsResponse.status);
 
-      await markReservationFailed(reservationId);
+      if (reservationId !== null) {
+        await markReservationFailed(reservationId);
+      }
       reservationId = null;
 
       return errorResponse(
