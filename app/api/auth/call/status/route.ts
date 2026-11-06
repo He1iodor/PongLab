@@ -4,8 +4,14 @@ import { createHash, randomBytes } from "node:crypto";
 
 export const runtime = "nodejs";
 
+function privateJson(body: unknown, init?: ResponseInit): NextResponse {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
 function errorResponse(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+  return privateJson({ error: message }, { status });
 }
 
 function hashToken(token: string): string {
@@ -143,28 +149,28 @@ export async function POST(request: NextRequest) {
       return errorResponse("Не удалось проверить статус звонка.", 502);
     }
 
-const smsResult = await smsResponse.json();
+    const smsResult = await smsResponse.json();
 
-if (
-  smsResult.status !== "OK" ||
-  Number(smsResult.status_code) !== 100
-) {
-  console.error("SMS.RU status request failed:", {
-    status: smsResult.status,
-    status_code: smsResult.status_code,
-    status_text: smsResult.status_text,
-  });
+    if (
+      smsResult.status !== "OK" ||
+      Number(smsResult.status_code) !== 100
+    ) {
+      console.error("SMS.RU status request failed:", {
+        status: smsResult.status,
+        status_code: smsResult.status_code,
+        status_text: smsResult.status_text,
+      });
 
-  return errorResponse(
-    "Не удалось получить статус звонка. Попробуйте позже.",
-    502,
-  );
-}
+      return errorResponse(
+        "Не удалось получить статус звонка. Попробуйте позже.",
+        502,
+      );
+    }
 
-const providerCode = Number(smsResult.check_status);
+    const providerCode = Number(smsResult.check_status);
 
     if (providerCode === 400) {
-      return NextResponse.json({
+      return privateJson({
         verified: false,
         status: "pending",
       });
@@ -243,7 +249,7 @@ const providerCode = Number(smsResult.check_status);
       return errorResponse("Не удалось завершить авторизацию.", 503);
     }
 
-    const response = NextResponse.json({ verified: true });
+    const response = privateJson({ verified: true });
 
     response.cookies.set("ponglab_session", sessionToken, {
       httpOnly: true,
