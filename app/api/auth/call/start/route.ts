@@ -63,18 +63,64 @@ async function supabaseRequest(
   });
 }
 
+// Помечаем зарезервированную попытку как failed.
+// Ошибка этой операции не должна скрывать исходную ошибку.
+async function markReservationFailed(reservationId: string) {
+  try {
+    const response = await supabaseRequest(
+      `phone_auth_challenges?id=eq.${reservationId}&status=eq.pending`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: "failed",
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      console.error(
+        "Failed to mark phone challenge as failed:",
+        await response.text(),
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Failed to update reserved phone challenge:",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
+  let reservationId: string | null = null;
+
   try {
     const smsApiId = process.env.SMS_RU_API_ID;
 
     if (!smsApiId) {
-      return errorResponse("Сервис авторизации пока не настроен.", 500);
+      return errorResponse(
+        "Сервис авторизации пока не настроен.",
+        500,
+      );
     }
 
     let body: { phone?: unknown };
 
     try {
-      body = await request.json();
+      const parsedBody = await request.json();
+
+      if (
+        !parsedBody ||
+        typeof parsedBody !== "object" ||
+        Array.isArray(parsedBody)
+      ) {
+        return errorResponse("Некорректный запрос.", 400);
+      }
+
+      body = parsedBody as { phone?: unknown };
     } catch {
       return errorResponse("Некорректный запрос.", 400);
     }
@@ -88,44 +134,73 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    const recentQuery = new URLSearchParams({
-      select: "id",
-      phone: `eq.${phone}`,
-      created_at: `gte.${cutoff}`,
-      limit: "3",
-    });
-
-    const recentResponse = await supabaseRequest(
-      `phone_auth_challenges?${recentQuery.toString()}`,
+    // 1. Атомарно резервируем попытку в PostgreSQL.
+    const reserveResponse = await supabaseRequest(
+      "rpc/reserve_phone_auth_challenge",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_phone: phone,
+        }),
+      },
     );
 
-    if (!recentResponse.ok) {
+    if (!reserveResponse.ok) {
       console.error(
-        "Supabase rate-limit query failed:",
-        await recentResponse.text(),
+        "Phone challenge reservation failed:",
+        await reserveResponse.text(),
       );
-      return errorResponse("Не удалось проверить запрос. Попробуйте позже.", 503);
+
+      return errorResponse(
+        "Не удалось проверить возможность авторизации. Попробуйте позже.",
+        503,
+      );
     }
 
-    const recentAttempts = await recentResponse.json();
+    const reserveRows = await reserveResponse.json();
+    const reservation = Array.isArray(reserveRows)
+      ? reserveRows[0]
+      : null;
 
-    if (!Array.isArray(recentAttempts)) {
-      return errorResponse("Временная ошибка сервиса.", 503);
+    if (
+      !reservation ||
+      typeof reservation.allowed !== "boolean"
+    ) {
+      console.error("Invalid reservation response from Supabase");
+
+      return errorResponse(
+        "Временная ошибка сервиса.",
+        503,
+      );
     }
 
-    if (recentAttempts.length >= 3) {
+    if (!reservation.allowed) {
       return errorResponse(
         "Слишком много попыток для этого номера. Попробуйте позже.",
         429,
       );
     }
 
-    // IP из заголовка используется только как дополнительная информация.
-    // Доверять ему для защиты от атак можно лишь при корректной настройке прокси.
+    if (typeof reservation.challenge_id !== "string") {
+      console.error("Reservation returned no challenge ID");
+
+      return errorResponse(
+        "Не удалось зарезервировать проверку.",
+        503,
+      );
+    }
+
+    reservationId = reservation.challenge_id;
+
+    // IP передаётся SMS.RU как дополнительная информация.
+    // Не используем x-forwarded-for самостоятельно для защиты.
     const forwardedFor = request.headers.get("x-forwarded-for");
     const userIp = forwardedFor?.split(",")[0]?.trim();
 
+    // 2. Запрашиваем проверочный звонок у SMS.RU.
     const smsParams = new URLSearchParams({
       api_id: smsApiId,
       phone,
@@ -136,18 +211,25 @@ export async function POST(request: NextRequest) {
       smsParams.set("ip", userIp);
     }
 
-    const smsResponse = await fetch("https://sms.ru/callcheck/add", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+    const smsResponse = await fetch(
+      "https://sms.ru/callcheck/add",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: smsParams.toString(),
+        cache: "no-store",
+        signal: AbortSignal.timeout(15000),
       },
-      body: smsParams.toString(),
-      cache: "no-store",
-      signal: AbortSignal.timeout(15000),
-    });
+    );
 
     if (!smsResponse.ok) {
       console.error("SMS.RU HTTP error:", smsResponse.status);
+
+      await markReservationFailed(reservationId);
+      reservationId = null;
+
       return errorResponse(
         "Не удалось связаться с сервисом проверки. Попробуйте позже.",
         502,
@@ -176,88 +258,63 @@ export async function POST(request: NextRequest) {
         status_text: smsResult.status_text,
       });
 
+      await markReservationFailed(reservationId);
+      reservationId = null;
+
       return errorResponse(
         "SMS.RU не смог начать проверку. Попробуйте позже.",
         502,
       );
     }
 
-    // Секрет уникален для каждой попытки. В базе хранится только его хеш.
+    // 3. Создаём секрет для привязки проверки к браузеру.
     const browserToken = randomBytes(32).toString("hex");
     const browserTokenHash = hashToken(browserToken);
 
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const expiresAt = new Date(
+      Date.now() + 5 * 60 * 1000,
+    ).toISOString();
 
-    const insertResponse = await supabaseRequest(
-      "phone_auth_challenges",
+    // 4. Обновляем резервную запись данными SMS.RU.
+    const updateResponse = await supabaseRequest(
+      `phone_auth_challenges?id=eq.${reservationId}&status=eq.pending`,
       {
-        method: "POST",
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Prefer: "return=representation",
         },
         body: JSON.stringify({
-          phone,
           provider_check_id: String(smsResult.check_id),
           browser_token_hash: browserTokenHash,
-          status: "pending",
           expires_at: expiresAt,
         }),
       },
     );
 
-    if (!insertResponse.ok) {
-      const errorText = await insertResponse.text();
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text();
+
+      console.error(
+        "Supabase challenge update failed:",
+        errorText,
+      );
+
+      await markReservationFailed(reservationId);
+      reservationId = null;
 
       if (
-        insertResponse.status === 409 ||
-        errorText.includes("phone_auth_challenges_provider_check_id_key") ||
+        updateResponse.status === 409 ||
+        errorText.includes(
+          "phone_auth_challenges_provider_check_id_key",
+        ) ||
         errorText.includes("duplicate key value")
       ) {
-        try {
-          const statusParams = new URLSearchParams({
-            api_id: smsApiId,
-            check_id: String(smsResult.check_id),
-            json: "1",
-          });
-
-          const statusResponse = await fetch(
-            `https://sms.ru/callcheck/status?${statusParams.toString()}`,
-            {
-              cache: "no-store",
-              signal: AbortSignal.timeout(10000),
-            },
-          );
-
-          const statusResult = await statusResponse.json();
-
-          console.log("SMS.RU duplicate check_id status diagnostic:", {
-            http_ok: statusResponse.ok,
-            status: statusResult.status,
-            status_code: statusResult.status_code,
-            check_status: statusResult.check_status,
-            check_status_text: statusResult.check_status_text,
-          });
-        } catch (diagnosticError) {
-          console.error(
-            "SMS.RU duplicate check_id status diagnostic failed:",
-            diagnosticError instanceof Error
-              ? diagnosticError.message
-              : "Unknown error",
-          );
-        }
-
-        console.error(
-          "SMS.RU returned a duplicate check_id. New challenge was not saved.",
-        );
-
         return errorResponse(
           "Сервис проверки временно вернул повторный идентификатор. Подождите минуту и попробуйте снова.",
           503,
         );
       }
-
-      console.error("Supabase challenge insert failed:", errorText);
 
       return errorResponse(
         "Не удалось сохранить проверку. Попробуйте позже.",
@@ -265,17 +322,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const savedRows = await insertResponse.json();
-    const savedChallenge = savedRows[0];
+    const savedRows = await updateResponse.json();
+    const savedChallenge = Array.isArray(savedRows)
+      ? savedRows[0]
+      : null;
 
     if (!savedChallenge?.id) {
-      return errorResponse("Не удалось сохранить проверку.", 503);
+      await markReservationFailed(reservationId);
+      reservationId = null;
+
+      return errorResponse(
+        "Не удалось сохранить проверку.",
+        503,
+      );
     }
+
+    // Резервирование успешно превращено в полноценную проверку.
+    reservationId = null;
 
     const response = privateJson(
       {
         challengeId: savedChallenge.id,
-        callPhone: smsResult.call_phone_pretty || smsResult.call_phone,
+        callPhone:
+          smsResult.call_phone_pretty || smsResult.call_phone,
         callPhoneHtml: smsResult.call_phone_html || null,
         expiresAt,
       },
@@ -297,6 +366,14 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Call authorization start failed:", error);
-    return errorResponse("Временная ошибка сервера. Попробуйте ещё раз.", 500);
+
+    if (reservationId) {
+      await markReservationFailed(reservationId);
+    }
+
+    return errorResponse(
+      "Временная ошибка сервера. Попробуйте ещё раз.",
+      500,
+    );
   }
 }
