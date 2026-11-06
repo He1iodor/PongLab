@@ -78,8 +78,7 @@ export async function POST(request: NextRequest) {
     const browserTokenHash = hashToken(browserToken);
 
     // Атомарно проверяем принадлежность, статус, срок действия
-    // и интервал между запросами. Одновременные запросы
-    // для одной проверки сериализуются в PostgreSQL.
+    // и интервал между запросами.
     const claimResponse = await dbRequest(
       "rpc/claim_phone_auth_status_poll",
       {
@@ -96,8 +95,8 @@ export async function POST(request: NextRequest) {
 
     if (!claimResponse.ok) {
       console.error(
-        "Supabase status poll claim failed:",
-        await claimResponse.text(),
+        "Supabase status poll claim failed. HTTP status:",
+        claimResponse.status,
       );
 
       return errorResponse(
@@ -246,8 +245,8 @@ export async function POST(request: NextRequest) {
 
       if (!expireResponse.ok) {
         console.error(
-          "Failed to expire phone challenge:",
-          await expireResponse.text(),
+          "Failed to expire phone challenge. HTTP status:",
+          expireResponse.status,
         );
       }
 
@@ -294,8 +293,8 @@ export async function POST(request: NextRequest) {
 
     if (!consumeResponse.ok) {
       console.error(
-        "Supabase challenge consumption failed:",
-        await consumeResponse.text(),
+        "Supabase challenge consumption failed. HTTP status:",
+        consumeResponse.status,
       );
 
       return errorResponse(
@@ -351,8 +350,10 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error) {
-    console.error("Call verification failed:", error);
+  } catch {
+    // Не записываем объект ошибки: он может содержать URL,
+    // идентификаторы проверки или другие внутренние данные.
+    console.error("Call verification failed");
 
     return errorResponse(
       "Временная ошибка сервера.",
