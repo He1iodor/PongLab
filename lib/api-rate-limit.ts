@@ -121,7 +121,6 @@ export async function consumeApiRateLimit({
   );
 
   if (!response.ok) {
-
     throw new Error("Не удалось проверить лимит запросов.");
   }
 
