@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
       console.error(
         "Logout session deletion failed:",
         supabaseResponse.status,
-        await supabaseResponse.text(),
       );
 
       return privateJson(
@@ -78,8 +77,8 @@ export async function POST(request: NextRequest) {
     }
 
     return response;
-  } catch (error) {
-    console.error("Logout request failed:", error);
+  } catch {
+    console.error("Logout request failed.");
     clearSessionCookie();
 
     return privateJson(
