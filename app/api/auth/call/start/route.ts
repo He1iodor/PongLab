@@ -88,14 +88,13 @@ async function markReservationFailed(
 
     if (!response.ok) {
       console.error(
-        "Failed to mark phone challenge as failed:",
-        await response.text(),
+        "Failed to mark phone challenge as failed. HTTP status:",
+        response.status,
       );
     }
-  } catch (error) {
+  } catch {
     console.error(
-      "Failed to update reserved phone challenge:",
-      error instanceof Error ? error.message : "Unknown error",
+      "Failed to update reserved phone challenge",
     );
   }
 }
@@ -156,8 +155,8 @@ export async function POST(request: NextRequest) {
 
     if (!reserveResponse.ok) {
       console.error(
-        "Phone challenge reservation failed:",
-        await reserveResponse.text(),
+        "Phone challenge reservation failed. HTTP status:",
+        reserveResponse.status,
       );
 
       return errorResponse(
@@ -303,9 +302,11 @@ export async function POST(request: NextRequest) {
     if (!updateResponse.ok) {
       const errorText = await updateResponse.text();
 
+      // Не записываем тело ответа Supabase в логи.
+      // errorText ниже используется только для проверки дубликата.
       console.error(
-        "Supabase challenge update failed:",
-        errorText,
+        "Supabase challenge update failed. HTTP status:",
+        updateResponse.status,
       );
 
       await markReservationFailed(reservationId);
@@ -372,8 +373,10 @@ export async function POST(request: NextRequest) {
     );
 
     return response;
-  } catch (error) {
-    console.error("Call authorization start failed:", error);
+  } catch {
+    // Не записываем объект ошибки: он может содержать
+    // URL, идентификаторы проверки или внутренние данные.
+    console.error("Call authorization start failed");
 
     if (reservationId) {
       await markReservationFailed(reservationId);
