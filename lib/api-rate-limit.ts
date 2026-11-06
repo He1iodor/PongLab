@@ -121,13 +121,6 @@ export async function consumeApiRateLimit({
   );
 
   if (!response.ok) {
-    const details = await response.text();
-
-    console.error(
-      "API rate limit RPC failed:",
-      response.status,
-      details,
-    );
 
     throw new Error("Не удалось проверить лимит запросов.");
   }
