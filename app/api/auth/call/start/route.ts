@@ -65,7 +65,13 @@ async function supabaseRequest(
 
 // Помечаем зарезервированную попытку как failed.
 // Ошибка этой операции не должна скрывать исходную ошибку.
-async function markReservationFailed(reservationId: string) {
+async function markReservationFailed(
+  reservationId: string | null,
+) {
+  if (reservationId === null) {
+    return;
+  }
+
   try {
     const response = await supabaseRequest(
       `phone_auth_challenges?id=eq.${reservationId}&status=eq.pending`,
