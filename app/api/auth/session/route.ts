@@ -55,10 +55,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (!dbResponse.ok) {
-      console.error(
-        "Session lookup failed:",
-        await dbResponse.text(),
-      );
+      console.error("Session lookup failed:", dbResponse.status);
 
       return privateJson(
         { error: "Не удалось проверить сессию." },
@@ -88,8 +85,8 @@ export async function GET(request: NextRequest) {
     return privateJson({
       authenticated: true,
     });
-  } catch (error) {
-    console.error("Session verification failed:", error);
+  } catch {
+    console.error("Session verification failed.");
 
     return privateJson(
       { error: "Временная ошибка сервера." },
