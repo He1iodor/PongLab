@@ -246,11 +246,11 @@ export async function POST(request: NextRequest) {
 
     const smsResult = await smsResponse.json();
 
+    // В логах оставляем только технический статус провайдера.
+    // check_id и call_phone нужны приложению, но не должны попадать в логи.
     console.log("SMS.RU callcheck/add diagnostic:", {
       status: smsResult.status,
       status_code: smsResult.status_code,
-      check_id: smsResult.check_id,
-      call_phone: smsResult.call_phone,
       status_text: smsResult.status_text,
     });
 
