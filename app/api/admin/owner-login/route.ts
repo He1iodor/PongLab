@@ -219,8 +219,11 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error) {
-    console.error("Owner login error:", error);
+  } catch {
+    // Не выводим объект исключения: он может содержать
+    // внутренние данные, URL или детали ответа Supabase.
+    console.error("Owner login failed.");
+
     return errorResponse("Не удалось выполнить вход.", 503);
   }
 }
