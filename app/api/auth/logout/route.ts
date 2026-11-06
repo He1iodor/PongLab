@@ -4,10 +4,16 @@ import { createHash } from "node:crypto";
 
 export const runtime = "nodejs";
 
+function privateJson(body: unknown, init?: ResponseInit): NextResponse {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get("ponglab_session")?.value;
 
-  const response = NextResponse.json({ success: true });
+  const response = privateJson({ success: true });
 
   // Очищаем cookie в браузере
   const clearSessionCookie = () => {
@@ -30,9 +36,9 @@ export async function POST(request: NextRequest) {
 
   if (!supabaseUrl || !supabaseKey) {
     clearSessionCookie();
-    return NextResponse.json(
+    return privateJson(
       { error: "Не настроены переменные Supabase." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -51,7 +57,7 @@ export async function POST(request: NextRequest) {
           Prefer: "return=minimal",
         },
         cache: "no-store",
-      }
+      },
     );
 
     // Даже если удаление на сервере не удалось,
@@ -62,12 +68,12 @@ export async function POST(request: NextRequest) {
       console.error(
         "Logout session deletion failed:",
         supabaseResponse.status,
-        await supabaseResponse.text()
+        await supabaseResponse.text(),
       );
 
-      return NextResponse.json(
+      return privateJson(
         { error: "Не удалось завершить серверную сессию." },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
@@ -76,9 +82,9 @@ export async function POST(request: NextRequest) {
     console.error("Logout request failed:", error);
     clearSessionCookie();
 
-    return NextResponse.json(
+    return privateJson(
       { error: "Ошибка при завершении сессии." },
-      { status: 503 }
+      { status: 503 },
     );
   }
 }
