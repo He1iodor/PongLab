@@ -4,12 +4,18 @@ import { createHash, randomBytes } from "node:crypto";
 
 export const runtime = "nodejs";
 
+function privateJson(body: unknown, init?: ResponseInit): NextResponse {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
 const jsonHeaders = {
   "Content-Type": "application/json",
 };
 
 function errorResponse(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+  return privateJson({ error: message }, { status });
 }
 
 function normalizePhone(value: unknown): string | null {
@@ -149,13 +155,14 @@ export async function POST(request: NextRequest) {
     }
 
     const smsResult = await smsResponse.json();
+
     console.log("SMS.RU callcheck/add diagnostic:", {
-  status: smsResult.status,
-  status_code: smsResult.status_code,
-  check_id: smsResult.check_id,
-  call_phone: smsResult.call_phone,
-  status_text: smsResult.status_text,
-});
+      status: smsResult.status,
+      status_code: smsResult.status_code,
+      check_id: smsResult.check_id,
+      call_phone: smsResult.call_phone,
+      status_text: smsResult.status_text,
+    });
 
     if (
       smsResult.status !== "OK" ||
@@ -199,70 +206,73 @@ export async function POST(request: NextRequest) {
       },
     );
 
-   if (!insertResponse.ok) {
-  const errorText = await insertResponse.text();
+    if (!insertResponse.ok) {
+      const errorText = await insertResponse.text();
 
- if (
-  insertResponse.status === 409 ||
-  errorText.includes("phone_auth_challenges_provider_check_id_key") ||
-  errorText.includes("duplicate key value")
-) {
-  try {
-    const statusParams = new URLSearchParams({
-      api_id: smsApiId,
-      check_id: String(smsResult.check_id),
-      json: "1",
-    });
+      if (
+        insertResponse.status === 409 ||
+        errorText.includes("phone_auth_challenges_provider_check_id_key") ||
+        errorText.includes("duplicate key value")
+      ) {
+        try {
+          const statusParams = new URLSearchParams({
+            api_id: smsApiId,
+            check_id: String(smsResult.check_id),
+            json: "1",
+          });
 
-    const statusResponse = await fetch(
-      `https://sms.ru/callcheck/status?${statusParams.toString()}`,
-      {
-        cache: "no-store",
-        signal: AbortSignal.timeout(10000),
-      },
-    );
+          const statusResponse = await fetch(
+            `https://sms.ru/callcheck/status?${statusParams.toString()}`,
+            {
+              cache: "no-store",
+              signal: AbortSignal.timeout(10000),
+            },
+          );
 
-    const statusResult = await statusResponse.json();
+          const statusResult = await statusResponse.json();
 
-    console.log("SMS.RU duplicate check_id status diagnostic:", {
-      http_ok: statusResponse.ok,
-      status: statusResult.status,
-      status_code: statusResult.status_code,
-      check_status: statusResult.check_status,
-      check_status_text: statusResult.check_status_text,
-    });
-  } catch (diagnosticError) {
-    console.error(
-      "SMS.RU duplicate check_id status diagnostic failed:",
-      diagnosticError instanceof Error
-        ? diagnosticError.message
-        : "Unknown error",
-    );
-  }
+          console.log("SMS.RU duplicate check_id status diagnostic:", {
+            http_ok: statusResponse.ok,
+            status: statusResult.status,
+            status_code: statusResult.status_code,
+            check_status: statusResult.check_status,
+            check_status_text: statusResult.check_status_text,
+          });
+        } catch (diagnosticError) {
+          console.error(
+            "SMS.RU duplicate check_id status diagnostic failed:",
+            diagnosticError instanceof Error
+              ? diagnosticError.message
+              : "Unknown error",
+          );
+        }
 
-  console.error(
-    "SMS.RU returned a duplicate check_id. New challenge was not saved.",
-  );
-    return errorResponse(
-      "Сервис проверки временно вернул повторный идентификатор. Подождите минуту и попробуйте снова.",
-      503,
-    );
-  }
+        console.error(
+          "SMS.RU returned a duplicate check_id. New challenge was not saved.",
+        );
 
-  console.error("Supabase challenge insert failed:", errorText);
+        return errorResponse(
+          "Сервис проверки временно вернул повторный идентификатор. Подождите минуту и попробуйте снова.",
+          503,
+        );
+      }
 
-  return errorResponse(
-    "Не удалось сохранить проверку. Попробуйте позже.",
-    503,
-  );
-}
-      const savedRows = await insertResponse.json();
+      console.error("Supabase challenge insert failed:", errorText);
+
+      return errorResponse(
+        "Не удалось сохранить проверку. Попробуйте позже.",
+        503,
+      );
+    }
+
+    const savedRows = await insertResponse.json();
     const savedChallenge = savedRows[0];
 
     if (!savedChallenge?.id) {
       return errorResponse("Не удалось сохранить проверку.", 503);
     }
-    const response = NextResponse.json(
+
+    const response = privateJson(
       {
         challengeId: savedChallenge.id,
         callPhone: smsResult.call_phone_pretty || smsResult.call_phone,
