@@ -4,6 +4,12 @@ import { createHash } from "node:crypto";
 
 export const runtime = "nodejs";
 
+function privateJson(body: unknown, init?: ResponseInit): NextResponse {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -32,7 +38,7 @@ export async function GET(request: NextRequest) {
       request.cookies.get("ponglab_session")?.value;
 
     if (!sessionToken || !/^[0-9a-f]{64}$/i.test(sessionToken)) {
-      return NextResponse.json({ authenticated: false });
+      return privateJson({ authenticated: false });
     }
 
     const tokenHash = hashToken(sessionToken);
@@ -54,7 +60,7 @@ export async function GET(request: NextRequest) {
         await dbResponse.text(),
       );
 
-      return NextResponse.json(
+      return privateJson(
         { error: "Не удалось проверить сессию." },
         { status: 503 },
       );
@@ -64,7 +70,7 @@ export async function GET(request: NextRequest) {
     const session = rows[0];
 
     if (!session?.user_id) {
-      const response = NextResponse.json({
+      const response = privateJson({
         authenticated: false,
       });
 
@@ -79,13 +85,13 @@ export async function GET(request: NextRequest) {
       return response;
     }
 
-    return NextResponse.json({
+    return privateJson({
       authenticated: true,
     });
   } catch (error) {
     console.error("Session verification failed:", error);
 
-    return NextResponse.json(
+    return privateJson(
       { error: "Временная ошибка сервера." },
       { status: 500 },
     );
