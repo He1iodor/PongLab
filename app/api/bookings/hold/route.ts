@@ -1,6 +1,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { GET as getAvailability } from "@/app/api/availability/route";
+import {
+  consumeApiRateLimit,
+  createInternalAvailabilityToken,
+} from "@/lib/api-rate-limit";
 import { createHash } from "node:crypto";
 
 export const runtime = "nodejs";
@@ -348,6 +352,29 @@ export async function POST(request: NextRequest) {
 
     const userId = sessions[0].user_id as string;
 
+    // Ограничиваем создание резервов по подтверждённому ID пользователя.
+    const rateLimit = await consumeApiRateLimit({
+      supabaseUrl: config.url,
+      serviceKey: config.key,
+      routeKey: "booking_hold",
+      subject: userId,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Слишком много попыток бронирования. Подождите немного и повторите попытку." },
+        {
+          status: 429,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+            "X-RateLimit-Limit": "5",
+            "X-RateLimit-Remaining": "0",
+          },
+        },
+      );
+    }
+
     // Освобождаем истёкшие удержания.
     await expireOldHolds(
       config.url,
@@ -434,9 +461,15 @@ export async function POST(request: NextRequest) {
         availabilityUrl.searchParams.set("date", date);
         availabilityUrl.searchParams.set("duration_minutes", "60");
 
-        // Вызов внутреннего обработчика, чтобы не зависеть от домена preview.
+        // Внутренний вызов подписан серверным токеном и не расходует
+        // публичный лимит запросов календаря.
         const availabilityResponse = await getAvailability(
-          new NextRequest(availabilityUrl),
+          new NextRequest(availabilityUrl, {
+            headers: {
+              "x-ponglab-internal-availability":
+                createInternalAvailabilityToken(config.key),
+            },
+          }),
         );
 
         const availabilityData = await availabilityResponse
