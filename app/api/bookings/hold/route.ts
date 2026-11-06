@@ -88,9 +88,8 @@ async function readRows(
 
   if (!response.ok) {
     console.error(
-      `Booking hold query failed (${table}):`,
+      `Booking hold query failed (${table}). HTTP status:`,
       response.status,
-      await response.text(),
     );
 
     throw new Error("Не удалось проверить данные бронирования.");
@@ -123,9 +122,8 @@ async function expireOldHolds(
 
   if (!groupedResponse.ok) {
     console.error(
-      "Expired grouped payment cleanup failed:",
+      "Expired grouped payment cleanup failed. HTTP status:",
       groupedResponse.status,
-      await groupedResponse.text(),
     );
 
     throw new Error(
@@ -155,9 +153,8 @@ async function expireOldHolds(
 
   if (!legacyResponse.ok) {
     console.error(
-      "Expired legacy booking cleanup failed:",
+      "Expired legacy booking cleanup failed. HTTP status:",
       legacyResponse.status,
-      await legacyResponse.text(),
     );
 
     throw new Error(
@@ -238,12 +235,6 @@ function parseRequestedGroups(
 }
 
 export async function POST(request: NextRequest) {
-  console.log("[PONGLAB_HOLD] POST reached", {
-    path: new URL(request.url).pathname,
-    origin: request.headers.get("origin"),
-    environment: process.env.VERCEL_ENV ?? "local",
-  });
-
   // Не принимаем запросы с посторонних сайтов.
   const origin = request.headers.get("origin");
 
@@ -498,13 +489,7 @@ export async function POST(request: NextRequest) {
         );
 
         if (!slot) {
-          console.error("Booking hold hourly segment mismatch:", {
-            studioId,
-            date,
-            table_id: group.table_id,
-            segment_start_at: segmentStart.toISOString(),
-            group_duration_minutes: group.duration_minutes,
-          });
+          console.error("Booking hold hourly segment is no longer available.");
 
           return errorResponse(
             "Один из выбранных часовых слотов уже недоступен или тариф изменился. Обновите календарь.",
@@ -562,9 +547,8 @@ export async function POST(request: NextRequest) {
       const details = await rpcResponse.text();
 
       console.error(
-        "Atomic payment group creation failed:",
+        "Atomic payment group creation failed. HTTP status:",
         rpcResponse.status,
-        details,
       );
 
       if (
@@ -595,8 +579,17 @@ export async function POST(request: NextRequest) {
       Number(createdGroup.total_price_rub) <= 0
     ) {
       console.error(
-        "Atomic payment group creation returned an unexpected response:",
-        createdGroup,
+        "Atomic payment group creation returned an unexpected response.",
+        {
+          hasPaymentGroupId: Boolean(createdGroup?.payment_group_id),
+          bookingsIsArray: Array.isArray(createdGroup?.bookings),
+          bookingCount: Array.isArray(createdGroup?.bookings)
+            ? createdGroup.bookings.length
+            : null,
+          hasPositiveTotal:
+            Number.isFinite(Number(createdGroup?.total_price_rub)) &&
+            Number(createdGroup.total_price_rub) > 0,
+        },
       );
 
       return errorResponse(
@@ -639,13 +632,11 @@ export async function POST(request: NextRequest) {
         headers: { "Cache-Control": "no-store" },
       },
     );
-  } catch (error) {
-    console.error("Booking hold POST error:", error);
+  } catch {
+    console.error("Booking hold POST failed.");
 
     return errorResponse(
-      error instanceof Error
-        ? error.message
-        : "Не удалось создать временную бронь.",
+      "Не удалось создать временную бронь. Попробуйте позже.",
       503,
     );
   }
