@@ -1,5 +1,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
+import {
+  consumeApiRateLimit,
+  getRateLimitClientIp,
+  isInternalAvailabilityRequest,
+} from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,6 +115,43 @@ export async function GET(request: NextRequest) {
   if (!validDate(date)) return errorResponse("Укажите дату в формате ГГГГ-ММ-ДД.", 400);
 
   try {
+    // Внутренние проверки из booking hold не расходуют публичный лимит.
+    const isInternal = isInternalAvailabilityRequest(
+      request,
+      config.key,
+    );
+
+    if (!isInternal) {
+      const clientIp = getRateLimitClientIp(request);
+
+      // В production отсутствие доверенного IP не должно отключать защиту.
+      if (!clientIp) {
+        return errorResponse("Не удалось определить источник запроса.", 503);
+      }
+
+      const rateLimit = await consumeApiRateLimit({
+        supabaseUrl: config.url,
+        serviceKey: config.key,
+        routeKey: "availability",
+        subject: clientIp,
+      });
+
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          { error: "Слишком много запросов. Подождите немного и повторите попытку." },
+          {
+            status: 429,
+            headers: {
+              "Cache-Control": "no-store",
+              "Retry-After": String(rateLimit.retryAfterSeconds),
+              "X-RateLimit-Limit": "30",
+              "X-RateLimit-Remaining": "0",
+            },
+          },
+        );
+      }
+    }
+
     // 1. Проверяем клуб и его часовой пояс.
     const studios = await fetchRows(config.url, config.key, "studios", {
       select: "id,timezone",
