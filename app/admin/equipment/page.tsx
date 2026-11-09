@@ -11,7 +11,11 @@ import {
   WifiOff,
 } from "lucide-react";
 
-type Studio = { id: string; name: string; is_active: boolean };
+type Studio = {
+  id: string;
+  name: string;
+  is_active: boolean;
+};
 
 type Device = {
   id: string;
@@ -37,6 +41,8 @@ const cardClass =
 
 const inputClass =
   "mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-3 py-3 text-sm text-white outline-none focus:border-violet-400 disabled:opacity-50";
+
+const MIN_OWNER_UNLOCK_VERSION = [1, 4, 1];
 
 function formatDate(value: string | null) {
   if (!value) return "Ещё не выходило на связь";
@@ -70,6 +76,35 @@ function isOnline(value: string | null) {
   return Number.isFinite(time) && Date.now() - time <= 90_000;
 }
 
+// Проверяем, поддерживает ли прошивка команды владельца.
+// Минимальная версия — 1.4.1.
+// Более новые версии также допускаются.
+function supportsOwnerUnlock(version: string | null) {
+  if (!version) return false;
+
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
+
+  if (!match) return false;
+
+  const current = [
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3]),
+  ];
+
+  for (let i = 0; i < 3; i++) {
+    if (current[i] > MIN_OWNER_UNLOCK_VERSION[i]) {
+      return true;
+    }
+
+    if (current[i] < MIN_OWNER_UNLOCK_VERSION[i]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export default function AdminEquipmentPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
@@ -79,7 +114,7 @@ export default function AdminEquipmentPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [testBusyId, setTestBusyId] = useState<string | null>(null);
+  const [unlockBusyId, setUnlockBusyId] = useState<string | null>(null);
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -214,23 +249,30 @@ export default function AdminEquipmentPage() {
     }
   }
 
-  async function sendTestUnlock(device: Device) {
+  async function sendOwnerUnlock(device: Device) {
+    const online = isOnline(device.last_seen_at);
+    const compatible = supportsOwnerUnlock(device.firmware_version);
+
     if (
       device.status !== "active" ||
-      !isOnline(device.last_seen_at) ||
-      testBusyId ||
+      !online ||
+      !compatible ||
+      unlockBusyId ||
       busyId
     ) {
       return;
     }
 
     const confirmed = window.confirm(
-      "Отправить контроллеру тестовую команду unlock? Сейчас прошивка работает в TEST MODE: физическое реле НЕ включится и замок не откроется. Проверяется только передача команды."
+      `ВНИМАНИЕ: отправить контроллеру «${device.name}» команду физического открытия двери?\n\n` +
+      "Команда владельца не требует активной брони или оплаты. " +
+      "Если контроллер получит команду, реле снимет питание замка на 5 секунд.\n\n" +
+      "Убедись, что открытие сейчас безопасно."
     );
 
     if (!confirmed) return;
 
-    setTestBusyId(device.id);
+    setUnlockBusyId(device.id);
     setError("");
     setMessage("");
 
@@ -251,12 +293,14 @@ export default function AdminEquipmentPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.error || "Не удалось отправить тестовую команду."
+          data.error || "Не удалось отправить команду открытия."
         );
       }
 
       setMessage(
-        `Тестовая команда создана. ID: ${data.command_id}. Контроллер должен получить её в течение 15 секунд. Физическое реле не включается — прошивка TEST MODE.`
+        `Команда владельца создана. ID: ${data.command_id}. ` +
+        "Контроллер должен получить её в течение 15 секунд. " +
+        "Фактическое открытие проверяй по состоянию геркона."
       );
 
       await load({ silent: true });
@@ -264,10 +308,10 @@ export default function AdminEquipmentPage() {
       setError(
         e instanceof Error
           ? e.message
-          : "Ошибка отправки тестовой команды."
+          : "Ошибка отправки команды открытия."
       );
     } finally {
-      setTestBusyId(null);
+      setUnlockBusyId(null);
     }
   }
 
@@ -357,9 +401,10 @@ export default function AdminEquipmentPage() {
 
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
               Регистрация контроллеров ESP32, контроль heartbeat
-              и состояния датчиков двери. Доступна тестовая отправка
-              команды unlock; физическое управление замком отключено
-              в прошивке TEST MODE.
+              и состояния датчиков двери. Владелец может отправить
+              команду ручного открытия активному контроллеру.
+              Клиентское открытие выполняется отдельно — по правилам
+              оплаченной брони.
             </p>
           </div>
 
@@ -522,6 +567,14 @@ export default function AdminEquipmentPage() {
                 device.status === "active" &&
                 isOnline(device.last_seen_at);
 
+              const compatible =
+                supportsOwnerUnlock(device.firmware_version);
+
+              const canOwnerUnlock =
+                device.status === "active" &&
+                online &&
+                compatible;
+
               const doorKnown =
                 online &&
                 device.status === "active" &&
@@ -538,6 +591,17 @@ export default function AdminEquipmentPage() {
                 : doorClosed
                   ? "border-emerald-300/30 bg-emerald-400/15 text-emerald-200"
                   : "border-red-300/30 bg-red-400/15 text-red-200";
+
+              let unlockDisabledReason = "";
+
+              if (device.status !== "active") {
+                unlockDisabledReason = "Контроллер отключён";
+              } else if (!online) {
+                unlockDisabledReason = "Контроллер не на связи";
+              } else if (!compatible) {
+                unlockDisabledReason =
+                  "Для ручного открытия нужна прошивка 1.4.1 или новее";
+              }
 
               return (
                 <article
@@ -641,6 +705,12 @@ export default function AdminEquipmentPage() {
                       <p className="mt-1 text-sm">
                         {device.firmware_version || "Не передана"}
                       </p>
+
+                      {!compatible && (
+                        <p className="mt-1 text-xs text-amber-200/80">
+                          Требуется версия 1.4.1 или новее для ручного открытия
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -648,24 +718,33 @@ export default function AdminEquipmentPage() {
                     <div className="mt-5 flex flex-wrap gap-3">
                       <button
                         type="button"
-                        onClick={() => void sendTestUnlock(device)}
-                        disabled={!online || testBusyId !== null || busyId !== null}
-                        className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
-                        title={
-                          !online
-                            ? "Контроллер должен быть на связи"
-                            : "Отправить тестовую команду unlock"
+                        onClick={() => void sendOwnerUnlock(device)}
+                        disabled={
+                          !canOwnerUnlock ||
+                          unlockBusyId !== null ||
+                          busyId !== null
                         }
+                        title={
+                          canOwnerUnlock
+                            ? "Физически открыть дверь командой владельца"
+                            : unlockDisabledReason
+                        }
+                        className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        {testBusyId === device.id
+                        <DoorOpen size={17} />
+
+                        {unlockBusyId === device.id
                           ? "Отправляем команду…"
-                          : "Тест команды unlock"}
+                          : "Открыть дверь"}
                       </button>
 
                       <button
                         type="button"
                         onClick={() => void disableDevice(device)}
-                        disabled={busyId !== null || testBusyId !== null}
+                        disabled={
+                          busyId !== null ||
+                          unlockBusyId !== null
+                        }
                         className="rounded-xl border border-red-300/20 px-4 py-2.5 text-sm font-medium text-red-200 transition hover:bg-red-300/10 disabled:opacity-50"
                       >
                         {busyId === device.id
@@ -673,6 +752,12 @@ export default function AdminEquipmentPage() {
                           : "Отключить устройство"}
                       </button>
                     </div>
+                  )}
+
+                  {device.status === "active" && !canOwnerUnlock && (
+                    <p className="mt-3 text-xs leading-5 text-amber-200/70">
+                      Ручное открытие недоступно: {unlockDisabledReason}.
+                    </p>
                   )}
                 </article>
               );
@@ -683,8 +768,8 @@ export default function AdminEquipmentPage() {
           Автоматическое обновление каждые 5 секунд. Контроллер
           считается «на связи», если heartbeat получен за последние
           90 секунд. Если связь потеряна, состояние двери считается
-          неизвестным. Индикация датчика не является подтверждением
-          физической безопасности замка.
+          неизвестным. Индикация геркона показывает положение двери,
+          но сама по себе не подтверждает исправность замка.
         </p>
       </div>
     </main>
