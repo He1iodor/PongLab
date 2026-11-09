@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -18,6 +17,9 @@ export type AccountBooking = {
   effective_status: string;
   payment_status: string;
   price_rub: number;
+  payment_init_started_at: string | null;
+  payment_id: string | null;
+  payment_group_id: string | null;
   hold_expires_at: string | null;
   created_at: string;
   table_id: string;
@@ -58,14 +60,36 @@ function formatDateTime(value: string, timezone: string) {
   }
 }
 
+function isPaymentInProgress(booking: AccountBooking) {
+  return (
+    booking.status === "pending_payment" &&
+    Boolean(
+      booking.payment_init_started_at || booking.payment_id,
+    )
+  );
+}
+
 function getStatus(booking: AccountBooking, now: number) {
+  const paymentInProgress = isPaymentInProgress(booking);
+
   const holdExpired =
-    booking.effective_status === "expired" ||
+    !paymentInProgress &&
     (
-      booking.status === "pending_payment" &&
-      Boolean(booking.hold_expires_at) &&
-      Date.parse(booking.hold_expires_at as string) <= now
+      booking.effective_status === "expired" ||
+      (
+        booking.status === "pending_payment" &&
+        Boolean(booking.hold_expires_at) &&
+        Date.parse(booking.hold_expires_at as string) <= now
+      )
     );
+
+  if (paymentInProgress) {
+    return {
+      label: "Оплата обрабатывается",
+      className:
+        "border-amber-300/25 bg-amber-300/10 text-amber-100",
+    };
+  }
 
   if (holdExpired) {
     return {
@@ -129,6 +153,7 @@ function getStatus(booking: AccountBooking, now: number) {
     className: "border-white/10 bg-white/5 text-white/65",
   };
 }
+
 function formatDeadline(
   value: string | null | undefined,
   timeZone: string | null | undefined,
@@ -162,6 +187,7 @@ function formatDeadline(
     }).format(date);
   }
 }
+
 export default function MyBookingsPanel({
   onCreateBooking,
 }: MyBookingsPanelProps) {
@@ -317,11 +343,20 @@ export default function MyBookingsPanel({
         <div className="space-y-3">
           {sortedBookings.map((booking) => {
             const status = getStatus(booking, now);
+            const paymentInProgress =
+              isPaymentInProgress(booking);
 
             const isTemporary =
+              !paymentInProgress &&
               booking.status === "pending_payment" &&
               Boolean(booking.hold_expires_at) &&
               Date.parse(booking.hold_expires_at as string) > now;
+
+            const paymentReturnUrl = booking.payment_group_id
+              ? `/payment/return?payment_group_id=${encodeURIComponent(
+                  booking.payment_group_id,
+                )}`
+              : null;
 
             return (
               <article
@@ -412,6 +447,29 @@ export default function MyBookingsPanel({
                     {money(booking.price_rub)}
                   </span>
                 </div>
+
+                {paymentInProgress && (
+                  <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
+                    <p className="text-xs leading-5 text-amber-100/85">
+                      Платёж уже инициирован. Дождитесь ответа
+                      платёжного сервиса. Не создавайте повторную
+                      бронь и не оплачивайте её повторно, пока
+                      текущий платёж проверяется.
+                    </p>
+
+                    {paymentReturnUrl && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.location.assign(paymentReturnUrl)
+                        }
+                        className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-amber-200/20 bg-amber-200/10 px-4 text-xs font-semibold text-amber-50 transition hover:bg-amber-200/15"
+                      >
+                        Проверить статус оплаты
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {isTemporary && booking.hold_expires_at && (
                   <p className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.06] p-3 text-xs leading-5 text-amber-100/80">
