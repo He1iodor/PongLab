@@ -2,9 +2,19 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Clock3, RefreshCw, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+  XCircle,
+} from "lucide-react";
 
-type PaymentState = "loading" | "pending" | "succeeded" | "cancelled" | "error";
+type PaymentState =
+  | "loading"
+  | "pending"
+  | "succeeded"
+  | "cancelled"
+  | "error";
 
 type PaymentStatusResponse = {
   state?: "pending" | "succeeded" | "cancelled";
@@ -21,87 +31,175 @@ function money(value: number) {
   }).format(value);
 }
 
-export default function PaymentReturnClient({ paymentGroupId }: { paymentGroupId: string }) {
+export default function PaymentReturnClient({
+  paymentGroupId,
+}: {
+  paymentGroupId: string;
+}) {
   const [state, setState] = useState<PaymentState>("loading");
   const [amount, setAmount] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
 
-  const checkPayment = useCallback(async (manual = false) => {
-    if (!paymentGroupId) {
-      setState("error");
-      setError("Не найден идентификатор бронирования.");
-      return;
-    }
+  // Убираем технические параметры Vercel из адресной строки.
+  // Bypass-cookie к этому моменту уже устанавливается Vercel.
+  // Идентификатор бронирования оставляем.
+  useEffect(() => {
+    const url = new URL(window.location.href);
 
-    if (manual) setChecking(true);
+    const hadBypassParameters =
+      url.searchParams.has("x-vercel-protection-bypass") ||
+      url.searchParams.has("x-vercel-set-bypass-cookie");
 
-    try {
-      const params = new URLSearchParams({ payment_group_id: paymentGroupId });
-      const response = await fetch(`/api/payments/status?${params.toString()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const result = (await response.json().catch(() => ({}))) as PaymentStatusResponse;
+    if (!hadBypassParameters) return;
 
-      if (!response.ok) {
-        throw new Error(result.error || "Не удалось проверить оплату.");
+    url.searchParams.delete("x-vercel-protection-bypass");
+    url.searchParams.delete("x-vercel-set-bypass-cookie");
+
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, []);
+
+  const checkPayment = useCallback(
+    async (manual = false) => {
+      if (!paymentGroupId) {
+        setState("error");
+        setError("Не найден идентификатор бронирования.");
+        return;
       }
 
-      setAmount(typeof result.amount_rub === "number" ? result.amount_rub : null);
-      setError("");
-      setState(result.state ?? "pending");
-    } catch (caught) {
-      setState("error");
-      setError(caught instanceof Error ? caught.message : "Ошибка проверки оплаты.");
-    } finally {
-      if (manual) setChecking(false);
-    }
-  }, [paymentGroupId]);
+      if (manual) setChecking(true);
 
+      try {
+        const params = new URLSearchParams({
+          payment_group_id: paymentGroupId,
+        });
+
+        const response = await fetch(
+          `/api/payments/status?${params.toString()}`,
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          },
+        );
+
+        const result = (
+          await response.json().catch(() => ({}))
+        ) as PaymentStatusResponse;
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Не удалось проверить оплату.",
+          );
+        }
+
+        setAmount(
+          typeof result.amount_rub === "number"
+            ? result.amount_rub
+            : null,
+        );
+
+        setError("");
+        setState(result.state ?? "pending");
+      } catch (caught) {
+        setState("error");
+
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Ошибка проверки оплаты.",
+        );
+      } finally {
+        if (manual) setChecking(false);
+      }
+    },
+    [paymentGroupId],
+  );
+
+  // Автоматически проверяем статус платежа.
   useEffect(() => {
     let cancelled = false;
     let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
       if (cancelled || attempts >= 20) return;
+
       attempts += 1;
 
       try {
-        const params = new URLSearchParams({ payment_group_id: paymentGroupId });
-        const response = await fetch(`/api/payments/status?${params.toString()}`, {
-          cache: "no-store",
-          credentials: "same-origin",
+        const params = new URLSearchParams({
+          payment_group_id: paymentGroupId,
         });
-        const result = (await response.json().catch(() => ({}))) as PaymentStatusResponse;
+
+        const response = await fetch(
+          `/api/payments/status?${params.toString()}`,
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          },
+        );
+
+        const result = (
+          await response.json().catch(() => ({}))
+        ) as PaymentStatusResponse;
 
         if (!response.ok) {
           if (!cancelled) {
             setState("error");
-            setError(result.error || "Не удалось проверить оплату.");
+            setError(
+              result.error || "Не удалось проверить оплату.",
+            );
           }
+
           return;
         }
 
         if (cancelled) return;
-        setAmount(typeof result.amount_rub === "number" ? result.amount_rub : null);
-        setError("");
-        setState(result.state ?? "pending");
 
-        if (result.state === "pending" && attempts < 20) {
-          window.setTimeout(poll, 3000);
+        setAmount(
+          typeof result.amount_rub === "number"
+            ? result.amount_rub
+            : null,
+        );
+
+        setError("");
+
+        const nextState = result.state ?? "pending";
+        setState(nextState);
+
+        if (
+          nextState === "pending" &&
+          attempts < 20
+        ) {
+          timer = setTimeout(poll, 3000);
         }
       } catch {
         if (!cancelled) {
           setState("error");
-          setError("Не удалось связаться с сервером. Проверьте статус повторно.");
+          setError(
+            "Не удалось связаться с сервером. Проверьте статус повторно.",
+          );
         }
       }
     };
 
-    void poll();
+    if (paymentGroupId) {
+      void poll();
+    } else {
+      setState("error");
+      setError("Не найден идентификатор бронирования.");
+    }
+
     return () => {
       cancelled = true;
+
+      if (timer) {
+        clearTimeout(timer);
+      }
     };
   }, [paymentGroupId]);
 
@@ -110,35 +208,81 @@ export default function PaymentReturnClient({ paymentGroupId }: { paymentGroupId
       <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#111427] p-6 shadow-2xl sm:p-8">
         {state === "succeeded" ? (
           <>
-            <CheckCircle2 size={44} className="text-emerald-300" />
-            <h1 className="mt-5 text-2xl font-semibold">Оплата прошла успешно</h1>
+            <CheckCircle2
+              size={44}
+              className="text-emerald-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Оплата прошла успешно
+            </h1>
+
             <p className="mt-3 text-sm leading-6 text-white/65">
-              Бронирование подтверждено. Информация о нём появится в личном кабинете.
+              Бронирование подтверждено. Информация о нём
+              появится в личном кабинете.
             </p>
-            {amount !== null && <p className="mt-4 text-lg font-semibold">{money(amount)}</p>}
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
           </>
         ) : state === "cancelled" ? (
           <>
-            <XCircle size={44} className="text-rose-300" />
-            <h1 className="mt-5 text-2xl font-semibold">Платёж не завершён</h1>
+            <XCircle
+              size={44}
+              className="text-rose-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Платёж не завершён
+            </h1>
+
             <p className="mt-3 text-sm leading-6 text-white/65">
-              YooKassa сообщила об отмене платежа. Проверьте бронирование в личном кабинете и при необходимости выберите новое время.
+              YooKassa сообщила об отмене платежа. Проверьте
+              бронирование в личном кабинете и при необходимости
+              выберите новое время.
             </p>
           </>
         ) : state === "pending" || state === "loading" ? (
           <>
-            <Clock3 size={44} className="text-[#A77BFF]" />
-            <h1 className="mt-5 text-2xl font-semibold">Проверяем оплату</h1>
+            <Clock3
+              size={44}
+              className="text-[#A77BFF]"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Проверяем оплату
+            </h1>
+
             <p className="mt-3 text-sm leading-6 text-white/65">
-              Платёж ещё обрабатывается или уведомление от банка не поступило. Не оплачивайте бронирование повторно. Страница автоматически проверит статус ещё несколько раз.
+              Платёж ещё обрабатывается или уведомление от банка
+              не поступило. Не оплачивайте бронирование повторно.
+              Страница автоматически проверит статус ещё несколько
+              раз.
             </p>
-            {amount !== null && <p className="mt-4 text-lg font-semibold">{money(amount)}</p>}
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
           </>
         ) : (
           <>
-            <XCircle size={44} className="text-amber-300" />
-            <h1 className="mt-5 text-2xl font-semibold">Не удалось проверить оплату</h1>
-            <p className="mt-3 text-sm leading-6 text-white/65">{error}</p>
+            <XCircle
+              size={44}
+              className="text-amber-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Не удалось проверить оплату
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              {error}
+            </p>
           </>
         )}
 
@@ -149,7 +293,10 @@ export default function PaymentReturnClient({ paymentGroupId }: { paymentGroupId
             disabled={checking}
             className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 text-sm font-medium transition hover:bg-white/[0.08] disabled:opacity-50"
           >
-            <RefreshCw size={16} className={checking ? "animate-spin" : ""} />
+            <RefreshCw
+              size={16}
+              className={checking ? "animate-spin" : ""}
+            />
             Проверить ещё раз
           </button>
         )}
