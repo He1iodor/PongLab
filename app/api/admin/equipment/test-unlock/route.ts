@@ -8,33 +8,49 @@ export const dynamic = "force-dynamic";
 function errorResponse(message: string, status: number) {
   return NextResponse.json(
     { error: message },
-    { status, headers: { "Cache-Control": "no-store" } },
+    {
+      status,
+      headers: { "Cache-Control": "no-store" },
+    },
   );
 }
 
 function getConfig() {
   const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
   const key = process.env.SUPABASE_SECRET_KEY;
+
   return url && key ? { url, key } : null;
 }
 
 function isUuid(value: unknown): value is string {
-  return typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
 }
 
 export async function POST(request: NextRequest) {
+  // Защита от запросов с другого origin.
   const origin = request.headers.get("origin");
 
   if (!origin || origin !== new URL(request.url).origin) {
     return errorResponse("Недопустимый запрос.", 403);
   }
 
+  // Полная проверка сессии и роли владельца.
   const owner = await requireOwner(request);
-  if (!owner.ok) return owner.response;
+
+  if (!owner.ok) {
+    return owner.response;
+  }
 
   const config = getConfig();
-  if (!config) return errorResponse("Сервис временно недоступен.", 503);
+
+  if (!config) {
+    return errorResponse("Сервис временно недоступен.", 503);
+  }
 
   let body: unknown;
 
@@ -61,12 +77,12 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    // Проверяем, что контроллер существует, активен и является дверным.
+    // 1. Проверяем активный дверной контроллер.
     const deviceUrl = new URL(
       `${config.url}/rest/v1/access_devices`,
     );
 
-    deviceUrl.searchParams.set("select", "id");
+    deviceUrl.searchParams.set("select", "id,studio_id");
     deviceUrl.searchParams.set("id", `eq.${deviceId}`);
     deviceUrl.searchParams.set("device_type", "eq.door");
     deviceUrl.searchParams.set("status", "eq.active");
@@ -79,73 +95,81 @@ export async function POST(request: NextRequest) {
 
     if (!deviceResponse.ok) {
       console.error(
-        "Test unlock device lookup failed:",
+        "Owner unlock: device lookup failed:",
         deviceResponse.status,
-        await deviceResponse.text(),
       );
 
       return errorResponse("Не удалось проверить контроллер.", 503);
     }
 
-    const devices = await deviceResponse.json();
-    const device = Array.isArray(devices) ? devices[0] : null;
+    const devices: unknown = await deviceResponse.json();
 
-    if (!device) {
+    const device =
+      Array.isArray(devices) ? devices[0] : null;
+
+    if (
+      !device ||
+      !isUuid(device.id) ||
+      !isUuid(device.studio_id)
+    ) {
       return errorResponse(
         "Активный дверной контроллер не найден.",
         404,
       );
     }
 
-    // Берём существующий ID бронирования только для связи записи
-    // в device_commands. Оплата и время брони не проверяются.
-    const bookingUrl = new URL(
-      `${config.url}/rest/v1/bookings`,
+    // 2. Проверяем, что студия контроллера активна.
+    const studioUrl = new URL(
+      `${config.url}/rest/v1/studios`,
     );
 
-    bookingUrl.searchParams.set("select", "id");
-    bookingUrl.searchParams.set("order", "start_at.desc");
-    bookingUrl.searchParams.set("limit", "1");
+    studioUrl.searchParams.set("select", "id");
+    studioUrl.searchParams.set("id", `eq.${device.studio_id}`);
+    studioUrl.searchParams.set("is_active", "eq.true");
+    studioUrl.searchParams.set("limit", "1");
 
-    const bookingResponse = await fetch(bookingUrl, {
+    const studioResponse = await fetch(studioUrl, {
       headers,
       cache: "no-store",
     });
 
-    if (!bookingResponse.ok) {
+    if (!studioResponse.ok) {
       console.error(
-        "Test unlock booking lookup failed:",
-        bookingResponse.status,
-        await bookingResponse.text(),
+        "Owner unlock: studio lookup failed:",
+        studioResponse.status,
       );
 
+      return errorResponse("Не удалось проверить студию.", 503);
+    }
+
+    const studios: unknown = await studioResponse.json();
+
+    if (!Array.isArray(studios) || studios.length === 0) {
       return errorResponse(
-        "Не удалось найти запись бронирования.",
-        503,
+        "Студия контроллера отключена или не найдена.",
+        403,
       );
     }
 
-    const bookings = await bookingResponse.json();
-    const booking = Array.isArray(bookings) ? bookings[0] : null;
-
-    if (!booking?.id) {
-      return errorResponse(
-        "В базе пока нет ни одной записи бронирования. Нужна хотя бы одна тестовая запись; активная бронь и оплата не требуются.",
-        409,
-      );
-    }
-
+    // 3. Закрываем только уже просроченные команды.
     const now = new Date();
-    const nowIso = now.toISOString();
 
-    // Закрываем только просроченные команды этого контроллера.
     const expireUrl = new URL(
       `${config.url}/rest/v1/device_commands`,
     );
 
-    expireUrl.searchParams.set("device_id", `eq.${device.id}`);
-    expireUrl.searchParams.set("status", "in.(pending,claimed)");
-    expireUrl.searchParams.set("expires_at", `lte.${nowIso}`);
+    expireUrl.searchParams.set(
+      "device_id",
+      `eq.${device.id}`,
+    );
+    expireUrl.searchParams.set(
+      "status",
+      "in.(pending,claimed)",
+    );
+    expireUrl.searchParams.set(
+      "expires_at",
+      `lte.${now.toISOString()}`,
+    );
 
     const expireResponse = await fetch(expireUrl, {
       method: "PATCH",
@@ -162,18 +186,18 @@ export async function POST(request: NextRequest) {
 
     if (!expireResponse.ok) {
       console.error(
-        "Test unlock expiration failed:",
+        "Owner unlock: expiration failed:",
         expireResponse.status,
-        await expireResponse.text(),
       );
 
       return errorResponse(
-        "Не удалось очистить просроченные команды.",
+        "Не удалось проверить предыдущие команды.",
         503,
       );
     }
 
-    // Создаём команду с коротким сроком действия — 15 секунд.
+    // 4. Создаём отдельную команду владельца.
+    // Бронирование и оплата для неё не требуются.
     const expiresAt = new Date(
       now.getTime() + 15_000,
     ).toISOString();
@@ -188,7 +212,8 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           device_id: device.id,
-          booking_id: booking.id,
+          booking_id: null,
+          command_source: "owner",
           requested_by: owner.userId,
           command: "unlock",
           status: "pending",
@@ -199,12 +224,9 @@ export async function POST(request: NextRequest) {
     );
 
     if (!insertResponse.ok) {
-      const details = await insertResponse.text();
-
       console.error(
-        "Test unlock insert failed:",
+        "Owner unlock: command insert failed:",
         insertResponse.status,
-        details,
       );
 
       if (insertResponse.status === 409) {
@@ -215,15 +237,17 @@ export async function POST(request: NextRequest) {
       }
 
       return errorResponse(
-        "Не удалось создать тестовую команду.",
+        "Не удалось создать команду открытия.",
         503,
       );
     }
 
-    const commands = await insertResponse.json();
-    const command = Array.isArray(commands) ? commands[0] : null;
+    const commands: unknown = await insertResponse.json();
 
-    if (!command?.id) {
+    const command =
+      Array.isArray(commands) ? commands[0] : null;
+
+    if (!command?.id || !command?.expires_at) {
       return errorResponse(
         "Сервер не подтвердил создание команды.",
         503,
@@ -233,23 +257,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        test: true,
         command_id: command.id,
+        command_source: "owner",
         status: command.status,
         expires_at: command.expires_at,
         message:
-          "Тестовая команда unlock отправлена контроллеру. Оплата и активная бронь не проверялись.",
+          "Команда ручного открытия создана. Активная бронь и оплата не требуются.",
       },
       {
         status: 201,
         headers: { "Cache-Control": "no-store" },
       },
     );
-  } catch (error) {
-    console.error("Admin test unlock error:", error);
+  } catch {
+    console.error("Owner unlock: unexpected server error.");
 
     return errorResponse(
-      "Не удалось отправить тестовую команду.",
+      "Не удалось отправить команду открытия.",
       503,
     );
   }
