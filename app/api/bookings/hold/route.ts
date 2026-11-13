@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { GET as getAvailability } from "@/app/api/availability/route";
 import {
@@ -6,6 +5,7 @@ import {
   createInternalAvailabilityToken,
 } from "@/lib/api-rate-limit";
 import { createHash } from "node:crypto";
+import { isYooKassaReadyForPayments } from "@/lib/yookassa";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -240,6 +240,16 @@ export async function POST(request: NextRequest) {
 
   if (!origin || origin !== new URL(request.url).origin) {
     return errorResponse("Недопустимый запрос.", 403);
+  }
+
+  // Не создаём временную бронь, если этот деплой не может принять оплату.
+  // Проверка выполняется до обращения к сессии и Supabase, чтобы не оставлять
+  // пользователю неоплачиваемое удержание слота.
+  if (!isYooKassaReadyForPayments()) {
+    return errorResponse(
+      "Онлайн-бронирование временно недоступно: приём оплаты ещё не подключён.",
+      503,
+    );
   }
 
   const sessionToken = request.cookies.get("ponglab_session")?.value;
