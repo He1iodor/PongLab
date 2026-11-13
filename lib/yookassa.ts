@@ -99,6 +99,32 @@ export function getPublicAppUrl(): string {
   return url.origin;
 }
 
+/**
+ * Returns whether this deployment can safely accept a new booking that
+ * requires an online YooKassa payment. Check this before creating a booking
+ * hold so missing credentials cannot leave a customer with a pending reserve.
+ */
+export function isYooKassaReadyForPayments(): boolean {
+  if (!getYooKassaCredentials()) {
+    return false;
+  }
+
+  try {
+    getPublicAppUrl();
+  } catch {
+    return false;
+  }
+
+  if (
+    process.env.VERCEL_ENV === "preview" &&
+    !process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export function isUuid(value: unknown): value is string {
   return (
     typeof value === "string" &&
