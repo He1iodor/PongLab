@@ -14,13 +14,17 @@ type PaymentState =
   | "pending"
   | "succeeded"
   | "cancelled"
+  | "refunded"
+  | "refund_required"
   | "error";
 
 type PaymentStatusResponse = {
-  state?: "pending" | "succeeded" | "cancelled";
+  state?: "pending" | "succeeded" | "cancelled" | "refunded";
   error?: string;
   amount_rub?: number;
   booking_count?: number;
+  monitor_late_payment?: boolean;
+  refund_required?: boolean;
 };
 
 function money(value: number) {
@@ -29,6 +33,11 @@ function money(value: number) {
     currency: "RUB",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function resolvedState(result: PaymentStatusResponse): PaymentState {
+  if (result.refund_required) return "refund_required";
+  return result.state ?? "pending";
 }
 
 export default function PaymentReturnClient({
@@ -40,6 +49,7 @@ export default function PaymentReturnClient({
   const [amount, setAmount] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
+  const [monitoringLatePayment, setMonitoringLatePayment] = useState(false);
 
   // Убираем технические параметры Vercel из адресной строки.
   // Bypass-cookie к этому моменту уже устанавливается Vercel.
@@ -101,12 +111,13 @@ export default function PaymentReturnClient({
             ? result.amount_rub
             : null,
         );
-
+        setMonitoringLatePayment(
+          Boolean(result.monitor_late_payment),
+        );
         setError("");
-        setState(result.state ?? "pending");
+        setState(resolvedState(result));
       } catch (caught) {
         setState("error");
-
         setError(
           caught instanceof Error
             ? caught.message
@@ -119,15 +130,15 @@ export default function PaymentReturnClient({
     [paymentGroupId],
   );
 
-  // Проверяем до получения окончательного статуса.
-  // Если запрос временно не удался, повторяем его через 30 секунд.
-  // Терминальные состояния succeeded и cancelled больше не опрашиваются.
+  // Обычная оплата проверяется чаще. После локального тайм-аута резерв уже
+  // закрыт, но страница продолжает проверять возможное позднее списание.
+  // После успешного/окончательного статуса YooKassa опрос прекращается.
   useEffect(() => {
-    let cancelled = false;
+    let stopped = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
-      if (cancelled) return;
+      if (stopped) return;
 
       if (!paymentGroupId) {
         setState("error");
@@ -160,7 +171,7 @@ export default function PaymentReturnClient({
           );
         }
 
-        if (cancelled) return;
+        if (stopped) return;
 
         setAmount(
           typeof result.amount_rub === "number"
@@ -168,19 +179,27 @@ export default function PaymentReturnClient({
             : null,
         );
 
-        setError("");
+        const monitoring = Boolean(result.monitor_late_payment);
+        const nextState = resolvedState(result);
 
-        const nextState = result.state ?? "pending";
+        setMonitoringLatePayment(monitoring);
+        setError("");
         setState(nextState);
 
         if (
           nextState === "succeeded" ||
-          nextState === "cancelled"
+          nextState === "refunded" ||
+          nextState === "refund_required" ||
+          (nextState === "cancelled" && !monitoring)
         ) {
           return;
         }
+
+        if (monitoring) {
+          nextDelay = 30_000;
+        }
       } catch (caught) {
-        if (cancelled) return;
+        if (stopped) return;
 
         setState("error");
         setError(
@@ -192,7 +211,7 @@ export default function PaymentReturnClient({
         nextDelay = 30_000;
       }
 
-      if (!cancelled) {
+      if (!stopped) {
         timer = setTimeout(poll, nextDelay);
       }
     };
@@ -200,13 +219,15 @@ export default function PaymentReturnClient({
     void poll();
 
     return () => {
-      cancelled = true;
-
-      if (timer) {
-        clearTimeout(timer);
-      }
+      stopped = true;
+      if (timer) clearTimeout(timer);
     };
   }, [paymentGroupId]);
+
+  const showManualCheck =
+    state === "pending" ||
+    state === "error" ||
+    (state === "cancelled" && monitoringLatePayment);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#090B18] px-4 py-10 text-white">
@@ -233,6 +254,53 @@ export default function PaymentReturnClient({
               </p>
             )}
           </>
+        ) : state === "refunded" ? (
+          <>
+            <CheckCircle2
+              size={44}
+              className="text-emerald-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Возврат оформлен
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              Возврат подтверждён PongLab. Срок поступления средств
+              на счёт зависит от банка и платёжной системы.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "refund_required" ? (
+          <>
+            <XCircle
+              size={44}
+              className="text-amber-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Нужна проверка возврата
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              Платёж подтвердился уже после закрытия временного резерва.
+              Бронь не восстановлена, чтобы не занять время, которое
+              могло быть выбрано другим клиентом. Свяжитесь с
+              администрацией PongLab: мы сверим операцию и оформим
+              возврат.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
         ) : state === "cancelled" ? (
           <>
             <XCircle
@@ -241,14 +309,22 @@ export default function PaymentReturnClient({
             />
 
             <h1 className="mt-5 text-2xl font-semibold">
-              Платёж не завершён
+              {monitoringLatePayment
+                ? "Резерв закрыт — проверяем платёж"
+                : "Платёж не завершён"}
             </h1>
 
             <p className="mt-3 text-sm leading-6 text-white/65">
-              YooKassa сообщила об окончательной отмене платежа.
-              Эта бронь закрыта. Для новой попытки выберите свободное
-              время и создайте новое бронирование.
+              {monitoringLatePayment
+                ? "Подтверждение не поступило в отведённые 10 минут, поэтому резерв закрыт. Мы продолжаем проверять статус у YooKassa на случай задержки. Не оплачивайте бронирование повторно."
+                : "Оплата не была подтверждена в течение 10 минут или YooKassa отклонила операцию. Резерв закрыт. Если деньги всё же списались, не создавайте повторную оплату — свяжитесь с администрацией PongLab, мы проверим операцию и при необходимости оформим возврат."}
             </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
           </>
         ) : state === "pending" || state === "loading" ? (
           <>
@@ -263,9 +339,8 @@ export default function PaymentReturnClient({
 
             <p className="mt-3 text-sm leading-6 text-white/65">
               Платёж ещё обрабатывается или уведомление от платёжного
-              сервиса не поступило. Страница будет автоматически
-              проверять статус каждые 15 секунд. Не оплачивайте
-              бронирование повторно.
+              сервиса не поступило. Проверяем статус автоматически.
+              Не оплачивайте бронирование повторно.
             </p>
 
             {amount !== null && (
@@ -296,7 +371,7 @@ export default function PaymentReturnClient({
           </>
         )}
 
-        {(state === "pending" || state === "error") && (
+        {showManualCheck && (
           <button
             type="button"
             onClick={() => void checkPayment(true)}
