@@ -33,6 +33,23 @@ function errorResponse(message: string, status: number) {
   );
 }
 
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : "UnknownError";
+}
+
+function errorStatusCode(error: unknown): number | null {
+  if (
+    error &&
+    typeof error === "object" &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number"
+  ) {
+    return error.statusCode;
+  }
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const sessionToken = getSessionTokenFromRequest(request);
   if (!sessionToken) {
@@ -80,6 +97,15 @@ export async function GET(request: NextRequest) {
       const payment = await getYooKassaPayment(group.provider_payment_id);
       syncResult = await syncYooKassaPayment(payment, paymentGroupId);
 
+      console.info("[payment-status] YooKassa status checked", {
+        providerStatus: syncResult.providerStatus,
+        cancellationReason:
+          typeof syncResult.payment.cancellation_details?.reason === "string"
+            ? syncResult.payment.cancellation_details.reason
+            : null,
+        databaseResult: syncResult.databaseResult ?? null,
+      });
+
       group = await readStatus();
       if (!group) {
         return errorResponse("Бронирование не найдено.", 404);
@@ -120,8 +146,11 @@ export async function GET(request: NextRequest) {
       },
       { headers: { "Cache-Control": "no-store" } },
     );
-  } catch {
-    console.error("Payment status lookup failed.");
+  } catch (error) {
+    console.error("[payment-status] lookup failed", {
+      errorName: errorName(error),
+      httpStatus: errorStatusCode(error),
+    });
     return errorResponse(
       "Не удалось проверить статус оплаты. Повторите попытку.",
       503,
