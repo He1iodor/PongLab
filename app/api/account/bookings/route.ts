@@ -33,6 +33,11 @@ type StudioRow = {
   timezone: string | null;
 };
 
+type PaymentGroupRow = {
+  id: string;
+  failure_reason: string | null;
+};
+
 function errorResponse(message: string, status: number) {
   return NextResponse.json(
     { error: message },
@@ -178,6 +183,33 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Причину отмены читаем из существующей payment_groups.
+    // Запрос обязательно ограничен подтверждённым user_id сессии.
+    const paymentGroupIds = [
+      ...new Set(
+        rows
+          .map((booking) => booking.payment_group_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const paymentGroups = paymentGroupIds.length
+      ? await getRows<PaymentGroupRow>(
+          config.url,
+          config.key,
+          "payment_groups",
+          {
+            select: "id,failure_reason",
+            id: `in.(${paymentGroupIds.join(",")})`,
+            user_id: `eq.${userId}`,
+          },
+        )
+      : [];
+
+    const paymentGroupById = new Map(
+      paymentGroups.map((group) => [group.id, group]),
+    );
+
     // Подгружаем связанные столы и клубы.
     const tableIds = [
       ...new Set(rows.map((booking) => booking.table_id)),
@@ -248,6 +280,9 @@ export async function GET(request: NextRequest) {
           ? "expired"
           : booking.status,
         payment_status: booking.payment_status,
+        payment_failure_reason: booking.payment_group_id
+          ? paymentGroupById.get(booking.payment_group_id)?.failure_reason ?? null
+          : null,
         price_rub: booking.price_rub,
         payment_init_started_at: booking.payment_init_started_at,
         payment_id: booking.payment_id,
