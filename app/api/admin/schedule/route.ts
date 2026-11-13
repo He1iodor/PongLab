@@ -67,7 +67,11 @@ async function checkStudio(
   });
 
   if (!response.ok) {
-    console.error("Schedule studio check failed:", response.status, await response.text());
+    console.error(
+      "Schedule studio check failed:",
+      response.status,
+      await response.text()
+    );
     throw new Error("Не удалось проверить клуб.");
   }
 
@@ -83,6 +87,7 @@ export async function GET(request: NextRequest) {
   if (!config) return errorResponse("Сервис временно недоступен.", 503);
 
   const studioId = request.nextUrl.searchParams.get("studio_id");
+
   if (!studioId || !isUuid(studioId)) {
     return errorResponse("Укажите корректный клуб.", 400);
   }
@@ -92,7 +97,10 @@ export async function GET(request: NextRequest) {
       return errorResponse("Клуб не найден или отключён.", 404);
     }
 
-    const scheduleUrl = new URL(`${config.url}/rest/v1/studio_weekly_schedule`);
+    const scheduleUrl = new URL(
+      `${config.url}/rest/v1/studio_weekly_schedule`
+    );
+
     scheduleUrl.searchParams.set(
       "select",
       "id,studio_id,weekday,is_open"
@@ -106,13 +114,20 @@ export async function GET(request: NextRequest) {
     });
 
     if (!scheduleResponse.ok) {
-      console.error("Weekly schedule GET failed:", scheduleResponse.status, await scheduleResponse.text());
+      console.error(
+        "Weekly schedule GET failed:",
+        scheduleResponse.status,
+        await scheduleResponse.text()
+      );
       return errorResponse("Не удалось загрузить расписание.", 503);
     }
 
     const scheduleRows = await scheduleResponse.json();
 
-    const intervalUrl = new URL(`${config.url}/rest/v1/studio_weekly_schedule_intervals`);
+    const intervalUrl = new URL(
+      `${config.url}/rest/v1/studio_weekly_schedule_intervals`
+    );
+
     intervalUrl.searchParams.set(
       "select",
       "id,schedule_id,opens_at,closes_at"
@@ -125,7 +140,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!intervalResponse.ok) {
-      console.error("Weekly intervals GET failed:", intervalResponse.status, await intervalResponse.text());
+      console.error(
+        "Weekly intervals GET failed:",
+        intervalResponse.status,
+        await intervalResponse.text()
+      );
       return errorResponse("Не удалось загрузить рабочие интервалы.", 503);
     }
 
@@ -133,6 +152,7 @@ export async function GET(request: NextRequest) {
 
     const days = Array.from({ length: 7 }, (_, index) => {
       const weekday = index + 1;
+
       const schedule = scheduleRows.find(
         (row: { weekday: number }) => row.weekday === weekday
       );
@@ -140,10 +160,14 @@ export async function GET(request: NextRequest) {
       const intervals = schedule
         ? intervalRows
             .filter(
-              (row: { schedule_id: string }) => row.schedule_id === schedule.id
+              (row: { schedule_id: string }) =>
+                row.schedule_id === schedule.id
             )
             .map(
-              (row: { opens_at: string; closes_at: string }) => ({
+              (row: {
+                opens_at: string;
+                closes_at: string;
+              }) => ({
                 opens_at: row.opens_at,
                 closes_at: row.closes_at,
               })
@@ -163,8 +187,11 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("Weekly schedule GET error:", error);
+
     return errorResponse(
-      error instanceof Error ? error.message : "Ошибка загрузки расписания.",
+      error instanceof Error
+        ? error.message
+        : "Ошибка загрузки расписания.",
       503
     );
   }
@@ -172,6 +199,7 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const origin = request.headers.get("origin");
+
   if (!origin || origin !== new URL(request.url).origin) {
     return errorResponse("Недопустимый запрос.", 403);
   }
@@ -183,6 +211,7 @@ export async function PUT(request: NextRequest) {
   if (!config) return errorResponse("Сервис временно недоступен.", 503);
 
   let body: unknown;
+
   try {
     body = await request.json();
   } catch {
@@ -202,7 +231,10 @@ export async function PUT(request: NextRequest) {
   }
 
   if (!Array.isArray(days) || days.length !== 7) {
-    return errorResponse("Передайте расписание на все семь дней.", 400);
+    return errorResponse(
+      "Передайте расписание на все семь дней.",
+      400
+    );
   }
 
   const seen = new Set<number>();
@@ -217,35 +249,64 @@ export async function PUT(request: NextRequest) {
       typeof item.is_open !== "boolean" ||
       !Array.isArray(item.intervals)
     ) {
-      return errorResponse("Некорректные данные дня недели.", 400);
+      return errorResponse(
+        "Некорректные данные дня недели.",
+        400
+      );
     }
 
     seen.add(item.weekday);
 
     if (!item.is_open && item.intervals.length > 0) {
-      return errorResponse("У закрытого дня не должно быть рабочих интервалов.", 400);
+      return errorResponse(
+        "У закрытого дня не должно быть рабочих интервалов.",
+        400
+      );
     }
 
     if (item.intervals.length > 10) {
-      return errorResponse("Для одного дня разрешено не более 10 интервалов.", 400);
+      return errorResponse(
+        "Для одного дня разрешено не более 10 интервалов.",
+        400
+      );
     }
 
-    const normalized: Array<{ start: number; end: number }> = [];
+    const normalized: Array<{
+      start: number;
+      end: number;
+    }> = [];
 
     for (const interval of item.intervals) {
-      if (!validTime(interval.opens_at) || !validTime(interval.closes_at)) {
-        return errorResponse("Укажите корректное время интервала.", 400);
+      if (
+        !interval ||
+        !validTime(interval.opens_at) ||
+        !validTime(interval.closes_at)
+      ) {
+        return errorResponse(
+          "Укажите корректное время интервала.",
+          400
+        );
       }
 
       const start = toMinutes(interval.opens_at);
       const end = toMinutes(interval.closes_at);
 
       if (start >= end) {
-        return errorResponse("Время окончания должно быть позже начала.", 400);
+        return errorResponse(
+          "Время окончания должно быть позже начала.",
+          400
+        );
       }
 
-      if (normalized.some((other) => start < other.end && end > other.start)) {
-        return errorResponse("Рабочие интервалы одного дня не должны пересекаться.", 400);
+      if (
+        normalized.some(
+          (other) => start < other.end && end > other.start
+        )
+      ) {
+        return errorResponse(
+          "Рабочие интервалы одного дня не должны пересекаться.",
+          400
+        );
       }
 
       normalized.push({ start, end });
@@ -253,7 +314,10 @@ export async function PUT(request: NextRequest) {
   }
 
   if (seen.size !== 7) {
-    return errorResponse("Необходимо указать каждый день недели.", 400);
+    return errorResponse(
+      "Необходимо указать каждый день недели.",
+      400
+    );
   }
 
   try {
@@ -261,84 +325,33 @@ export async function PUT(request: NextRequest) {
       return errorResponse("Клуб не найден или отключён.", 404);
     }
 
-    const scheduleUrl = new URL(`${config.url}/rest/v1/studio_weekly_schedule`);
-    scheduleUrl.searchParams.set("on_conflict", "studio_id,weekday");
+    const saveResponse = await fetch(
+      `${config.url}/rest/v1/rpc/save_weekly_schedule_atomic`,
+      {
+        method: "POST",
+        headers: {
+          ...headers(config.key),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_studio_id: studioId,
+          p_days: days,
+        }),
+        cache: "no-store",
+      }
+    );
 
-    const scheduleResponse = await fetch(scheduleUrl, {
-      method: "POST",
-      headers: {
-        ...headers(config.key),
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=representation",
-      },
-      body: JSON.stringify(
-        (days as DayInput[]).map((day) => ({
-          studio_id: studioId,
-          weekday: day.weekday,
-          is_open: day.is_open,
-        }))
-      ),
-      cache: "no-store",
-    });
-
-    if (!scheduleResponse.ok) {
-      console.error("Weekly schedule save failed:", scheduleResponse.status, await scheduleResponse.text());
-      return errorResponse("Не удалось сохранить дни расписания.", 503);
-    }
-
-    const savedSchedules = await scheduleResponse.json();
-
-    for (const schedule of savedSchedules as Array<{ id: string; weekday: number }>) {
-      const day = (days as DayInput[]).find(
-        (item) => item.weekday === schedule.weekday
+    if (!saveResponse.ok) {
+      console.error(
+        "Weekly schedule atomic save failed:",
+        saveResponse.status,
+        await saveResponse.text()
       );
 
-      if (!day) continue;
-
-      const deleteUrl = new URL(`${config.url}/rest/v1/studio_weekly_schedule_intervals`);
-      deleteUrl.searchParams.set("schedule_id", `eq.${schedule.id}`);
-
-      const deleteResponse = await fetch(deleteUrl, {
-        method: "DELETE",
-        headers: headers(config.key),
-        cache: "no-store",
-      });
-
-      if (!deleteResponse.ok) {
-        console.error("Weekly intervals delete failed:", deleteResponse.status, await deleteResponse.text());
-        return errorResponse("Не удалось обновить рабочие интервалы.", 503);
-      }
-
-      if (day.is_open && day.intervals.length > 0) {
-        const insertResponse = await fetch(
-          `${config.url}/rest/v1/studio_weekly_schedule_intervals`,
-          {
-            method: "POST",
-            headers: {
-              ...headers(config.key),
-              "Content-Type": "application/json",
-              Prefer: "return=minimal",
-            },
-            body: JSON.stringify(
-              day.intervals.map((interval) => ({
-                schedule_id: schedule.id,
-                opens_at: interval.opens_at.length === 5
-                  ? `${interval.opens_at}:00`
-                  : interval.opens_at,
-                closes_at: interval.closes_at.length === 5
-                  ? `${interval.closes_at}:00`
-                  : interval.closes_at,
-              }))
-            ),
-            cache: "no-store",
-          }
-        );
-
-        if (!insertResponse.ok) {
-          console.error("Weekly intervals insert failed:", insertResponse.status, await insertResponse.text());
-          return errorResponse("Не удалось сохранить рабочие интервалы.", 503);
-        }
-      }
+      return errorResponse(
+        "Не удалось сохранить расписание.",
+        503
+      );
     }
 
     return NextResponse.json(
@@ -347,8 +360,11 @@ export async function PUT(request: NextRequest) {
     );
   } catch (error) {
     console.error("Weekly schedule PUT error:", error);
+
     return errorResponse(
-      error instanceof Error ? error.message : "Ошибка сохранения расписания.",
+      error instanceof Error
+        ? error.message
+        : "Ошибка сохранения расписания.",
       503
     );
   }

@@ -4,8 +4,14 @@ import { createHash, randomBytes } from "node:crypto";
 
 export const runtime = "nodejs";
 
+function privateJson(body: unknown, init?: ResponseInit): NextResponse {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
 function errorResponse(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+  return privateJson({ error: message }, { status });
 }
 
 function hashToken(token: string): string {
@@ -71,62 +77,109 @@ export async function POST(request: NextRequest) {
 
     const browserTokenHash = hashToken(browserToken);
 
-    const query = new URLSearchParams({
-      select: "id,phone,provider_check_id,status,expires_at",
-      id: `eq.${challengeId}`,
-      browser_token_hash: `eq.${browserTokenHash}`,
-      limit: "1",
-    });
-
-    const challengeResponse = await dbRequest(
-      `phone_auth_challenges?${query.toString()}`,
+    // Атомарно проверяем принадлежность, статус, срок действия
+    // и интервал между запросами.
+    const claimResponse = await dbRequest(
+      "rpc/claim_phone_auth_status_poll",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_challenge_id: challengeId,
+          p_browser_token_hash: browserTokenHash,
+        }),
+      },
     );
 
-    if (!challengeResponse.ok) {
+    if (!claimResponse.ok) {
       console.error(
-        "Supabase challenge lookup failed:",
-        await challengeResponse.text(),
-      );
-      return errorResponse("Не удалось проверить запрос.", 503);
-    }
-
-    const challenges = await challengeResponse.json();
-    const challenge = challenges[0];
-
-    if (!challenge) {
-      return errorResponse(
-        "Проверка не найдена или не принадлежит этому браузеру.",
-        403,
-      );
-    }
-
-    if (challenge.status !== "pending") {
-      return errorResponse(
-        "Эта проверка уже завершена или недействительна. Начните заново.",
-        410,
-      );
-    }
-
-    if (new Date(challenge.expires_at).getTime() <= Date.now()) {
-      await dbRequest(
-        `phone_auth_challenges?id=eq.${challengeId}&status=eq.pending&browser_token_hash=eq.${browserTokenHash}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "expired" }),
-        },
+        "Supabase status poll claim failed. HTTP status:",
+        claimResponse.status,
       );
 
       return errorResponse(
-        "Время проверки истекло. Запросите звонок заново.",
-        410,
+        "Не удалось проверить запрос.",
+        503,
+      );
+    }
+
+    const claimRows = await claimResponse.json();
+    const claim = Array.isArray(claimRows)
+      ? claimRows[0]
+      : null;
+
+    if (!claim || typeof claim.result_code !== "string") {
+      console.error("Invalid status poll claim response");
+
+      return errorResponse(
+        "Временная ошибка сервиса.",
+        503,
+      );
+    }
+
+    if (!claim.allowed) {
+      if (claim.result_code === "not_found") {
+        return errorResponse(
+          "Проверка не найдена или не принадлежит этому браузеру.",
+          403,
+        );
+      }
+
+      if (
+        claim.result_code === "not_pending" ||
+        claim.result_code === "expired"
+      ) {
+        return errorResponse(
+          "Эта проверка завершена или истекла. Запросите новый звонок.",
+          410,
+        );
+      }
+
+      if (claim.result_code === "rate_limited") {
+        return privateJson(
+          {
+            verified: false,
+            status: "pending",
+          },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": "3",
+            },
+          },
+        );
+      }
+
+      console.error(
+        "Unexpected status poll claim result:",
+        claim.result_code,
+      );
+
+      return errorResponse(
+        "Не удалось проверить статус авторизации.",
+        503,
+      );
+    }
+
+    if (
+      typeof claim.provider_check_id !== "string" ||
+      !claim.provider_check_id ||
+      typeof claim.expires_at !== "string"
+    ) {
+      console.error("Invalid challenge data returned by PostgreSQL");
+
+      return errorResponse(
+        "Не удалось получить данные проверки.",
+        503,
       );
     }
 
     // Только SMS.RU может подтвердить факт звонка.
     const params = new URLSearchParams({
       api_id: apiId,
-      check_id: String(challenge.provider_check_id),
+      check_id: claim.provider_check_id,
       json: "1",
     });
 
@@ -140,45 +193,62 @@ export async function POST(request: NextRequest) {
 
     if (!smsResponse.ok) {
       console.error("SMS.RU HTTP error:", smsResponse.status);
-      return errorResponse("Не удалось проверить статус звонка.", 502);
+
+      return errorResponse(
+        "Не удалось проверить статус звонка.",
+        502,
+      );
     }
 
-const smsResult = await smsResponse.json();
+    const smsResult = await smsResponse.json();
 
-if (
-  smsResult.status !== "OK" ||
-  Number(smsResult.status_code) !== 100
-) {
-  console.error("SMS.RU status request failed:", {
-    status: smsResult.status,
-    status_code: smsResult.status_code,
-    status_text: smsResult.status_text,
-  });
+    if (
+      smsResult.status !== "OK" ||
+      Number(smsResult.status_code) !== 100
+    ) {
+      console.error("SMS.RU status request failed:", {
+        status: smsResult.status,
+        status_code: smsResult.status_code,
+        status_text: smsResult.status_text,
+      });
 
-  return errorResponse(
-    "Не удалось получить статус звонка. Попробуйте позже.",
-    502,
-  );
-}
+      return errorResponse(
+        "Не удалось получить статус звонка. Попробуйте позже.",
+        502,
+      );
+    }
 
-const providerCode = Number(smsResult.check_status);
+    const providerCode = Number(smsResult.check_status);
 
+    // Звонок ещё не подтверждён.
     if (providerCode === 400) {
-      return NextResponse.json({
+      return privateJson({
         verified: false,
         status: "pending",
       });
     }
 
+    // SMS.RU сообщает, что время проверки истекло.
     if (providerCode === 402) {
-      await dbRequest(
+      const expireResponse = await dbRequest(
         `phone_auth_challenges?id=eq.${challengeId}&status=eq.pending&browser_token_hash=eq.${browserTokenHash}`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "expired" }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "expired",
+          }),
         },
       );
+
+      if (!expireResponse.ok) {
+        console.error(
+          "Failed to expire phone challenge. HTTP status:",
+          expireResponse.status,
+        );
+      }
 
       return errorResponse(
         "Звонок не подтверждён вовремя. Запросите новый.",
@@ -199,7 +269,8 @@ const providerCode = Number(smsResult.check_status);
       );
     }
 
-    // Создаём случайный токен сессии. В базе будет только его хеш.
+    // Создаём случайный токен сессии.
+    // В базе будет храниться только его хеш.
     const sessionToken = randomBytes(32).toString("hex");
     const sessionTokenHash = hashToken(sessionToken);
 
@@ -209,7 +280,9 @@ const providerCode = Number(smsResult.check_status);
       "rpc/consume_phone_auth_challenge",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           p_challenge_id: challengeId,
           p_browser_token_hash: browserTokenHash,
@@ -220,14 +293,20 @@ const providerCode = Number(smsResult.check_status);
 
     if (!consumeResponse.ok) {
       console.error(
-        "Supabase challenge consumption failed:",
-        await consumeResponse.text(),
+        "Supabase challenge consumption failed. HTTP status:",
+        consumeResponse.status,
       );
-      return errorResponse("Не удалось завершить авторизацию.", 503);
+
+      return errorResponse(
+        "Не удалось завершить авторизацию.",
+        503,
+      );
     }
 
     const consumedRows = await consumeResponse.json();
-    const consumed = Array.isArray(consumedRows) ? consumedRows[0] : null;
+    const consumed = Array.isArray(consumedRows)
+      ? consumedRows[0]
+      : null;
 
     if (!consumed?.user_id || !consumed?.session_expires_at) {
       return errorResponse(
@@ -236,14 +315,22 @@ const providerCode = Number(smsResult.check_status);
       );
     }
 
-    const sessionExpiresAt = new Date(consumed.session_expires_at);
+    const sessionExpiresAt = new Date(
+      consumed.session_expires_at,
+    );
 
     if (Number.isNaN(sessionExpiresAt.getTime())) {
       console.error("Invalid session expiry returned by database");
-      return errorResponse("Не удалось завершить авторизацию.", 503);
+
+      return errorResponse(
+        "Не удалось завершить авторизацию.",
+        503,
+      );
     }
 
-    const response = NextResponse.json({ verified: true });
+    const response = privateJson({
+      verified: true,
+    });
 
     response.cookies.set("ponglab_session", sessionToken, {
       httpOnly: true,
@@ -263,8 +350,14 @@ const providerCode = Number(smsResult.check_status);
     });
 
     return response;
-  } catch (error) {
-    console.error("Call verification failed:", error);
-    return errorResponse("Временная ошибка сервера.", 500);
+  } catch {
+    // Не записываем объект ошибки: он может содержать URL,
+    // идентификаторы проверки или другие внутренние данные.
+    console.error("Call verification failed");
+
+    return errorResponse(
+      "Временная ошибка сервера.",
+      500,
+    );
   }
 }

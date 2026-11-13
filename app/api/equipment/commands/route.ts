@@ -14,7 +14,7 @@ type DeviceRow = {
 
 type CommandRow = {
   id: string;
-  booking_id: string;
+  booking_id: string | null;
   command: string;
   expires_at: string;
 };
@@ -34,6 +34,15 @@ function getConfig() {
   const key = process.env.SUPABASE_SECRET_KEY;
 
   return url && key ? { url, key } : null;
+}
+
+function isUuid(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
 }
 
 function constantTimeHexEqual(left: string, right: string) {
@@ -102,7 +111,6 @@ export async function POST(request: NextRequest) {
       console.error(
         "Device command lookup failed:",
         lookupResponse.status,
-        await lookupResponse.text(),
       );
 
       return jsonError("Не удалось проверить устройство.", 503);
@@ -126,6 +134,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Атомарно забираем одну ожидающую команду.
+    // Проверки оплаты, брони или роли владельца выполняет
+    // исключительно защищённая SQL-функция.
     const rpcResponse = await fetch(
       `${config.url}/rest/v1/rpc/claim_device_command`,
       {
@@ -142,7 +152,6 @@ export async function POST(request: NextRequest) {
       console.error(
         "Claim device command failed:",
         rpcResponse.status,
-        await rpcResponse.text(),
       );
 
       return jsonError(
@@ -154,12 +163,12 @@ export async function POST(request: NextRequest) {
     const result: unknown = await rpcResponse.json();
 
     if (!Array.isArray(result)) {
-      console.error("Unexpected command RPC response:", result);
+      console.error("Unexpected command RPC response format.");
 
       return jsonError("Некорректный ответ сервера.", 503);
     }
 
-    // 4. Если ожидающих команд нет — сообщаем ESP32.
+    // 4. Ожидающих команд нет.
     if (result.length === 0) {
       return NextResponse.json(
         {
@@ -175,19 +184,27 @@ export async function POST(request: NextRequest) {
 
     const command = result[0] as CommandRow;
 
-    // 5. Проверяем формат полученной команды.
+    // 5. Проверяем формат команды.
+    // booking_id может быть UUID или null:
+    // UUID — клиентская бронь, null — команда владельца.
+    const validBookingId =
+      command.booking_id === null ||
+      isUuid(command.booking_id);
+
     if (
-      !command.id ||
-      !command.booking_id ||
+      !isUuid(command.id) ||
+      !validBookingId ||
       command.command !== "unlock" ||
-      !command.expires_at
+      typeof command.expires_at !== "string" ||
+      !Number.isFinite(Date.parse(command.expires_at))
     ) {
-      console.error("Invalid device command:", command);
+      console.error("Invalid device command format.");
 
       return jsonError("Некорректная команда устройства.", 503);
     }
 
-    // 6. Передаём контроллеру только необходимые данные.
+    // 6. Передаём ESP32 команду.
+    // null в booking_id намеренно сохраняется.
     return NextResponse.json(
       {
         ok: true,
@@ -203,8 +220,8 @@ export async function POST(request: NextRequest) {
         headers: { "Cache-Control": "no-store" },
       },
     );
-  } catch (error) {
-    console.error("Device commands API error:", error);
+  } catch {
+    console.error("Device commands API: unexpected server error.");
 
     return jsonError(
       "Не удалось обработать запрос устройства.",

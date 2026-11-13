@@ -1,4 +1,10 @@
+
 import { NextRequest, NextResponse } from "next/server";
+import {
+  consumeApiRateLimit,
+  getRateLimitClientIp,
+  isInternalAvailabilityRequest,
+} from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,11 +94,20 @@ function localDateTimeToUtc(date: string, time: string, timezone: string) {
 async function fetchRows(url: string, key: string, table: string, params: Record<string, string>) {
   const target = new URL(`${url}/rest/v1/${table}`);
   for (const [name, value] of Object.entries(params)) target.searchParams.set(name, value);
-  const response = await fetch(target, { headers: headers(key), cache: "no-store" });
+
+  const response = await fetch(target, {
+    headers: headers(key),
+    cache: "no-store",
+  });
+
   if (!response.ok) {
-    console.error(`Availability query failed (${table}):`, response.status, await response.text());
+    console.error(
+      `Availability query failed (${table}). HTTP status:`,
+      response.status,
+    );
     throw new Error("Не удалось рассчитать доступные слоты.");
   }
+
   return response.json();
 }
 
@@ -109,6 +124,43 @@ export async function GET(request: NextRequest) {
   if (!validDate(date)) return errorResponse("Укажите дату в формате ГГГГ-ММ-ДД.", 400);
 
   try {
+    // Внутренние проверки из booking hold не расходуют публичный лимит.
+    const isInternal = isInternalAvailabilityRequest(
+      request,
+      config.key,
+    );
+
+    if (!isInternal) {
+      const clientIp = getRateLimitClientIp(request);
+
+      // В production отсутствие доверенного IP не должно отключать защиту.
+      if (!clientIp) {
+        return errorResponse("Не удалось определить источник запроса.", 503);
+      }
+
+      const rateLimit = await consumeApiRateLimit({
+        supabaseUrl: config.url,
+        serviceKey: config.key,
+        routeKey: "availability",
+        subject: clientIp,
+      });
+
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          { error: "Слишком много запросов. Подождите немного и повторите попытку." },
+          {
+            status: 429,
+            headers: {
+              "Cache-Control": "no-store",
+              "Retry-After": String(rateLimit.retryAfterSeconds),
+              "X-RateLimit-Limit": "30",
+              "X-RateLimit-Remaining": "0",
+            },
+          },
+        );
+      }
+    }
+
     // 1. Проверяем клуб и его часовой пояс.
     const studios = await fetchRows(config.url, config.key, "studios", {
       select: "id,timezone",
@@ -116,12 +168,17 @@ export async function GET(request: NextRequest) {
       is_active: "eq.true",
       limit: "1",
     });
+
     if (!Array.isArray(studios) || studios.length === 0)
       return errorResponse("Клуб не найден или отключён.", 404);
 
     const timezone = studios[0].timezone || "Europe/Moscow";
-    try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }); }
-    catch { return errorResponse("У клуба некорректный часовой пояс.", 500); }
+
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: timezone });
+    } catch {
+      return errorResponse("У клуба некорректный часовой пояс.", 500);
+    }
 
     // 2. Читаем настройки, сохранённые владельцем в Supabase.
     const settingRows = await fetchRows(config.url, config.key, "studio_booking_settings", {
@@ -129,7 +186,9 @@ export async function GET(request: NextRequest) {
       studio_id: `eq.${studioId}`,
       limit: "1",
     });
+
     const rawSettings = Array.isArray(settingRows) && settingRows.length ? settingRows[0] : {};
+
     const settings = {
       // В календаре доступен только часовой слот; старые значения в БД игнорируются.
       slot_interval_minutes: 60,
@@ -142,8 +201,10 @@ export async function GET(request: NextRequest) {
 
     if (settings.slot_interval_minutes !== 60 || settings.allowed_durations_minutes.length !== 1 || settings.allowed_durations_minutes[0] !== 60)
       throw new Error("Внутренняя ошибка настройки часовых слотов.");
+
     if (!Number.isInteger(settings.booking_horizon_days) || settings.booking_horizon_days < 1 || settings.booking_horizon_days > 365)
       throw new Error("В настройках клуба указан некорректный горизонт бронирования.");
+
     if (!Number.isInteger(settings.minimum_notice_minutes) || settings.minimum_notice_minutes < 0 || settings.minimum_notice_minutes > 10080)
       throw new Error("В настройках клуба указано некорректное минимальное время до бронирования.");
 
@@ -152,16 +213,26 @@ export async function GET(request: NextRequest) {
       if (parsed !== 60)
         return errorResponse("Один слот длится ровно 60 минут. Выберите нужное количество соседних часов.", 400);
     }
+
     const durations: number[] = [60];
 
     // Сравниваем календарные даты именно в часовом поясе клуба.
     const today = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     }).format(new Date());
 
-    if (date < today || date > addDays(today, settings.booking_horizon_days) ||
-        (date === today && !settings.allow_same_day_booking)) {
-      return NextResponse.json({ date, timezone, slots: [] }, { headers: { "Cache-Control": "no-store" } });
+    if (
+      date < today ||
+      date > addDays(today, settings.booking_horizon_days) ||
+      (date === today && !settings.allow_same_day_booking)
+    ) {
+      return NextResponse.json(
+        { date, timezone, slots: [] },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
 
     // 3. Исключение конкретной даты имеет приоритет над недельным расписанием.
@@ -173,39 +244,70 @@ export async function GET(request: NextRequest) {
     });
 
     let workingIntervals: Array<{ opens_at: string; closes_at: string }> = [];
+
     if (exceptions.length > 0) {
       const exception = exceptions[0];
-      if (exception.is_closed) return NextResponse.json({ date, timezone, slots: [] }, { headers: { "Cache-Control": "no-store" } });
+
+      if (exception.is_closed)
+        return NextResponse.json(
+          { date, timezone, slots: [] },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+
       workingIntervals = await fetchRows(config.url, config.key, "studio_date_exception_intervals", {
-        select: "opens_at,closes_at", exception_id: `eq.${exception.id}`, order: "opens_at.asc",
+        select: "opens_at,closes_at",
+        exception_id: `eq.${exception.id}`,
+        order: "opens_at.asc",
       });
     } else {
       const schedules = await fetchRows(config.url, config.key, "studio_weekly_schedule", {
-        select: "id,is_open", studio_id: `eq.${studioId}`, weekday: `eq.${weekdayForDate(date)}`, limit: "1",
+        select: "id,is_open",
+        studio_id: `eq.${studioId}`,
+        weekday: `eq.${weekdayForDate(date)}`,
+        limit: "1",
       });
+
       if (schedules.length === 0 || !schedules[0].is_open)
-        return NextResponse.json({ date, timezone, slots: [] }, { headers: { "Cache-Control": "no-store" } });
+        return NextResponse.json(
+          { date, timezone, slots: [] },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+
       workingIntervals = await fetchRows(config.url, config.key, "studio_weekly_schedule_intervals", {
-        select: "opens_at,closes_at", schedule_id: `eq.${schedules[0].id}`, order: "opens_at.asc",
+        select: "opens_at,closes_at",
+        schedule_id: `eq.${schedules[0].id}`,
+        order: "opens_at.asc",
       });
     }
+
     if (!workingIntervals.length)
-      return NextResponse.json({ date, timezone, slots: [] }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json(
+        { date, timezone, slots: [] },
+        { headers: { "Cache-Control": "no-store" } },
+      );
 
     // 4. Активные столы.
     const tables = await fetchRows(config.url, config.key, "studio_tables", {
-      select: "id,name", studio_id: `eq.${studioId}`, is_active: "eq.true", order: "created_at.asc",
+      select: "id,name",
+      studio_id: `eq.${studioId}`,
+      is_active: "eq.true",
+      order: "created_at.asc",
     });
+
     if (!tables.length)
-      return NextResponse.json({ date, timezone, slots: [] }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json(
+        { date, timezone, slots: [] },
+        { headers: { "Cache-Control": "no-store" } },
+      );
 
     // 5. Брони, пересекающиеся с местными сутками клуба.
     const dayStart = localDateTimeToUtc(date, "00:00", timezone);
     const nextDate = addDays(date, 1);
     const dayEnd = localDateTimeToUtc(nextDate, "00:00", timezone);
     const tableIds = tables.map((table: { id: string }) => table.id);
+
     const bookings = await fetchRows(config.url, config.key, "bookings", {
-      select: "table_id,start_at,end_at,status,payment_status,hold_expires_at",
+      select: "table_id,start_at,end_at,status,payment_status,hold_expires_at,payment_init_started_at,payment_id",
       table_id: `in.(${tableIds.join(",")})`,
       status: "in.(pending_payment,confirmed)",
       start_at: `lt.${dayEnd.toISOString()}`,
@@ -213,9 +315,27 @@ export async function GET(request: NextRequest) {
     });
 
     const now = Date.now();
-    const blockingBookings = bookings.filter((booking: { status: string; hold_expires_at: string | null }) => {
+
+    // Важно: если инициализация оплаты началась или у брони уже есть ID
+    // платежа, удерживаем стол даже после hold_expires_at.
+    // Это защищает от повторного бронирования при неизвестном результате оплаты.
+    const blockingBookings = bookings.filter((booking: {
+      status: string;
+      hold_expires_at: string | null;
+      payment_init_started_at: string | null;
+      payment_id: string | null;
+    }) => {
       if (booking.status === "confirmed") return true;
+
+      if (
+        booking.payment_init_started_at !== null ||
+        booking.payment_id !== null
+      ) {
+        return true;
+      }
+
       if (!booking.hold_expires_at) return true;
+
       return new Date(booking.hold_expires_at).getTime() > now;
     });
 
@@ -227,32 +347,55 @@ export async function GET(request: NextRequest) {
       weekday: `eq.${weekdayForDate(date)}`,
       order: "starts_at.asc",
     });
-    const activeRules = rules.filter((rule: { effective_from: string | null; effective_to: string | null }) =>
-      (!rule.effective_from || rule.effective_from <= date) && (!rule.effective_to || rule.effective_to >= date)
+
+    const activeRules = rules.filter((rule: {
+      effective_from: string | null;
+      effective_to: string | null;
+    }) =>
+      (!rule.effective_from || rule.effective_from <= date) &&
+      (!rule.effective_to || rule.effective_to >= date)
     );
 
     // 7. Формируем слоты с сохранённым шагом и минимальным временем до старта.
     const slots: Array<{
-      start_at: string; end_at: string; starts_at: string; ends_at: string;
-      duration_minutes: number; price_rub: number; available_tables: Array<{ id: string; name: string }>;
+      start_at: string;
+      end_at: string;
+      starts_at: string;
+      ends_at: string;
+      duration_minutes: number;
+      price_rub: number;
+      available_tables: Array<{ id: string; name: string }>;
     }> = [];
+
     const earliestStartMs = Date.now() + settings.minimum_notice_minutes * 60_000;
 
     for (const interval of workingIntervals) {
       const opens = minutes(interval.opens_at);
       const closes = minutes(interval.closes_at);
+
       for (let start = opens; start < closes; start += settings.slot_interval_minutes) {
         for (const duration of durations) {
           const end = start + duration;
           if (end > closes) continue;
 
-          const matchingRules = activeRules.filter((rule: { duration_minutes: number; starts_at: string; ends_at: string }) =>
-            rule.duration_minutes === duration && minutes(rule.starts_at) <= start && minutes(rule.ends_at) >= end
+          const matchingRules = activeRules.filter((rule: {
+            duration_minutes: number;
+            starts_at: string;
+            ends_at: string;
+          }) =>
+            rule.duration_minutes === duration &&
+            minutes(rule.starts_at) <= start &&
+            minutes(rule.ends_at) >= end
           );
+
           if (!matchingRules.length) continue;
+
           if (matchingRules.length > 1) {
-            console.error("Overlapping price rules:", studioId, date, timeString(start), duration);
-            return errorResponse("В настройках цен обнаружены пересекающиеся тарифы. Проверьте тарифы клуба.", 409);
+            console.error("Overlapping price rules detected.");
+            return errorResponse(
+              "В настройках цен обнаружены пересекающиеся тарифы. Проверьте тарифы клуба.",
+              409,
+            );
           }
 
           const rule = matchingRules[0];
@@ -260,10 +403,15 @@ export async function GET(request: NextRequest) {
           const localEnd = timeString(end);
           const startAt = localDateTimeToUtc(date, localStart, timezone);
           const endAt = localDateTimeToUtc(date, localEnd, timezone);
+
           if (startAt.getTime() < earliestStartMs) continue;
 
           const availableTables = tables.filter((table: { id: string }) =>
-            !blockingBookings.some((booking: { table_id: string; start_at: string; end_at: string }) =>
+            !blockingBookings.some((booking: {
+              table_id: string;
+              start_at: string;
+              end_at: string;
+            }) =>
               booking.table_id === table.id &&
               new Date(booking.start_at).getTime() < endAt.getTime() &&
               new Date(booking.end_at).getTime() > startAt.getTime()
@@ -277,16 +425,33 @@ export async function GET(request: NextRequest) {
             ends_at: localEnd,
             duration_minutes: duration,
             price_rub: rule.price_rub,
-            available_tables: availableTables.map((table: { id: string; name: string }) => ({ id: table.id, name: table.name })),
+            available_tables: availableTables.map((table: {
+              id: string;
+              name: string;
+            }) => ({
+              id: table.id,
+              name: table.name,
+            })),
           });
         }
       }
     }
 
-    slots.sort((a, b) => a.start_at.localeCompare(b.start_at) || a.duration_minutes - b.duration_minutes);
-    return NextResponse.json({ date, timezone, slots }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) {
-    console.error("Availability GET error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Не удалось рассчитать доступные слоты.", 503);
+    slots.sort((a, b) =>
+      a.start_at.localeCompare(b.start_at) ||
+      a.duration_minutes - b.duration_minutes
+    );
+
+    return NextResponse.json(
+      { date, timezone, slots },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch {
+    console.error("Availability GET failed.");
+
+    return errorResponse(
+      "Не удалось рассчитать доступные слоты. Попробуйте позже.",
+      503,
+    );
   }
 }

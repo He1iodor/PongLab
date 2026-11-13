@@ -1,7 +1,11 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { GET as getAvailability } from "@/app/api/availability/route";
+import {
+  consumeApiRateLimit,
+  createInternalAvailabilityToken,
+} from "@/lib/api-rate-limit";
 import { createHash } from "node:crypto";
+import { isYooKassaReadyForPayments } from "@/lib/yookassa";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,9 +88,8 @@ async function readRows(
 
   if (!response.ok) {
     console.error(
-      `Booking hold query failed (${table}):`,
+      `Booking hold query failed (${table}). HTTP status:`,
       response.status,
-      await response.text(),
     );
 
     throw new Error("Не удалось проверить данные бронирования.");
@@ -100,12 +103,44 @@ async function expireOldHolds(
   key: string,
   nowIso: string,
 ) {
-  const target = new URL(`${url}/rest/v1/bookings`);
+  // Групповые бронирования очищаются одной PostgreSQL-функцией.
+  // Она атомарно переводит payment_groups в cancelled и связанные
+  // неоплаченные бронирования в expired.
+  // Группы с начатой инициализацией платежа не затрагиваются.
+  const groupedResponse = await fetch(
+    `${url}/rest/v1/rpc/expire_unpaid_payment_holds`,
+    {
+      method: "POST",
+      headers: {
+        ...headers(key),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+      cache: "no-store",
+    },
+  );
 
-  target.searchParams.set("status", "eq.pending_payment");
-  target.searchParams.set("hold_expires_at", `lte.${nowIso}`);
+  if (!groupedResponse.ok) {
+    console.error(
+      "Expired grouped payment cleanup failed. HTTP status:",
+      groupedResponse.status,
+    );
 
-  const response = await fetch(target, {
+    throw new Error(
+      "Не удалось освободить истёкшие групповые бронирования. Повторите попытку.",
+    );
+  }
+
+  // Совместимость со старыми бронями без payment_group_id.
+  // Не трогаем их, если для них уже начиналась инициализация оплаты.
+  const legacyUrl = new URL(`${url}/rest/v1/bookings`);
+  legacyUrl.searchParams.set("status", "eq.pending_payment");
+  legacyUrl.searchParams.set("hold_expires_at", `lte.${nowIso}`);
+  legacyUrl.searchParams.set("payment_group_id", "is.null");
+  legacyUrl.searchParams.set("payment_init_started_at", "is.null");
+  legacyUrl.searchParams.set("payment_id", "is.null");
+
+  const legacyResponse = await fetch(legacyUrl, {
     method: "PATCH",
     headers: {
       ...headers(key),
@@ -116,11 +151,10 @@ async function expireOldHolds(
     cache: "no-store",
   });
 
-  if (!response.ok) {
+  if (!legacyResponse.ok) {
     console.error(
-      "Expired booking holds cleanup failed:",
-      response.status,
-      await response.text(),
+      "Expired legacy booking cleanup failed. HTTP status:",
+      legacyResponse.status,
     );
 
     throw new Error(
@@ -201,16 +235,21 @@ function parseRequestedGroups(
 }
 
 export async function POST(request: NextRequest) {
-  console.log("[PONGLAB_HOLD] POST reached", {
-  path: new URL(request.url).pathname,
-  origin: request.headers.get("origin"),
-  environment: process.env.VERCEL_ENV ?? "local",
-});
   // Не принимаем запросы с посторонних сайтов.
   const origin = request.headers.get("origin");
 
   if (!origin || origin !== new URL(request.url).origin) {
     return errorResponse("Недопустимый запрос.", 403);
+  }
+
+  // Не создаём временную бронь, если этот деплой не может принять оплату.
+  // Проверка выполняется до обращения к сессии и Supabase, чтобы не оставлять
+  // пользователю неоплачиваемое удержание слота.
+  if (!isYooKassaReadyForPayments()) {
+    return errorResponse(
+      "Онлайн-бронирование временно недоступно: приём оплаты ещё не подключён.",
+      503,
+    );
   }
 
   const sessionToken = request.cookies.get("ponglab_session")?.value;
@@ -314,6 +353,29 @@ export async function POST(request: NextRequest) {
 
     const userId = sessions[0].user_id as string;
 
+    // Ограничиваем создание резервов по подтверждённому ID пользователя.
+    const rateLimit = await consumeApiRateLimit({
+      supabaseUrl: config.url,
+      serviceKey: config.key,
+      routeKey: "booking_hold",
+      subject: userId,
+    });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Слишком много попыток бронирования. Подождите немного и повторите попытку." },
+        {
+          status: 429,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+            "X-RateLimit-Limit": "5",
+            "X-RateLimit-Remaining": "0",
+          },
+        },
+      );
+    }
+
     // Освобождаем истёкшие удержания.
     await expireOldHolds(
       config.url,
@@ -345,8 +407,15 @@ export async function POST(request: NextRequest) {
     }
 
     for (const group of groups) {
-      if (group.duration_minutes < 60 || group.duration_minutes > 480 || group.duration_minutes % 60 !== 0) {
-        return errorResponse("Бронирование должно состоять из целого количества часовых слотов.", 400);
+      if (
+        group.duration_minutes < 60 ||
+        group.duration_minutes > 480 ||
+        group.duration_minutes % 60 !== 0
+      ) {
+        return errorResponse(
+          "Бронирование должно состоять из целого количества часовых слотов.",
+          400,
+        );
       }
     }
 
@@ -380,19 +449,38 @@ export async function POST(request: NextRequest) {
       let finalEndAt = "";
 
       for (let index = 0; index < hours; index++) {
-        const segmentStart = new Date(groupStartMs + index * 60 * 60_000);
-        const availabilityUrl = new URL("/api/availability", request.url);
+        const segmentStart = new Date(
+          groupStartMs + index * 60 * 60_000,
+        );
+
+        const availabilityUrl = new URL(
+          "/api/availability",
+          request.url,
+        );
+
         availabilityUrl.searchParams.set("studio_id", studioId);
         availabilityUrl.searchParams.set("date", date);
         availabilityUrl.searchParams.set("duration_minutes", "60");
 
-        // Вызов внутреннего обработчика, чтобы не зависеть от домена preview.
-        const availabilityResponse = await getAvailability(new NextRequest(availabilityUrl));
-        const availabilityData = await availabilityResponse.json().catch(() => ({}));
+        // Внутренний вызов подписан серверным токеном и не расходует
+        // публичный лимит запросов календаря.
+        const availabilityResponse = await getAvailability(
+          new NextRequest(availabilityUrl, {
+            headers: {
+              "x-ponglab-internal-availability":
+                createInternalAvailabilityToken(config.key),
+            },
+          }),
+        );
+
+        const availabilityData = await availabilityResponse
+          .json()
+          .catch(() => ({}));
 
         if (!availabilityResponse.ok) {
           return errorResponse(
-            availabilityData.error || "Не удалось проверить доступность слота.",
+            availabilityData.error ||
+              "Не удалось проверить доступность слота.",
             availabilityResponse.status,
           );
         }
@@ -400,25 +488,29 @@ export async function POST(request: NextRequest) {
         const slots = Array.isArray(availabilityData.slots)
           ? (availabilityData.slots as AvailableSlot[])
           : [];
-        const slot = slots.find((candidate) =>
-          Date.parse(candidate.start_at) === segmentStart.getTime() &&
-          Number(candidate.duration_minutes) === 60 &&
-          candidate.available_tables.some((table) => table.id === group.table_id)
+
+        const slot = slots.find(
+          (candidate) =>
+            Date.parse(candidate.start_at) === segmentStart.getTime() &&
+            Number(candidate.duration_minutes) === 60 &&
+            candidate.available_tables.some(
+              (table) => table.id === group.table_id,
+            ),
         );
 
         if (!slot) {
-          console.error("Booking hold hourly segment mismatch:", {
-            studioId, date, table_id: group.table_id,
-            segment_start_at: segmentStart.toISOString(),
-            group_duration_minutes: group.duration_minutes,
-          });
+          console.error("Booking hold hourly segment is no longer available.");
+
           return errorResponse(
             "Один из выбранных часовых слотов уже недоступен или тариф изменился. Обновите календарь.",
             409,
           );
         }
 
-        if (index === 0) firstStartAt = slot.start_at;
+        if (index === 0) {
+          firstStartAt = slot.start_at;
+        }
+
         finalEndAt = slot.end_at;
         totalPrice += Number(slot.price_rub);
       }
@@ -435,22 +527,10 @@ export async function POST(request: NextRequest) {
       Date.now() + holdMinutes * 60_000,
     ).toISOString();
 
-    // Создаём все брони одним пакетным запросом.
-    // Ограничения базы данных должны отклонять пересечения по времени.
-    const rowsToInsert = validated.map((item) => ({
-      user_id: userId,
-      table_id: item.table_id,
-      start_at: item.start_at,
-      end_at: item.end_at,
-      price_rub: item.price_rub,
-      status: "pending_payment",
-      payment_provider: "tbank",
-      payment_status: "pending",
-      hold_expires_at: holdExpiresAt,
-    }));
-
-    const insertResponse = await fetch(
-      `${config.url}/rest/v1/bookings`,
+    // Создаём группу платежа и все связанные брони одной транзакцией PostgreSQL.
+    // Платёжный провайдер — YooKassa. Сам платёж подключим следующим этапом.
+    const rpcResponse = await fetch(
+      `${config.url}/rest/v1/rpc/create_payment_group_with_bookings`,
       {
         method: "POST",
         headers: {
@@ -458,22 +538,31 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Prefer: "return=representation",
         },
-        body: JSON.stringify(rowsToInsert),
+        body: JSON.stringify({
+          p_user_id: userId,
+          p_provider: "yookassa",
+          p_hold_expires_at: holdExpiresAt,
+          p_bookings: validated.map((item) => ({
+            table_id: item.table_id,
+            start_at: item.start_at,
+            end_at: item.end_at,
+            price_rub: item.price_rub,
+          })),
+        }),
         cache: "no-store",
       },
     );
 
-    if (!insertResponse.ok) {
-      const details = await insertResponse.text();
+    if (!rpcResponse.ok) {
+      const details = await rpcResponse.text();
 
       console.error(
-        "Booking hold insert failed:",
-        insertResponse.status,
-        details,
+        "Atomic payment group creation failed. HTTP status:",
+        rpcResponse.status,
       );
 
       if (
-        insertResponse.status === 409 ||
+        rpcResponse.status === 409 ||
         details.includes("bookings_no_overlap") ||
         details.includes("23P01")
       ) {
@@ -483,38 +572,51 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (details.includes("bookings_payment_provider_check")) {
-        return errorResponse(
-          "База данных ещё не обновлена для выбранного платёжного провайдера. Проверьте SQL-миграцию.",
-          503,
-        );
-      }
-
       return errorResponse(
-        "Не удалось создать временную бронь. Повторите попытку.",
+        "Не удалось создать группу бронирования. Повторите попытку.",
         503,
       );
     }
 
-    const createdRows = await insertResponse.json();
+    const createdGroup = await rpcResponse.json().catch(() => null);
 
     if (
-      !Array.isArray(createdRows) ||
-      createdRows.length !== rowsToInsert.length ||
-      createdRows.some((row) => !row?.id)
+      !createdGroup ||
+      typeof createdGroup !== "object" ||
+      !createdGroup.payment_group_id ||
+      !Array.isArray(createdGroup.bookings) ||
+      createdGroup.bookings.length !== validated.length ||
+      Number(createdGroup.total_price_rub) <= 0
     ) {
       console.error(
-        "Booking hold insert returned an unexpected response.",
-        createdRows,
+        "Atomic payment group creation returned an unexpected response.",
+        {
+          hasPaymentGroupId: Boolean(createdGroup?.payment_group_id),
+          bookingsIsArray: Array.isArray(createdGroup?.bookings),
+          bookingCount: Array.isArray(createdGroup?.bookings)
+            ? createdGroup.bookings.length
+            : null,
+          hasPositiveTotal:
+            Number.isFinite(Number(createdGroup?.total_price_rub)) &&
+            Number(createdGroup.total_price_rub) > 0,
+        },
       );
 
       return errorResponse(
-        "Сервер не подтвердил создание всех временных броней.",
+        "Сервер не подтвердил создание всей группы бронирования.",
         503,
       );
     }
 
-    const bookings = createdRows.map((row) => ({
+    const bookings = createdGroup.bookings.map((row: {
+      id: string;
+      start_at: string;
+      end_at: string;
+      price_rub: number;
+      status: string;
+      hold_expires_at: string;
+      table_id: string;
+    }) => ({
       id: row.id,
       start_at: row.start_at,
       end_at: row.end_at,
@@ -524,16 +626,12 @@ export async function POST(request: NextRequest) {
       table_id: row.table_id,
     }));
 
-    const totalPrice = bookings.reduce(
-      (total, booking) => total + Number(booking.price_rub),
-      0,
-    );
-
     return NextResponse.json(
       {
+        payment_group_id: createdGroup.payment_group_id,
         bookings,
-        total_price_rub: totalPrice,
-        hold_expires_at: holdExpiresAt,
+        total_price_rub: Number(createdGroup.total_price_rub),
+        hold_expires_at: createdGroup.hold_expires_at ?? holdExpiresAt,
         next_step: "payment",
         ...(parsedGroups.legacySingleGroup
           ? { booking: bookings[0] }
@@ -544,13 +642,11 @@ export async function POST(request: NextRequest) {
         headers: { "Cache-Control": "no-store" },
       },
     );
-  } catch (error) {
-    console.error("Booking hold POST error:", error);
+  } catch {
+    console.error("Booking hold POST failed.");
 
     return errorResponse(
-      error instanceof Error
-        ? error.message
-        : "Не удалось создать временную бронь.",
+      "Не удалось создать временную бронь. Попробуйте позже.",
       503,
     );
   }

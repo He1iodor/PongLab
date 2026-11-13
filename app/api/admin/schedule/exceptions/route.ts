@@ -35,12 +35,18 @@ function validDate(value: unknown): value is string {
   }
 
   const date = new Date(`${value}T00:00:00Z`);
+
   return !Number.isNaN(date.getTime()) &&
     date.toISOString().slice(0, 10) === value;
 }
 
-async function checkStudio(url: string, key: string, studioId: string) {
+async function checkStudio(
+  url: string,
+  key: string,
+  studioId: string
+) {
   const target = new URL(`${url}/rest/v1/studios`);
+
   target.searchParams.set("select", "id");
   target.searchParams.set("id", `eq.${studioId}`);
   target.searchParams.set("is_active", "eq.true");
@@ -52,11 +58,17 @@ async function checkStudio(url: string, key: string, studioId: string) {
   });
 
   if (!response.ok) {
-    console.error("Exception studio check failed:", response.status, await response.text());
+    console.error(
+      "Exception studio check failed:",
+      response.status,
+      await response.text()
+    );
+
     throw new Error("Не удалось проверить клуб.");
   }
 
   const rows = await response.json();
+
   return Array.isArray(rows) && rows.length > 0;
 }
 
@@ -65,9 +77,13 @@ export async function GET(request: NextRequest) {
   if (!access.ok) return access.response;
 
   const config = getConfig();
-  if (!config) return errorResponse("Сервис временно недоступен.", 503);
+
+  if (!config) {
+    return errorResponse("Сервис временно недоступен.", 503);
+  }
 
   const studioId = request.nextUrl.searchParams.get("studio_id");
+
   if (!studioId || !isUuid(studioId)) {
     return errorResponse("Укажите корректный клуб.", 400);
   }
@@ -77,7 +93,10 @@ export async function GET(request: NextRequest) {
       return errorResponse("Клуб не найден или отключён.", 404);
     }
 
-    const target = new URL(`${config.url}/rest/v1/studio_date_exceptions`);
+    const target = new URL(
+      `${config.url}/rest/v1/studio_date_exceptions`
+    );
+
     target.searchParams.set(
       "select",
       "id,studio_id,exception_date,is_closed,note"
@@ -91,12 +110,23 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      console.error("Exceptions GET failed:", response.status, await response.text());
-      return errorResponse("Не удалось загрузить исключения.", 503);
+      console.error(
+        "Exceptions GET failed:",
+        response.status,
+        await response.text()
+      );
+
+      return errorResponse(
+        "Не удалось загрузить исключения.",
+        503
+      );
     }
 
     const exceptions = await response.json();
-    const ids = exceptions.map((item: { id: string }) => item.id);
+
+    const ids = exceptions.map(
+      (item: { id: string }) => item.id
+    );
 
     let intervals: Array<{
       id: string;
@@ -109,15 +139,21 @@ export async function GET(request: NextRequest) {
       const intervalUrl = new URL(
         `${config.url}/rest/v1/studio_date_exception_intervals`
       );
+
       intervalUrl.searchParams.set(
         "select",
         "id,exception_id,opens_at,closes_at"
       );
+
       intervalUrl.searchParams.set(
         "exception_id",
         `in.(${ids.join(",")})`
       );
-      intervalUrl.searchParams.set("order", "opens_at.asc");
+
+      intervalUrl.searchParams.set(
+        "order",
+        "opens_at.asc"
+      );
 
       const intervalResponse = await fetch(intervalUrl, {
         headers: headers(config.key),
@@ -125,8 +161,16 @@ export async function GET(request: NextRequest) {
       });
 
       if (!intervalResponse.ok) {
-        console.error("Exception intervals GET failed:", intervalResponse.status, await intervalResponse.text());
-        return errorResponse("Не удалось загрузить интервалы исключений.", 503);
+        console.error(
+          "Exception intervals GET failed:",
+          intervalResponse.status,
+          await intervalResponse.text()
+        );
+
+        return errorResponse(
+          "Не удалось загрузить интервалы исключений.",
+          503
+        );
       }
 
       intervals = await intervalResponse.json();
@@ -141,7 +185,9 @@ export async function GET(request: NextRequest) {
     }) => ({
       ...item,
       intervals: intervals
-        .filter((interval) => interval.exception_id === item.id)
+        .filter(
+          (interval) => interval.exception_id === item.id
+        )
         .map((interval) => ({
           opens_at: interval.opens_at,
           closes_at: interval.closes_at,
@@ -154,8 +200,11 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("Exceptions GET error:", error);
+
     return errorResponse(
-      error instanceof Error ? error.message : "Ошибка загрузки исключений.",
+      error instanceof Error
+        ? error.message
+        : "Ошибка загрузки исключений.",
       503
     );
   }
@@ -163,6 +212,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
+
   if (!origin || origin !== new URL(request.url).origin) {
     return errorResponse("Недопустимый запрос.", 403);
   }
@@ -171,9 +221,13 @@ export async function POST(request: NextRequest) {
   if (!access.ok) return access.response;
 
   const config = getConfig();
-  if (!config) return errorResponse("Сервис временно недоступен.", 503);
+
+  if (!config) {
+    return errorResponse("Сервис временно недоступен.", 503);
+  }
 
   let body: unknown;
+
   try {
     body = await request.json();
   } catch {
@@ -185,6 +239,7 @@ export async function POST(request: NextRequest) {
   }
 
   const data = body as Record<string, unknown>;
+
   const studioId = data.studio_id;
   const date = data.exception_date;
   const isClosed = data.is_closed;
@@ -203,17 +258,32 @@ export async function POST(request: NextRequest) {
     return errorResponse("Укажите тип исключения.", 400);
   }
 
-  if (note !== undefined && note !== null &&
-      (typeof note !== "string" || note.trim().length > 300)) {
-    return errorResponse("Примечание должно быть не длиннее 300 символов.", 400);
+  if (
+    note !== undefined &&
+    note !== null &&
+    (
+      typeof note !== "string" ||
+      note.trim().length > 300
+    )
+  ) {
+    return errorResponse(
+      "Примечание должно быть не длиннее 300 символов.",
+      400
+    );
   }
 
   if (!Array.isArray(intervals) || intervals.length > 10) {
-    return errorResponse("Укажите до 10 рабочих интервалов.", 400);
+    return errorResponse(
+      "Укажите до 10 рабочих интервалов.",
+      400
+    );
   }
 
   if (isClosed && intervals.length > 0) {
-    return errorResponse("Для закрытого дня интервалы не нужны.", 400);
+    return errorResponse(
+      "Для закрытого дня интервалы не нужны.",
+      400
+    );
   }
 
   const normalized: Array<{
@@ -225,12 +295,16 @@ export async function POST(request: NextRequest) {
 
   for (const item of intervals as Array<Record<string, unknown>>) {
     if (
+      !item ||
       typeof item.opens_at !== "string" ||
       typeof item.closes_at !== "string" ||
       !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(item.opens_at) ||
       !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(item.closes_at)
     ) {
-      return errorResponse("Укажите корректное время интервалов.", 400);
+      return errorResponse(
+        "Укажите корректное время интервалов.",
+        400
+      );
     }
 
     const toMinutes = (value: string) => {
@@ -242,23 +316,42 @@ export async function POST(request: NextRequest) {
     const end = toMinutes(item.closes_at);
 
     if (start >= end) {
-      return errorResponse("Окончание должно быть позже начала.", 400);
+      return errorResponse(
+        "Окончание должно быть позже начала.",
+        400
+      );
     }
 
-    if (normalized.some((other) => start < other.end && end > other.start)) {
-      return errorResponse("Интервалы не должны пересекаться.", 400);
+    if (
+      normalized.some(
+        (other) => start < other.end && end > other.start
+      )
+    ) {
+      return errorResponse(
+        "Интервалы не должны пересекаться.",
+        400
+      );
     }
 
     normalized.push({
-      opens_at: item.opens_at.length === 5 ? `${item.opens_at}:00` : item.opens_at,
-      closes_at: item.closes_at.length === 5 ? `${item.closes_at}:00` : item.closes_at,
+      opens_at: item.opens_at.length === 5
+        ? `${item.opens_at}:00`
+        : item.opens_at,
+
+      closes_at: item.closes_at.length === 5
+        ? `${item.closes_at}:00`
+        : item.closes_at,
+
       start,
       end,
     });
   }
 
   if (!isClosed && normalized.length === 0) {
-    return errorResponse("Для особого рабочего дня добавьте хотя бы один интервал.", 400);
+    return errorResponse(
+      "Для особого рабочего дня добавьте хотя бы один интервал.",
+      400
+    );
   }
 
   try {
@@ -266,88 +359,67 @@ export async function POST(request: NextRequest) {
       return errorResponse("Клуб не найден или отключён.", 404);
     }
 
-    const target = new URL(`${config.url}/rest/v1/studio_date_exceptions`);
-    target.searchParams.set("on_conflict", "studio_id,exception_date");
+    const saveResponse = await fetch(
+      `${config.url}/rest/v1/rpc/save_date_exception_atomic`,
+      {
+        method: "POST",
+        headers: {
+          ...headers(config.key),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_studio_id: studioId,
+          p_exception_date: date,
+          p_is_closed: isClosed,
+          p_note: typeof note === "string"
+            ? note.trim() || null
+            : null,
 
-    const response = await fetch(target, {
-      method: "POST",
-      headers: {
-        ...headers(config.key),
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=representation",
-      },
-      body: JSON.stringify({
-        studio_id: studioId,
-        exception_date: date,
-        is_closed: isClosed,
-        note: typeof note === "string" ? note.trim() || null : null,
-      }),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      console.error("Exception POST failed:", response.status, await response.text());
-      return errorResponse("Не удалось сохранить исключение.", 503);
-    }
-
-    const rows = await response.json();
-    const exception = Array.isArray(rows) ? rows[0] : null;
-
-    if (!exception) {
-      return errorResponse("Не удалось подтвердить сохранение исключения.", 503);
-    }
-
-    const deleteUrl = new URL(
-      `${config.url}/rest/v1/studio_date_exception_intervals`
+          p_intervals: normalized.map((interval) => ({
+            opens_at: interval.opens_at,
+            closes_at: interval.closes_at,
+          })),
+        }),
+        cache: "no-store",
+      }
     );
-    deleteUrl.searchParams.set("exception_id", `eq.${exception.id}`);
 
-    const deleteResponse = await fetch(deleteUrl, {
-      method: "DELETE",
-      headers: headers(config.key),
-      cache: "no-store",
-    });
-
-    if (!deleteResponse.ok) {
-      console.error("Exception intervals DELETE failed:", deleteResponse.status, await deleteResponse.text());
-      return errorResponse("Исключение сохранено, но не удалось обновить интервалы.", 503);
-    }
-
-    if (normalized.length > 0) {
-      const insertResponse = await fetch(
-        `${config.url}/rest/v1/studio_date_exception_intervals`,
-        {
-          method: "POST",
-          headers: {
-            ...headers(config.key),
-            "Content-Type": "application/json",
-            Prefer: "return=minimal",
-          },
-          body: JSON.stringify(
-            normalized.map((interval) => ({
-              exception_id: exception.id,
-              opens_at: interval.opens_at,
-              closes_at: interval.closes_at,
-            }))
-          ),
-          cache: "no-store",
-        }
+    if (!saveResponse.ok) {
+      console.error(
+        "Exception atomic save failed:",
+        saveResponse.status,
+        await saveResponse.text()
       );
 
-      if (!insertResponse.ok) {
-        console.error("Exception intervals POST failed:", insertResponse.status, await insertResponse.text());
-        return errorResponse("Исключение сохранено, но не удалось сохранить интервалы.", 503);
-      }
+      return errorResponse(
+        "Не удалось сохранить исключение.",
+        503
+      );
+    }
+
+    const exception = await saveResponse.json();
+
+    if (!exception || typeof exception !== "object") {
+      return errorResponse(
+        "Не удалось подтвердить сохранение исключения.",
+        503
+      );
     }
 
     return NextResponse.json(
       { exception },
-      { status: 201, headers: { "Cache-Control": "no-store" } }
+      {
+        status: 201,
+        headers: { "Cache-Control": "no-store" },
+      }
     );
   } catch (error) {
     console.error("Exceptions POST error:", error);
+
     return errorResponse(
-      error instanceof Error ? error.message : "Ошибка сохранения исключения.",
+      error instanceof Error
+        ? error.message
+        : "Ошибка сохранения исключения.",
       503
     );
   }
@@ -355,6 +427,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const origin = request.headers.get("origin");
+
   if (!origin || origin !== new URL(request.url).origin) {
     return errorResponse("Недопустимый запрос.", 403);
   }
@@ -363,26 +436,53 @@ export async function DELETE(request: NextRequest) {
   if (!access.ok) return access.response;
 
   const config = getConfig();
-  if (!config) return errorResponse("Сервис временно недоступен.", 503);
+
+  if (!config) {
+    return errorResponse("Сервис временно недоступен.", 503);
+  }
 
   const id = request.nextUrl.searchParams.get("id");
+
   if (!id || !isUuid(id)) {
     return errorResponse("Укажите корректное исключение.", 400);
   }
 
   try {
-    const target = new URL(`${config.url}/rest/v1/studio_date_exceptions`);
-    target.searchParams.set("id", `eq.${id}`);
-
-    const response = await fetch(target, {
-      method: "DELETE",
-      headers: headers(config.key),
-      cache: "no-store",
-    });
+    const response = await fetch(
+      `${config.url}/rest/v1/rpc/delete_date_exception_atomic`,
+      {
+        method: "POST",
+        headers: {
+          ...headers(config.key),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_exception_id: id,
+        }),
+        cache: "no-store",
+      }
+    );
 
     if (!response.ok) {
-      console.error("Exception DELETE failed:", response.status, await response.text());
-      return errorResponse("Не удалось удалить исключение.", 503);
+      console.error(
+        "Atomic exception DELETE failed:",
+        response.status,
+        await response.text()
+      );
+
+      return errorResponse(
+        "Не удалось удалить исключение.",
+        503
+      );
+    }
+
+    const deleted = await response.json();
+
+    if (deleted !== true) {
+      return errorResponse(
+        "Исключение не найдено или уже удалено.",
+        404
+      );
     }
 
     return NextResponse.json(
@@ -390,7 +490,11 @@ export async function DELETE(request: NextRequest) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
-    console.error("Exception DELETE error:", error);
-    return errorResponse("Ошибка удаления исключения.", 503);
+    console.error("Exceptions DELETE error:", error);
+
+    return errorResponse(
+      "Ошибка удаления исключения.",
+      503
+    );
   }
 }

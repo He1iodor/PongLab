@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -46,6 +45,7 @@ type SelectedSlot = {
 };
 
 type HoldResult = {
+  payment_group_id: string;
   bookings: Array<{
     id: string;
     start_at: string;
@@ -136,6 +136,7 @@ export default function BookingCalendar() {
 
   const [offerAccepted, setOfferAccepted] = useState(false);
   const [creatingHold, setCreatingHold] = useState(false);
+  const [creatingPayment, setCreatingPayment] = useState(false);
   const [holdError, setHoldError] = useState("");
   const [holdResult, setHoldResult] = useState<HoldResult | null>(null);
 
@@ -452,7 +453,8 @@ export default function BookingCalendar() {
       if (
         !Array.isArray(result.bookings) ||
         result.bookings.length !== bookingGroups.length ||
-        !result.hold_expires_at
+        !result.hold_expires_at ||
+        typeof result.payment_group_id !== "string"
       ) {
         throw new Error(
           "Сервер не подтвердил создание всех временных броней. Обновите страницу перед повторной попыткой.",
@@ -469,6 +471,78 @@ export default function BookingCalendar() {
       );
     } finally {
       setCreatingHold(false);
+    }
+  };
+
+  // Запускаем оплату уже созданной группы броней.
+  // Создавать новую группу при повторном нажатии нельзя.
+  const startPayment = async () => {
+    if (!holdResult?.payment_group_id) {
+      setHoldError(
+        "Не найден идентификатор группы бронирования. Обновите страницу и проверьте бронирование в личном кабинете.",
+      );
+      return;
+    }
+
+    setCreatingPayment(true);
+    setHoldError("");
+
+    try {
+      const response = await fetch("/api/payments/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          payment_group_id: holdResult.payment_group_id,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+            "Не удалось начать оплату. Проверьте бронирование в личном кабинете.",
+        );
+      }
+
+      // Если сервер уже подтвердил оплату, открываем страницу
+      // проверки результата, а не пытаемся создать новый платёж.
+      if (result.state === "succeeded") {
+        window.location.assign(
+          `/payment/return?payment_group_id=${encodeURIComponent(
+            holdResult.payment_group_id,
+          )}`,
+        );
+        return;
+      }
+
+      if (
+        result.state !== "pending" ||
+        typeof result.confirmation_url !== "string"
+      ) {
+        throw new Error(
+          "Платёжный сервис не вернул ссылку для оплаты. Повторите попытку.",
+        );
+      }
+
+      const paymentUrl = new URL(result.confirmation_url);
+
+      if (paymentUrl.protocol !== "https:") {
+        throw new Error(
+          "Получена небезопасная ссылка оплаты. Обратитесь в поддержку.",
+        );
+      }
+
+      window.location.assign(paymentUrl.toString());
+    } catch (caught) {
+      setHoldError(
+        caught instanceof Error
+          ? caught.message
+          : "Не удалось перейти к оплате. Повторите попытку.",
+      );
+    } finally {
+      setCreatingPayment(false);
     }
   };
 
@@ -849,11 +923,11 @@ export default function BookingCalendar() {
                   <span>
                     Я ознакомился(-ась) с{" "}
                     <Link
-  href="/oferta"
-  className="text-[#C8B2FF] underline underline-offset-4 hover:text-white"
->
-  договором-офертой
-</Link>{" "}
+                      href="/oferta"
+                      className="text-[#C8B2FF] underline underline-offset-4 hover:text-white"
+                    >
+                      договором-офертой
+                    </Link>{" "}
                     и согласен(-на) с его условиями. Понимаю, что временный
                     резерв сам по себе не заключает договор: согласно оферте,
                     договор заключается после полной оплаты.
@@ -872,11 +946,12 @@ export default function BookingCalendar() {
                 {holdResult ? (
                   <div
                     role="status"
-                    className="space-y-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4"
+                    className="space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4"
                   >
                     <p className="font-semibold text-emerald-100">
                       Временная бронь создана
                     </p>
+
                     <p className="text-sm leading-6 text-white/75">
                       Выбранное время удерживается до{" "}
                       {new Intl.DateTimeFormat("ru-RU", {
@@ -886,10 +961,28 @@ export default function BookingCalendar() {
                           selectedStudio?.timezone || "Europe/Moscow",
                       }).format(new Date(holdResult.hold_expires_at))}.
                     </p>
+
                     <p className="text-sm leading-6 text-white/75">
-                      Сумма резерва: {money(holdResult.total_price_rub)}.
-                      Переход к оплате ещё не подключён, деньги не списаны.
+                      К оплате: {money(holdResult.total_price_rub)}.
                     </p>
+
+                    <button
+                      type="button"
+                      onClick={() => void startPayment()}
+                      disabled={creatingPayment}
+                      className="flex min-h-12 w-full items-center justify-center rounded-xl bg-[#8F5BFF] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#A77BFF] disabled:cursor-wait disabled:opacity-50"
+                    >
+                      {creatingPayment
+                        ? "Подключаем оплату..."
+                        : "Перейти к оплате"}
+                    </button>
+
+                    <p className="text-xs leading-5 text-white/55">
+                      Оплата откроется на защищённой странице ЮKassa.
+                      Бронь станет подтверждённой только после проверки
+                      успешного платежа сервером.
+                    </p>
+
                     <p className="text-xs leading-5 text-white/50">
                       Номера временных броней:{" "}
                       {holdResult.bookings
@@ -915,8 +1008,9 @@ export default function BookingCalendar() {
                 )}
 
                 <p className="text-xs leading-5 text-white/45">
-                  Резерв не является оплатой. Если не завершить оплату до
-                  истечения срока удержания, бронь будет освобождена системой.
+                  До начала оплаты временный резерв удерживается 10 минут.
+                  После перехода к оплате система дождётся финального
+                  статуса платёжного сервиса.
                 </p>
               </div>
             </div>

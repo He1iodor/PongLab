@@ -58,7 +58,6 @@ export async function requireOwner(
     return deny(503, "Сервис временно недоступен.");
   }
 
-  // Проверяем подпись cookie владельца.
   const parts = ownerToken.split(".");
 
   if (parts.length !== 2) {
@@ -103,7 +102,6 @@ export async function requireOwner(
   };
 
   try {
-    // Повторно проверяем действительность основной сессии.
     const tokenHash = createHash("sha256")
       .update(sessionToken)
       .digest("hex");
@@ -142,7 +140,6 @@ export async function requireOwner(
       return deny(401, "Основная сессия недействительна.");
     }
 
-    // Проверяем роль по базе при каждом защищённом запросе.
     const userUrl = new URL(`${supabaseUrl}/rest/v1/users`);
     userUrl.searchParams.set("select", "id,role");
     userUrl.searchParams.set("id", `eq.${claims.sub}`);
@@ -172,8 +169,8 @@ export async function requireOwner(
     }
 
     return { ok: true, userId: claims.sub };
-  } catch (error) {
-    console.error("Owner auth error:", error);
+  } catch {
+    console.error("Owner auth: unexpected verification failure.");
     return deny(503, "Ошибка проверки доступа.");
   }
 }

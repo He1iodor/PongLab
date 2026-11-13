@@ -44,15 +44,10 @@ export async function GET(request: NextRequest) {
       }
     );
 
-   if (!response.ok) {
-  const details = await response.text();
-  console.error(
-    "Cities GET failed:",
-    response.status,
-    details
-  );
-  return errorResponse("Не удалось загрузить города.", 503);
-}
+    if (!response.ok) {
+      console.error("Cities GET failed:", response.status);
+      return errorResponse("Не удалось загрузить города.", 503);
+    }
 
     const cities = await response.json();
 
@@ -60,8 +55,8 @@ export async function GET(request: NextRequest) {
       { cities },
       { headers: { "Cache-Control": "no-store" } }
     );
-  } catch (error) {
-    console.error("Cities GET error:", error);
+  } catch {
+    console.error("Cities GET failed: unexpected server error.");
     return errorResponse("Сервис временно недоступен.", 503);
   }
 }
@@ -125,13 +120,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (!response.ok) {
+      // Тело ответа читается только для определения конфликта уникальности.
+      // В логи оно не записывается.
       const details = await response.text();
-      console.error("Cities POST failed:", response.status, details);
 
-      if (response.status === 400 && details.includes("cities_name_lower_unique")) {
+      if (
+        response.status === 400 &&
+        details.includes("cities_name_lower_unique")
+      ) {
         return errorResponse("Такой город уже существует.", 409);
       }
 
+      console.error("Cities POST failed:", response.status);
       return errorResponse("Не удалось создать город.", 503);
     }
 
@@ -139,7 +139,10 @@ export async function POST(request: NextRequest) {
     const city = Array.isArray(rows) ? rows[0] : null;
 
     if (!city) {
-      return errorResponse("Не удалось подтвердить создание города.", 503);
+      return errorResponse(
+        "Не удалось подтвердить создание города.",
+        503
+      );
     }
 
     return NextResponse.json(
@@ -149,8 +152,8 @@ export async function POST(request: NextRequest) {
         headers: { "Cache-Control": "no-store" },
       }
     );
-  } catch (error) {
-    console.error("Cities POST error:", error);
+  } catch {
+    console.error("Cities POST failed: unexpected server error.");
     return errorResponse("Сервис временно недоступен.", 503);
   }
 }

@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 
@@ -13,6 +12,9 @@ type BookingRow = {
   status: string;
   payment_status: string;
   price_rub: number;
+  payment_init_started_at: string | null;
+  payment_id: string | null;
+  payment_group_id: string | null;
   hold_expires_at: string | null;
   created_at: string;
   updated_at: string;
@@ -154,7 +156,7 @@ export async function GET(request: NextRequest) {
       return response;
     }
 
-    // user_id берётся только из проверенной серверной сессии.
+    // user_id берётся только из подтверждённой серверной сессии.
     // Клиент не может передать чужой user_id.
     const rows = await getRows<BookingRow>(
       config.url,
@@ -162,7 +164,7 @@ export async function GET(request: NextRequest) {
       "bookings",
       {
         select:
-          "id,table_id,start_at,end_at,status,payment_status,price_rub,hold_expires_at,created_at,updated_at",
+          "id,table_id,start_at,end_at,status,payment_status,price_rub,payment_init_started_at,payment_id,payment_group_id,hold_expires_at,created_at,updated_at",
         user_id: `eq.${userId}`,
         order: "start_at.desc",
         limit: "100",
@@ -223,7 +225,16 @@ export async function GET(request: NextRequest) {
         ? studioById.get(table.studio_id)
         : undefined;
 
+      // Начатая оплата не должна считаться истёкшим резервом,
+      // даже если первоначальное время удержания уже закончилось.
+      const paymentInProgress =
+        booking.status === "pending_payment" &&
+        Boolean(
+          booking.payment_init_started_at || booking.payment_id,
+        );
+
       const holdExpired =
+        !paymentInProgress &&
         booking.status === "pending_payment" &&
         Boolean(booking.hold_expires_at) &&
         Date.parse(booking.hold_expires_at as string) <= now;
@@ -237,7 +248,13 @@ export async function GET(request: NextRequest) {
           ? "expired"
           : booking.status,
         payment_status: booking.payment_status,
+        // Причина отмены — дополнительная информация.
+        // Не читаем payment_groups: у service_role нет SELECT.
+        payment_failure_reason: null,
         price_rub: booking.price_rub,
+        payment_init_started_at: booking.payment_init_started_at,
+        payment_id: booking.payment_id,
+        payment_group_id: booking.payment_group_id,
         hold_expires_at: booking.hold_expires_at,
         created_at: booking.created_at,
         table_id: booking.table_id,
