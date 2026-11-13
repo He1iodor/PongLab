@@ -388,6 +388,21 @@ export async function getYooKassaPayment(
   return payment as YooKassaPayment;
 }
 
+function normalizeYooKassaCode(
+  value: unknown,
+  fallback: string,
+): string {
+  if (typeof value !== "string") return fallback;
+
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, 64);
+
+  return normalized || fallback;
+}
+
 export async function syncYooKassaPayment(
   payment: YooKassaPayment,
   expectedPaymentGroupId?: string,
@@ -451,10 +466,20 @@ export async function syncYooKassaPayment(
   }
 
   if (payment.status === "canceled") {
-    const reason =
-      typeof payment.cancellation_details?.reason === "string"
-        ? payment.cancellation_details.reason.slice(0, 80)
-        : "yookassa_payment_canceled";
+    const reason = normalizeYooKassaCode(
+      payment.cancellation_details?.reason,
+      "unknown",
+    );
+    const party = normalizeYooKassaCode(
+      payment.cancellation_details?.party,
+      "unknown",
+    );
+
+    // Используем существующее TEXT-поле payment_groups.failure_reason.
+    // Формат сохраняет оба значения YooKassa без новой таблицы:
+    // yookassa_canceled|reason=<reason>|party=<party>
+    const failureReason =
+      `yookassa_canceled|reason=${reason}|party=${party}`.slice(0, 180);
 
     const databaseResult = await supabaseRpc<string>(
       "apply_payment_group_failure",
@@ -462,7 +487,7 @@ export async function syncYooKassaPayment(
         p_payment_group_id: metadataGroupId,
         p_final_status: "cancelled",
         p_provider_payment_id: payment.id,
-        p_failure_reason: reason,
+        p_failure_reason: failureReason,
       },
     );
 
