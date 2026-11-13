@@ -1,3 +1,163 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type BookingRow = {
+  id: string;
+  table_id: string;
+  start_at: string;
+  end_at: string;
+  status: string;
+  payment_status: string;
+  price_rub: number;
+  payment_init_started_at: string | null;
+  payment_id: string | null;
+  payment_group_id: string | null;
+  hold_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type TableRow = {
+  id: string;
+  name: string;
+  studio_id: string;
+};
+
+type StudioRow = {
+  id: string;
+  name: string;
+  address: string | null;
+  timezone: string | null;
+};
+
+function errorResponse(message: string, status: number) {
+  return NextResponse.json(
+    { error: message },
+    {
+      status,
+      headers: { "Cache-Control": "no-store" },
+    },
+  );
+}
+
+function getConfig() {
+  const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+  const key = process.env.SUPABASE_SECRET_KEY;
+
+  return url && key ? { url, key } : null;
+}
+
+function hashToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function apiHeaders(key: string) {
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+  };
+}
+
+async function getRows<T>(
+  url: string,
+  key: string,
+  table: string,
+  query: Record<string, string>,
+): Promise<T[]> {
+  const target = new URL(`${url}/rest/v1/${table}`);
+
+  for (const [name, value] of Object.entries(query)) {
+    target.searchParams.set(name, value);
+  }
+
+  const response = await fetch(target, {
+    headers: apiHeaders(key),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+
+    console.error(
+      `Account bookings query failed (${table}):`,
+      response.status,
+      details,
+    );
+
+    throw new Error("Не удалось загрузить бронирования.");
+  }
+
+  const data: unknown = await response.json();
+
+  if (!Array.isArray(data)) {
+    throw new Error("Получен некорректный ответ базы данных.");
+  }
+
+  return data as T[];
+}
+
+export async function GET(request: NextRequest) {
+  const sessionToken = request.cookies.get("ponglab_session")?.value;
+
+  if (!sessionToken || !/^[a-f0-9]{64}$/i.test(sessionToken)) {
+    return errorResponse(
+      "Войдите в личный кабинет, чтобы просмотреть бронирования.",
+      401,
+    );
+  }
+
+  const config = getConfig();
+
+  if (!config) {
+    return errorResponse("Сервис временно недоступен.", 503);
+  }
+
+  try {
+    // Сначала проверяем серверную сессию.
+    const sessions = await getRows<{
+      user_id: string;
+      expires_at: string;
+    }>(
+      config.url,
+      config.key,
+      "user_sessions",
+      {
+        select: "user_id,expires_at",
+        token_hash: `eq.${hashToken(sessionToken)}`,
+        expires_at: `gt.${new Date().toISOString()}`,
+        limit: "1",
+      },
+    );
+
+    const userId = sessions[0]?.user_id;
+
+    if (!userId) {
+      const response = NextResponse.json(
+        {
+          error: "Сессия истекла. Войдите в личный кабинет повторно.",
+        },
+        {
+          status: 401,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+
+      response.cookies.set("ponglab_session", "", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 0,
+      });
+
+      return response;
+    }
+
+    // user_id берётся только из подтверждённой серверной сессии.
+    // Клиент не может передать чужой user_id.
     const rows = await getRows<BookingRow>(
       config.url,
       config.key,
@@ -88,8 +248,8 @@
           ? "expired"
           : booking.status,
         payment_status: booking.payment_status,
-        // Причина отмены — необязательная метаинформация.
-        // Не запрашиваем payment_groups: service_role не имеет SELECT.
+        // Причина отмены — дополнительная информация.
+        // Не читаем payment_groups: у service_role нет SELECT.
         payment_failure_reason: null,
         price_rub: booking.price_rub,
         payment_init_started_at: booking.payment_init_started_at,
