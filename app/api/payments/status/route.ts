@@ -6,6 +6,7 @@ import {
   resolveSessionUserId,
   supabaseRpc,
   syncYooKassaPayment,
+  type PaymentSyncResult,
 } from "@/lib/yookassa";
 
 export const runtime = "nodejs";
@@ -34,7 +35,9 @@ function errorResponse(message: string, status: number) {
 
 export async function GET(request: NextRequest) {
   const sessionToken = getSessionTokenFromRequest(request);
-  if (!sessionToken) return errorResponse("Войдите в личный кабинет.", 401);
+  if (!sessionToken) {
+    return errorResponse("Войдите в личный кабинет.", 401);
+  }
 
   const paymentGroupId = request.nextUrl.searchParams.get("payment_group_id");
   if (!isUuid(paymentGroupId)) {
@@ -43,31 +46,62 @@ export async function GET(request: NextRequest) {
 
   try {
     const userId = await resolveSessionUserId(sessionToken);
-    if (!userId) return errorResponse("Сессия истекла. Войдите повторно.", 401);
+    if (!userId) {
+      return errorResponse("Сессия истекла. Войдите повторно.", 401);
+    }
 
     const readStatus = async () => {
-      const rows = await supabaseRpc<PaymentGroupStatus[]>("get_payment_group_status", {
-        p_payment_group_id: paymentGroupId,
-        p_user_id: userId,
-      });
+      const rows = await supabaseRpc<PaymentGroupStatus[]>(
+        "get_payment_group_status",
+        {
+          p_payment_group_id: paymentGroupId,
+          p_user_id: userId,
+        },
+      );
+
       return Array.isArray(rows) ? rows[0] ?? null : null;
     };
 
     let group = await readStatus();
-    if (!group) return errorResponse("Бронирование не найдено.", 404);
+    if (!group) {
+      return errorResponse("Бронирование не найдено.", 404);
+    }
 
-    if (group.payment_status === "pending" && group.provider_payment_id) {
+    let syncResult: PaymentSyncResult | null = null;
+
+    // Besides normal pending payments, keep checking a locally timed-out
+    // payment while the return page is open. This catches a delayed provider
+    // success even if the browser remains on this page after the slot is freed.
+    if (
+      group.provider_payment_id &&
+      (group.payment_status === "pending" ||
+        group.payment_status === "cancelled")
+    ) {
       const payment = await getYooKassaPayment(group.provider_payment_id);
-      await syncYooKassaPayment(payment, paymentGroupId);
+      syncResult = await syncYooKassaPayment(payment, paymentGroupId);
+
       group = await readStatus();
-      if (!group) return errorResponse("Бронирование не найдено.", 404);
+      if (!group) {
+        return errorResponse("Бронирование не найдено.", 404);
+      }
     }
 
     const state = group.payment_status === "succeeded"
       ? "succeeded"
-      : group.payment_status === "cancelled" || group.payment_status === "failed"
-        ? "cancelled"
-        : "pending";
+      : group.payment_status === "refunded"
+        ? "refunded"
+        : group.payment_status === "cancelled" ||
+            group.payment_status === "failed"
+          ? "cancelled"
+          : "pending";
+
+    const refundRequired =
+      syncResult?.databaseResult === "late_success_refund_required";
+
+    const monitorLatePayment =
+      group.payment_status === "cancelled" &&
+      Boolean(group.provider_payment_id) &&
+      syncResult?.providerStatus === "pending";
 
     return NextResponse.json(
       {
@@ -78,12 +112,19 @@ export async function GET(request: NextRequest) {
         hold_expires_at: group.hold_expires_at,
         booking_count: group.booking_count,
         confirmed_booking_count: group.confirmed_booking_count,
-        payment_initialization_started: Boolean(group.payment_init_started_at),
+        payment_initialization_started: Boolean(
+          group.payment_init_started_at,
+        ),
+        monitor_late_payment: monitorLatePayment,
+        refund_required: refundRequired,
       },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch {
     console.error("Payment status lookup failed.");
-    return errorResponse("Не удалось проверить статус оплаты. Повторите попытку.", 503);
+    return errorResponse(
+      "Не удалось проверить статус оплаты. Повторите попытку.",
+      503,
+    );
   }
 }
