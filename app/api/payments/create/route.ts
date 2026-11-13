@@ -4,6 +4,7 @@ import {
   getSessionTokenFromRequest,
   getYooKassaPayment,
   isUuid,
+  isYooKassaReadyForPayments,
   parseWholeRubleAmount,
   resolveSessionUserId,
   supabaseRpc,
@@ -85,6 +86,15 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) {
     return errorResponse("Недопустимый запрос.", 403);
+  }
+
+  // Не запускаем инициализацию платежа, если окружение не готово принять оплату.
+  // Проверка выполняется до обращения к сессии и Supabase.
+  if (!isYooKassaReadyForPayments()) {
+    return errorResponse(
+      "Онлайн-оплата временно недоступна: платёжный сервис ещё не настроен.",
+      503,
+    );
   }
 
   const sessionToken = getSessionTokenFromRequest(request);
