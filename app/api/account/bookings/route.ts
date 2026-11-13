@@ -255,7 +255,7 @@ export async function GET(request: NextRequest) {
       const doorOnline =
         Number.isFinite(lastSeenMs) &&
         lastSeenMs <= now &&
-        now - lastSeenMs <= 45_000;
+        now - lastSeenMs <= 90_000;
 
       return {
         id: booking.id,
