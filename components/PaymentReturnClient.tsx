@@ -119,16 +119,23 @@ export default function PaymentReturnClient({
     [paymentGroupId],
   );
 
-  // Автоматически проверяем статус платежа.
+  // Проверяем до получения окончательного статуса.
+  // Если запрос временно не удался, повторяем его через 30 секунд.
+  // Терминальные состояния succeeded и cancelled больше не опрашиваются.
   useEffect(() => {
     let cancelled = false;
-    let attempts = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
-      if (cancelled || attempts >= 20) return;
+      if (cancelled) return;
 
-      attempts += 1;
+      if (!paymentGroupId) {
+        setState("error");
+        setError("Не найден идентификатор бронирования.");
+        return;
+      }
+
+      let nextDelay = 15_000;
 
       try {
         const params = new URLSearchParams({
@@ -148,14 +155,9 @@ export default function PaymentReturnClient({
         ) as PaymentStatusResponse;
 
         if (!response.ok) {
-          if (!cancelled) {
-            setState("error");
-            setError(
-              result.error || "Не удалось проверить оплату.",
-            );
-          }
-
-          return;
+          throw new Error(
+            result.error || "Не удалось проверить оплату.",
+          );
         }
 
         if (cancelled) return;
@@ -172,27 +174,30 @@ export default function PaymentReturnClient({
         setState(nextState);
 
         if (
-          nextState === "pending" &&
-          attempts < 20
+          nextState === "succeeded" ||
+          nextState === "cancelled"
         ) {
-          timer = setTimeout(poll, 3000);
+          return;
         }
-      } catch {
-        if (!cancelled) {
-          setState("error");
-          setError(
-            "Не удалось связаться с сервером. Проверьте статус повторно.",
-          );
-        }
+      } catch (caught) {
+        if (cancelled) return;
+
+        setState("error");
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Не удалось связаться с сервером. Проверка будет повторена автоматически.",
+        );
+
+        nextDelay = 30_000;
+      }
+
+      if (!cancelled) {
+        timer = setTimeout(poll, nextDelay);
       }
     };
 
-    if (paymentGroupId) {
-      void poll();
-    } else {
-      setState("error");
-      setError("Не найден идентификатор бронирования.");
-    }
+    void poll();
 
     return () => {
       cancelled = true;
@@ -240,9 +245,9 @@ export default function PaymentReturnClient({
             </h1>
 
             <p className="mt-3 text-sm leading-6 text-white/65">
-              YooKassa сообщила об отмене платежа. Проверьте
-              бронирование в личном кабинете и при необходимости
-              выберите новое время.
+              YooKassa сообщила об окончательной отмене платежа.
+              Эта бронь закрыта. Для новой попытки выберите свободное
+              время и создайте новое бронирование.
             </p>
           </>
         ) : state === "pending" || state === "loading" ? (
@@ -257,10 +262,10 @@ export default function PaymentReturnClient({
             </h1>
 
             <p className="mt-3 text-sm leading-6 text-white/65">
-              Платёж ещё обрабатывается или уведомление от банка
-              не поступило. Не оплачивайте бронирование повторно.
-              Страница автоматически проверит статус ещё несколько
-              раз.
+              Платёж ещё обрабатывается или уведомление от платёжного
+              сервиса не поступило. Страница будет автоматически
+              проверять статус каждые 15 секунд. Не оплачивайте
+              бронирование повторно.
             </p>
 
             {amount !== null && (
@@ -283,6 +288,11 @@ export default function PaymentReturnClient({
             <p className="mt-3 text-sm leading-6 text-white/65">
               {error}
             </p>
+
+            <p className="mt-2 text-xs leading-5 text-white/45">
+              Автоматическая проверка будет повторена. Не создавайте
+              новый платёж, пока не выяснено состояние текущего.
+            </p>
           </>
         )}
 
@@ -297,7 +307,7 @@ export default function PaymentReturnClient({
               size={16}
               className={checking ? "animate-spin" : ""}
             />
-            Проверить ещё раз
+            Проверить сейчас
           </button>
         )}
 
