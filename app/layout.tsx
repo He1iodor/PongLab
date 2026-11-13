@@ -30,10 +30,9 @@ export const metadata: Metadata = {
     title: siteTitle,
     description: siteDescription,
   },
-  robots: {
-    index: true,
-    follow: true,
-  },
+  // Не задаём глобальные robots: X-Robots-Tag точечно управляет noindex
+  // для служебных маршрутов в next.config.ts. Публичные страницы индексируются
+  // по умолчанию, без конфликтующего meta robots="index, follow".
 };
 
 export default function RootLayout({
