@@ -42,13 +42,9 @@ function getConfig() {
 
 async function getRefundRow(refundId: string): Promise<RefundRow | null> {
   const config = getConfig();
-
-  if (!config) {
-    throw new Error("Supabase configuration is unavailable.");
-  }
+  if (!config) throw new Error("Supabase configuration is unavailable.");
 
   const target = new URL(`${config.url}/rest/v1/payment_refunds`);
-
   target.searchParams.set(
     "select",
     "id,booking_operation_id,payment_group_id,provider,provider_payment_id,provider_refund_id,amount_rub,currency,status,idempotency_key",
@@ -73,7 +69,6 @@ async function getRefundRow(refundId: string): Promise<RefundRow | null> {
   }
 
   const rows: unknown = await response.json();
-
   if (!Array.isArray(rows)) {
     throw new Error("Некорректный ответ базы данных.");
   }
@@ -93,32 +88,23 @@ function parseProviderAmount(refund: YooKassaRefund): number | null {
   }
 
   const match = amount.value.match(/^(\d+)(?:\.(\d{1,2}))?$/);
-
   if (!match) return null;
 
   const rubles = Number(match[1]);
   const kopecks = Number((match[2] ?? "").padEnd(2, "0") || "0");
 
-  if (!Number.isSafeInteger(rubles) || kopecks !== 0) {
-    return null;
-  }
-
+  if (!Number.isSafeInteger(rubles) || kopecks !== 0) return null;
   return rubles;
 }
 
-function validateProviderRefund(
-  refund: YooKassaRefund,
-  row: RefundRow,
-) {
+function validateProviderRefund(refund: YooKassaRefund, row: RefundRow) {
   if (
     typeof refund.id !== "string" ||
     refund.id.length === 0 ||
     refund.id.length > 200 ||
     refund.payment_id !== row.provider_payment_id ||
     parseProviderAmount(refund) !== row.amount_rub ||
-    !["pending", "succeeded", "canceled"].includes(
-      String(refund.status),
-    )
+    !["pending", "succeeded", "canceled"].includes(String(refund.status))
   ) {
     throw new Error("YooKassa refund response validation failed.");
   }
@@ -130,22 +116,17 @@ async function synchronizeRefund(
 ): Promise<string> {
   validateProviderRefund(refund, row);
 
-  const result = await supabaseRpc<string>(
-    "finalize_customer_booking_cancellation",
-    {
-      p_refund_id: row.id,
-      p_provider_refund_id: refund.id,
-      p_provider_status: refund.status,
-      p_provider_response: {
-        id: refund.id,
-        payment_id: refund.payment_id,
-        status: refund.status,
-        amount: refund.amount,
-      },
+  return supabaseRpc<string>("finalize_customer_booking_cancellation", {
+    p_refund_id: row.id,
+    p_provider_refund_id: refund.id,
+    p_provider_status: refund.status,
+    p_provider_response: {
+      id: refund.id,
+      payment_id: refund.payment_id,
+      status: refund.status,
+      amount: refund.amount,
     },
-  );
-
-  return result;
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -156,7 +137,6 @@ export async function POST(request: NextRequest) {
   }
 
   let body: unknown;
-
   try {
     body = await request.json();
   } catch {
@@ -179,14 +159,12 @@ export async function POST(request: NextRequest) {
   }
 
   const sessionToken = getSessionTokenFromRequest(request);
-
   if (!sessionToken) {
     return errorResponse("Войдите в личный кабинет.", 401);
   }
 
   try {
     const userId = await resolveSessionUserId(sessionToken);
-
     if (!userId) {
       return errorResponse("Сессия истекла. Войдите повторно.", 401);
     }
@@ -199,64 +177,32 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    if (
-      !prepared ||
-      typeof prepared.refund_id !== "string"
-    ) {
+    if (!prepared || typeof prepared.operation_id !== "string") {
       return errorResponse("Не удалось подготовить возврат.", 409);
     }
 
-    const row = await getRefundRow(prepared.refund_id);
-
-    if (!row) {
-      return errorResponse("Операция возврата не найдена.", 503);
-    }
-
-    if (row.status === "succeeded") {
+    if (prepared.state === "completed") {
       return NextResponse.json(
         { success: true, state: "completed" },
         { headers: { "Cache-Control": "no-store" } },
       );
     }
 
-    if (row.status === "cancelled" || row.status === "failed") {
-      return errorResponse(
-        "Провайдер не завершил возврат. Обратитесь к администратору.",
-        409,
-      );
-    }
+    const refundIds = Array.isArray(prepared.refund_ids)
+      ? prepared.refund_ids.filter(
+          (id): id is string =>
+            typeof id === "string" &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+        )
+      : [];
 
-    if (row.provider !== "yookassa" || row.currency !== "RUB") {
-      return errorResponse("Неподдерживаемый способ возврата.", 409);
-    }
-
-    let providerRefund: YooKassaRefund;
-
-    if (row.provider_refund_id) {
-      providerRefund = await getYooKassaRefund(row.provider_refund_id);
-    } else {
-      providerRefund = await createYooKassaRefund({
-        paymentId: row.provider_payment_id,
-        amountRub: row.amount_rub,
-        idempotencyKey: row.idempotency_key,
-      });
-    }
-
-    const result = await synchronizeRefund(providerRefund, row);
-
-    if (result === "completed" || result === "already_completed") {
-      return NextResponse.json(
-        { success: true, state: "completed" },
-        { headers: { "Cache-Control": "no-store" } },
-      );
-    }
-
-    if (result === "pending") {
+    if (refundIds.length === 0) {
       return NextResponse.json(
         {
           success: true,
           state: "processing",
-          message: "Возврат обрабатывается. Бронь пока остаётся активной.",
+          message:
+            "Возврат ожидает проверки. Бронирование пока остаётся активным.",
         },
         {
           status: 202,
@@ -265,7 +211,78 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return errorResponse("Не удалось завершить возврат.", 409);
+    let hasPending = false;
+    let needsRetry = false;
+    let completed = false;
+
+    for (const refundId of refundIds) {
+      const row = await getRefundRow(refundId);
+
+      if (!row) {
+        throw new Error("Операция возврата не найдена.");
+      }
+
+      if (row.status === "succeeded") continue;
+
+      if (row.status === "cancelled" || row.status === "failed") {
+        needsRetry = true;
+        continue;
+      }
+
+      if (row.provider !== "yookassa" || row.currency !== "RUB") {
+        return errorResponse("Неподдерживаемый способ возврата.", 409);
+      }
+
+      let providerRefund: YooKassaRefund;
+
+      if (row.provider_refund_id) {
+        providerRefund = await getYooKassaRefund(row.provider_refund_id);
+      } else {
+        providerRefund = await createYooKassaRefund({
+          paymentId: row.provider_payment_id,
+          amountRub: row.amount_rub,
+          idempotencyKey: row.idempotency_key,
+        });
+      }
+
+      const result = await synchronizeRefund(providerRefund, row);
+
+      if (result === "completed" || result === "already_completed") {
+        completed = true;
+      } else if (result === "pending") {
+        hasPending = true;
+      } else if (result === "retry_required") {
+        needsRetry = true;
+      } else if (result === "refund_recorded") {
+        // Этот источник вернул деньги. Остальные источники обрабатываются
+        // в рамках той же операции.
+      } else {
+        throw new Error("Не удалось завершить возврат.");
+      }
+    }
+
+    if (completed) {
+      return NextResponse.json(
+        { success: true, state: "completed" },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        state: "processing",
+        message: hasPending
+          ? "Часть возвратов ещё обрабатывается YooKassa. Бронирование остаётся активным."
+          : needsRetry
+            ? "Один из возвратов требует повторной проверки. Бронирование остаётся активным."
+            : "Возвраты обрабатываются. Проверьте статус позднее.",
+      },
+      {
+        status: 202,
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
   } catch (error) {
     console.error("[booking-cancel] processing failed", {
       errorName: error instanceof Error ? error.name : "UnknownError",
