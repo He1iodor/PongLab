@@ -113,14 +113,18 @@ BEGIN
         RAISE EXCEPTION 'Transfer target hold is missing or invalid';
     END IF;
 
+    -- Compare gross allocation amounts with the original booking price.
+    -- Net balances decrease as each partial provider refund succeeds, while
+    -- the source booking deliberately remains unchanged until every refund
+    -- belonging to this transfer has succeeded.
     SELECT
-        COALESCE(sum(a.amount_rub - a.refunded_amount_rub), 0)::integer
+        COALESCE(sum(a.amount_rub), 0)::integer
     INTO v_available_allocation
     FROM public.booking_payment_allocations a
     WHERE a.booking_id = v_booking.id;
 
     IF v_available_allocation <> v_booking.price_rub THEN
-        RAISE EXCEPTION 'Source payment allocation balance does not match booking price';
+        RAISE EXCEPTION 'Source payment allocation total does not match booking price';
     END IF;
 
     SELECT
