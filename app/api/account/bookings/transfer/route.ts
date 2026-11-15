@@ -26,9 +26,7 @@ function errorResponse(message: string, status: number) {
 function isUuid(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      value,
-    )
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
   );
 }
 
@@ -51,12 +49,12 @@ export async function POST(request: NextRequest) {
 
   const payload = body as Record<string, unknown>;
   const bookingId = payload.booking_id;
-  const targetTableId = payload.target_table_id;
+  const targetStudioId = payload.target_studio_id;
   const targetStartAt = payload.target_start_at;
   const idempotencyKey = payload.idempotency_key;
 
-  if (!isUuid(bookingId) || !isUuid(targetTableId)) {
-    return errorResponse("Укажите корректное бронирование и целевой стол.", 400);
+  if (!isUuid(bookingId) || !isUuid(targetStudioId)) {
+    return errorResponse("Укажите корректное бронирование и клуб.", 400);
   }
 
   if (
@@ -65,10 +63,7 @@ export async function POST(request: NextRequest) {
     !/(Z|[+-]\d{2}:\d{2})$/i.test(targetStartAt) ||
     !Number.isFinite(Date.parse(targetStartAt))
   ) {
-    return errorResponse(
-      "Укажите время начала слота с часовым поясом.",
-      400,
-    );
+    return errorResponse("Укажите время начала слота с часовым поясом.", 400);
   }
 
   if (
@@ -91,11 +86,11 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await supabaseRpc<TransferPreparation>(
-      "prepare_customer_booking_transfer",
+      "prepare_customer_booking_transfer_auto",
       {
         p_booking_id: bookingId,
         p_user_id: userId,
-        p_target_table_id: targetTableId,
+        p_target_studio_id: targetStudioId,
         p_target_start_at: targetStartAt,
         p_idempotency_key: idempotencyKey,
       },
@@ -124,10 +119,7 @@ export async function POST(request: NextRequest) {
 
     if (result.state === "awaiting_payment") {
       if (!isUuid(result.payment_group_id)) {
-        return errorResponse(
-          "Перенос подготовлен, но платёжная группа не найдена.",
-          503,
-        );
+        return errorResponse("Перенос подготовлен, но платёжная группа не найдена.", 503);
       }
 
       return NextResponse.json(
