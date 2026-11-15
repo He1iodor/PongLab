@@ -1,3 +1,4 @@
+
 -- Stage 5: automatic table assignment and one-time customer transfer.
 -- Adds a new RPC and deliberately leaves the legacy RPC intact.
 -- Apply only after this corrected file is committed to the feature branch.
@@ -10,6 +11,8 @@ DECLARE
   v_old_date_rule text;
   v_old_transfer_guard text;
   v_new_transfer_guard text;
+  v_old_purchase_anchor text;
+  v_new_purchase_anchor text;
 BEGIN
   SELECT pg_catalog.pg_get_functiondef(
     'public.prepare_customer_booking_transfer(uuid,uuid,uuid,timestamptz,text)'::regprocedure
@@ -19,6 +22,14 @@ BEGIN
   IF v_definition IS NULL THEN
     RAISE EXCEPTION 'Existing customer transfer RPC was not found';
   END IF;
+
+  v_old_purchase_anchor := '  v_booking public.bookings%ROWTYPE;';
+  v_new_purchase_anchor := v_old_purchase_anchor || E'\n  v_purchase_at timestamptz;';
+
+  IF pg_catalog.strpos(v_definition, v_old_purchase_anchor) = 0 THEN
+    RAISE EXCEPTION 'Could not add purchase timestamp variable';
+  END IF;
+  v_definition := pg_catalog.replace(v_definition, v_old_purchase_anchor, v_new_purchase_anchor);
 
   v_old_target_block :=
     '  SELECT' || E'\n' ||
@@ -67,6 +78,24 @@ BEGIN
   END IF;
 
   v_definition := pg_catalog.replace(v_definition, v_old_target_block, v_new_target_block);
+
+  v_old_purchase_anchor := $old_booking$  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Booking not found';
+  END IF;$old_booking$;
+  v_new_purchase_anchor := $new_booking$  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Booking not found';
+  END IF;
+
+  SELECT pg.paid_at
+  INTO v_purchase_at
+  FROM public.payment_groups pg
+  WHERE pg.id = v_booking.payment_group_id;
+
+  v_purchase_at := COALESCE(v_purchase_at, v_booking.created_at);$new_booking$;
+  IF pg_catalog.strpos(v_definition, v_old_purchase_anchor) = 0 THEN
+    RAISE EXCEPTION 'Could not locate booking ownership check for purchase timestamp';
+  END IF;
+  v_definition := pg_catalog.replace(v_definition, v_old_purchase_anchor, v_new_purchase_anchor);
 
   -- The new RPC accepts a studio ID. The legacy RPC remains unchanged.
   v_definition := pg_catalog.replace(
@@ -135,17 +164,18 @@ BEGIN
   END IF;
   v_definition := pg_catalog.replace(v_definition, v_old_date_rule, '');
 
-  -- Preserve target studio settings and add the purchase-relative 30-day cap.
+  -- Use the actual payment timestamp; booking.created_at is only a fallback
+  -- for legacy bookings without a recorded paid_at value.
   v_definition := pg_catalog.replace(
     v_definition,
     '     OR p_target_start_at < v_now' || E'\n' ||
     '          + pg_catalog.make_interval(mins => v_target_settings.minimum_notice_minutes)',
-    '     OR p_target_start_at > v_booking.created_at + interval ''30 days''' || E'\n' ||
+    '     OR p_target_start_at > v_purchase_at + interval ''30 days''' || E'\n' ||
     '     OR p_target_start_at < v_now' || E'\n' ||
     '          + pg_catalog.make_interval(mins => v_target_settings.minimum_notice_minutes)'
   );
 
-  IF pg_catalog.strpos(v_definition, 'p_target_start_at > v_booking.created_at + interval ''30 days''') = 0 THEN
+  IF pg_catalog.strpos(v_definition, 'p_target_start_at > v_purchase_at + interval ''30 days''') = 0 THEN
     RAISE EXCEPTION 'Could not add the purchase-relative 30-day transfer limit';
   END IF;
 
