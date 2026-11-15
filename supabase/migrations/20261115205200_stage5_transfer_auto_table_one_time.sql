@@ -150,10 +150,27 @@ BEGIN
   );
 
   -- A completed transfer consumes the one permitted transfer.
+  -- Failed operations block retries only if financial/manual resolution
+  -- is still outstanding.
   v_old_transfer_guard :=
     '      AND bo.status IN (''requested'', ''offered'', ''awaiting_payment'', ''processing'')';
+
   v_new_transfer_guard :=
-    '      AND bo.status IN (''requested'', ''offered'', ''awaiting_payment'', ''processing'', ''completed'')';
+    '      AND (' || E'\n' ||
+    '        bo.status IN (''requested'', ''offered'', ''awaiting_payment'', ''processing'', ''completed'')' || E'\n' ||
+    '        OR (' || E'\n' ||
+    '          bo.status = ''failed''' || E'\n' ||
+    '          AND (' || E'\n' ||
+    '            bo.metadata ->> ''manual_resolution_required'' = ''true''' || E'\n' ||
+    '            OR EXISTS (' || E'\n' ||
+    '              SELECT 1' || E'\n' ||
+    '              FROM public.payment_refunds r' || E'\n' ||
+    '              WHERE r.booking_operation_id = bo.id' || E'\n' ||
+    '                AND r.status IN (''pending'', ''succeeded'')' || E'\n' ||
+    '            )' || E'\n' ||
+    '          )' || E'\n' ||
+    '        )' || E'\n' ||
+    '      )';
 
   IF pg_catalog.strpos(v_definition, v_old_transfer_guard) = 0 THEN
     RAISE EXCEPTION 'Could not locate the expected one-transfer guard; no changes made';
