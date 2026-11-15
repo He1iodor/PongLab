@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import BookingTransferAction from "@/components/BookingTransferAction";
 import {
   CalendarDays,
   Clock3,
@@ -31,6 +32,7 @@ type Booking = {
   payment_group_id: string | null;
   hold_expires_at: string | null;
   table_name: string;
+  studio_id: string | null;
   studio_name: string;
   studio_address: string | null;
   timezone: string;
@@ -574,6 +576,10 @@ export default function AccountBookingsPanel({
                   <span className="text-sm text-white/50">Стоимость</span>
                   <span className="font-semibold text-white">{money(booking.price_rub)}</span>
                 </div>
+
+                {booking.status === "confirmed" && booking.payment_status === "succeeded" && (
+                  <BookingTransferAction bookingId={booking.id} startAt={booking.start_at} studioId={booking.studio_id} timezone={booking.timezone} sourcePrice={booking.price_rub} onComplete={() => void load(true)} />
+                )}
 
                 {pending && (
                   <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3 text-xs leading-5 text-amber-100/80">
