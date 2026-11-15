@@ -1,6 +1,6 @@
 -- Stage 5: automatic table assignment and one-time customer transfer.
--- This migration adds a new RPC and deliberately leaves the legacy RPC intact.
--- Apply only after the matching files have been committed to the feature branch.
+-- Adds a new RPC and deliberately leaves the legacy RPC intact.
+-- Apply only after this corrected file is committed to the feature branch.
 
 DO $migration$
 DECLARE
@@ -68,13 +68,36 @@ BEGIN
 
   v_definition := pg_catalog.replace(v_definition, v_old_target_block, v_new_target_block);
 
-  -- New RPC accepts a studio ID, not a table ID. The original RPC remains available.
+  -- The new RPC accepts a studio ID. The legacy RPC remains unchanged.
   v_definition := pg_catalog.replace(
     v_definition,
     'FUNCTION public.prepare_customer_booking_transfer(',
     'FUNCTION public.prepare_customer_booking_transfer_auto('
   );
   v_definition := pg_catalog.replace(v_definition, 'p_target_table_id', 'p_target_studio_id');
+
+  -- Persist the server-selected table ID everywhere the old function used
+  -- the caller-supplied table ID. Never write a studio ID into table_id fields.
+  v_definition := pg_catalog.replace(
+    v_definition,
+    'WHERE b.table_id = p_target_studio_id',
+    'WHERE b.table_id = v_target.table_id'
+  );
+  v_definition := pg_catalog.replace(
+    v_definition,
+    'IF v_booking.table_id = p_target_studio_id',
+    'IF v_booking.table_id = v_target.table_id'
+  );
+  v_definition := pg_catalog.replace(
+    v_definition,
+    'v_booking.start_at, v_booking.end_at, p_target_studio_id,',
+    'v_booking.start_at, v_booking.end_at, v_target.table_id,'
+  );
+  v_definition := pg_catalog.replace(
+    v_definition,
+    'p_user_id, p_target_studio_id, p_target_start_at,',
+    'p_user_id, v_target.table_id, p_target_start_at,'
+  );
 
   -- Idempotent retries compare the studio of the already-reserved table.
   v_definition := pg_catalog.replace(
@@ -87,8 +110,7 @@ BEGIN
     '       )'
   );
 
-  -- A booking may be moved once. A completed transfer consumes that right;
-  -- in-flight operations also block a second attempt.
+  -- A completed transfer consumes the one permitted transfer.
   v_old_transfer_guard :=
     '      AND bo.status IN (''requested'', ''offered'', ''awaiting_payment'', ''processing'')';
   v_new_transfer_guard :=
@@ -99,7 +121,7 @@ BEGIN
   END IF;
   v_definition := pg_catalog.replace(v_definition, v_old_transfer_guard, v_new_transfer_guard);
 
-  -- The agreed transfer window is any eligible date up to 30 days from purchase.
+  -- Transfer is allowed to any eligible date within 30 days of purchase.
   v_old_date_rule :=
     '  IF v_booking.start_at <= v_now + interval ''24 hours''' || E'\n' ||
     '     AND (p_target_start_at AT TIME ZONE v_source_studio.timezone)::date' || E'\n' ||
@@ -113,8 +135,7 @@ BEGIN
   END IF;
   v_definition := pg_catalog.replace(v_definition, v_old_date_rule, '');
 
-  -- Keep the existing studio booking horizon/settings checks and add the
-  -- purchase-relative 30-day ceiling.
+  -- Preserve target studio settings and add the purchase-relative 30-day cap.
   v_definition := pg_catalog.replace(
     v_definition,
     '     OR p_target_start_at < v_now' || E'\n' ||
@@ -128,12 +149,20 @@ BEGIN
     RAISE EXCEPTION 'Could not add the purchase-relative 30-day transfer limit';
   END IF;
 
-  -- The table is selected server-side. Fail closed if no suitable table exists.
   v_definition := pg_catalog.replace(
     v_definition,
     'RAISE EXCEPTION ''Target table or studio is inactive or missing'';',
     'RAISE EXCEPTION ''No available table in the selected studio for this slot'';'
   );
+
+  -- Fail closed if any table-ID use was accidentally left pointing at the studio ID.
+  IF pg_catalog.strpos(v_definition, 'b.table_id = p_target_studio_id') > 0
+     OR pg_catalog.strpos(v_definition, 'v_booking.table_id = p_target_studio_id') > 0
+     OR pg_catalog.strpos(v_definition, 'v_booking.start_at, v_booking.end_at, p_target_studio_id') > 0
+     OR pg_catalog.strpos(v_definition, 'p_user_id, p_target_studio_id, p_target_start_at') > 0
+  THEN
+    RAISE EXCEPTION 'Unsafe studio/table ID substitution detected; no changes made';
+  END IF;
 
   EXECUTE v_definition;
 END;
