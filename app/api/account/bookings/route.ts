@@ -123,6 +123,7 @@ export async function GET(request: NextRequest) {
       {
         select: "id,table_id,start_at,end_at,status,payment_status,price_rub,payment_init_started_at,payment_id,payment_group_id,hold_expires_at,created_at,updated_at",
         user_id: `eq.${userId}`,
+        booking_operation_id: "is.null",
         order: "start_at.desc",
         limit: "100",
       },
