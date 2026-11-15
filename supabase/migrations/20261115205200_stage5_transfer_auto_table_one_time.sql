@@ -82,6 +82,7 @@ BEGIN
   v_old_purchase_anchor := $old_booking$  IF NOT FOUND THEN
     RAISE EXCEPTION 'Booking not found';
   END IF;$old_booking$;
+
   v_new_purchase_anchor := $new_booking$  IF NOT FOUND THEN
     RAISE EXCEPTION 'Booking not found';
   END IF;
@@ -92,6 +93,7 @@ BEGIN
   WHERE pg.id = v_booking.payment_group_id;
 
   v_purchase_at := COALESCE(v_purchase_at, v_booking.created_at);$new_booking$;
+
   IF pg_catalog.strpos(v_definition, v_old_purchase_anchor) = 0 THEN
     RAISE EXCEPTION 'Could not locate booking ownership check for purchase timestamp';
   END IF;
@@ -126,6 +128,14 @@ BEGIN
     v_definition,
     'p_user_id, p_target_studio_id, p_target_start_at,',
     'p_user_id, v_target.table_id, p_target_start_at,'
+  );
+
+  -- The equal-price path updates the original booking directly.
+  -- Persist the selected TABLE ID, never the target STUDIO ID.
+  v_definition := pg_catalog.replace(
+    v_definition,
+    'SET table_id = p_target_studio_id,',
+    'SET table_id = v_target.table_id,'
   );
 
   -- Idempotent retries compare the studio of the already-reserved table.
@@ -190,6 +200,7 @@ BEGIN
      OR pg_catalog.strpos(v_definition, 'v_booking.table_id = p_target_studio_id') > 0
      OR pg_catalog.strpos(v_definition, 'v_booking.start_at, v_booking.end_at, p_target_studio_id') > 0
      OR pg_catalog.strpos(v_definition, 'p_user_id, p_target_studio_id, p_target_start_at') > 0
+     OR pg_catalog.strpos(v_definition, 'SET table_id = p_target_studio_id') > 0
   THEN
     RAISE EXCEPTION 'Unsafe studio/table ID substitution detected; no changes made';
   END IF;
