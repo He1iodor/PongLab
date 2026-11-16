@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 
@@ -21,14 +22,54 @@ type BookingRow = {
 };
 
 type TableRow = { id: string; name: string; studio_id: string };
-type StudioRow = { id: string; name: string; address: string | null; timezone: string | null };
+type StudioRow = {
+  id: string;
+  name: string;
+  address: string | null;
+  timezone: string | null;
+};
 type DeviceRow = {
   id: string;
   studio_id: string;
   door_state: "open" | "closed" | "unknown";
   last_seen_at: string | null;
 };
-type FailureRow = { payment_group_id: string; failure_reason: string | null };
+type FailureRow = {
+  payment_group_id: string;
+  failure_reason: string | null;
+};
+
+type BookingOperationRow = {
+  id: string;
+  booking_id: string;
+  status: string;
+  operation_type: string;
+  source_payment_group_id: string | null;
+  adjustment_payment_group_id: string | null;
+  price_difference_rub: number;
+  expires_at: string | null;
+  completed_at: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type PaymentRefundRow = {
+  id: string;
+  booking_operation_id: string;
+  payment_group_id: string;
+  status: string;
+  amount_rub: number;
+  failure_reason: string | null;
+  created_at: string;
+  succeeded_at: string | null;
+};
+
+type PaymentGroupRow = {
+  id: string;
+  paid_at: string | null;
+  status: string;
+};
 
 function errorResponse(message: string, status: number) {
   return NextResponse.json(
@@ -58,6 +99,7 @@ async function getRows<T>(
   query: Record<string, string>,
 ): Promise<T[]> {
   const target = new URL(`${url}/rest/v1/${table}`);
+
   for (const [name, value] of Object.entries(query)) {
     target.searchParams.set(name, value);
   }
@@ -69,23 +111,69 @@ async function getRows<T>(
   });
 
   if (!response.ok) {
-    console.error(`Account bookings query failed (${table}):`, response.status, await response.text());
+    console.error(
+      `Account bookings query failed (${table}):`,
+      response.status,
+      await response.text(),
+    );
     throw new Error("Не удалось загрузить бронирования.");
   }
 
   const data: unknown = await response.json();
-  if (!Array.isArray(data)) throw new Error("Получен некорректный ответ базы данных.");
+
+  if (!Array.isArray(data)) {
+    throw new Error("Получен некорректный ответ базы данных.");
+  }
+
   return data as T[];
+}
+
+function uniqueIds(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function isManualResolutionRequired(
+  metadata: Record<string, unknown> | null,
+) {
+  return metadata?.manual_resolution_required === true;
+}
+
+function isActiveTransferStatus(status: string) {
+  return [
+    "requested",
+    "offered",
+    "awaiting_payment",
+    "processing",
+  ].includes(status);
+}
+
+function isUnresolvedRefundStatus(status: string) {
+  return status === "pending" || status === "succeeded";
+}
+
+function addThirtyDays(value: string) {
+  const timestamp = Date.parse(value);
+
+  if (!Number.isFinite(timestamp)) return null;
+
+  return new Date(timestamp + 30 * 24 * 60 * 60 * 1000).toISOString();
 }
 
 export async function GET(request: NextRequest) {
   const sessionToken = request.cookies.get("ponglab_session")?.value;
+
   if (!sessionToken || !/^[a-f0-9]{64}$/i.test(sessionToken)) {
-    return errorResponse("Войдите в личный кабинет, чтобы просмотреть бронирования.", 401);
+    return errorResponse(
+      "Войдите в личный кабинет, чтобы просмотреть бронирования.",
+      401,
+    );
   }
 
   const config = getConfig();
-  if (!config) return errorResponse("Сервис временно недоступен.", 503);
+
+  if (!config) {
+    return errorResponse("Сервис временно недоступен.", 503);
+  }
 
   try {
     const sessions = await getRows<{ user_id: string }>(
@@ -101,11 +189,16 @@ export async function GET(request: NextRequest) {
     );
 
     const userId = sessions[0]?.user_id;
+
     if (!userId) {
       const response = NextResponse.json(
         { error: "Сессия истекла. Войдите в личный кабинет повторно." },
-        { status: 401, headers: { "Cache-Control": "no-store" } },
+        {
+          status: 401,
+          headers: { "Cache-Control": "no-store" },
+        },
       );
+
       response.cookies.set("ponglab_session", "", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -113,6 +206,7 @@ export async function GET(request: NextRequest) {
         path: "/",
         maxAge: 0,
       });
+
       return response;
     }
 
@@ -121,7 +215,8 @@ export async function GET(request: NextRequest) {
       config.key,
       "bookings",
       {
-        select: "id,table_id,start_at,end_at,status,payment_status,price_rub,payment_init_started_at,payment_id,payment_group_id,hold_expires_at,created_at,updated_at",
+        select:
+          "id,table_id,start_at,end_at,status,payment_status,price_rub,payment_init_started_at,payment_id,payment_group_id,hold_expires_at,created_at,updated_at",
         user_id: `eq.${userId}`,
         booking_operation_id: "is.null",
         order: "start_at.desc",
@@ -136,7 +231,87 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tableIds = [...new Set(rows.map((booking) => booking.table_id))];
+    const bookingIds = uniqueIds(rows.map((booking) => booking.id));
+
+    // Transfer history is read from existing booking_operations.
+    // It is intentionally owner-scoped and limited to transfer operations.
+    const operations = await getRows<BookingOperationRow>(
+      config.url,
+      config.key,
+      "booking_operations",
+      {
+        select:
+          "id,booking_id,status,operation_type,source_payment_group_id,adjustment_payment_group_id,price_difference_rub,expires_at,completed_at,metadata,created_at,updated_at",
+        user_id: `eq.${userId}`,
+        booking_id: `in.(${bookingIds.join(",")})`,
+        operation_type: "eq.transfer",
+        order: "created_at.desc",
+        limit: "500",
+      },
+    );
+
+    const operationIds = uniqueIds(operations.map((operation) => operation.id));
+
+    const refunds = operationIds.length
+      ? await getRows<PaymentRefundRow>(
+          config.url,
+          config.key,
+          "payment_refunds",
+          {
+            select:
+              "id,booking_operation_id,payment_group_id,status,amount_rub,failure_reason,created_at,succeeded_at",
+            booking_operation_id: `in.(${operationIds.join(",")})`,
+            order: "created_at.desc",
+            limit: "500",
+          },
+        )
+      : [];
+
+    const operationIdsByBooking = new Map<string, BookingOperationRow[]>();
+
+    for (const operation of operations) {
+      const list = operationIdsByBooking.get(operation.booking_id) ?? [];
+      list.push(operation);
+      operationIdsByBooking.set(operation.booking_id, list);
+    }
+
+    const refundsByOperation = new Map<string, PaymentRefundRow[]>();
+
+    for (const refund of refunds) {
+      const list = refundsByOperation.get(refund.booking_operation_id) ?? [];
+      list.push(refund);
+      refundsByOperation.set(refund.booking_operation_id, list);
+    }
+
+    // Read payment groups to obtain the original purchase timestamp
+    // and the state of an adjustment payment, if one exists.
+    const paymentGroupIds = uniqueIds([
+      ...rows.map((booking) => booking.payment_group_id),
+      ...operations.map((operation) => operation.source_payment_group_id),
+      ...operations.map((operation) => operation.adjustment_payment_group_id),
+      ...refunds.map((refund) => refund.payment_group_id),
+    ]);
+
+    const paymentGroups = paymentGroupIds.length
+      ? await getRows<PaymentGroupRow>(
+          config.url,
+          config.key,
+          "payment_groups",
+          {
+            select: "id,paid_at,status",
+            id: `in.(${paymentGroupIds.join(",")})`,
+            user_id: `eq.${userId}`,
+            limit: "500",
+          },
+        )
+      : [];
+
+    const paymentGroupById = new Map(
+      paymentGroups.map((group) => [group.id, group]),
+    );
+
+    const tableIds = uniqueIds(rows.map((booking) => booking.table_id));
+
     const tables = await getRows<TableRow>(
       config.url,
       config.key,
@@ -148,7 +323,7 @@ export async function GET(request: NextRequest) {
     );
 
     const tableById = new Map(tables.map((table) => [table.id, table]));
-    const studioIds = [...new Set(tables.map((table) => table.studio_id))];
+    const studioIds = uniqueIds(tables.map((table) => table.studio_id));
 
     const studios = studioIds.length
       ? await getRows<StudioRow>(
@@ -182,24 +357,21 @@ export async function GET(request: NextRequest) {
       : [];
 
     const devicesByStudio = new Map<string, DeviceRow[]>();
+
     for (const device of devices) {
       const list = devicesByStudio.get(device.studio_id) ?? [];
       list.push(device);
       devicesByStudio.set(device.studio_id, list);
     }
 
-    // Payment failure reasons are read through an owner-scoped RPC. If the
-    // migration has not been applied yet, the bookings list still remains usable.
-    const paymentGroupIds = [
-      ...new Set(
-        rows
-          .map((booking) => booking.payment_group_id)
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ];
+    // Existing owner-scoped RPC for payment failure reasons.
+    const bookingPaymentGroupIds = uniqueIds(
+      rows.map((booking) => booking.payment_group_id),
+    );
+
     const failureByGroup = new Map<string, string | null>();
 
-    if (paymentGroupIds.length > 0) {
+    if (bookingPaymentGroupIds.length > 0) {
       try {
         const failureResponse = await fetch(
           `${config.url}/rest/v1/rpc/get_account_payment_failure_reasons`,
@@ -211,7 +383,7 @@ export async function GET(request: NextRequest) {
             },
             body: JSON.stringify({
               p_user_id: userId,
-              p_payment_group_ids: paymentGroupIds,
+              p_payment_group_ids: bookingPaymentGroupIds,
             }),
             cache: "no-store",
             signal: AbortSignal.timeout(10000),
@@ -220,13 +392,20 @@ export async function GET(request: NextRequest) {
 
         if (failureResponse.ok) {
           const failures = (await failureResponse.json()) as FailureRow[];
+
           if (Array.isArray(failures)) {
             for (const failure of failures) {
-              failureByGroup.set(failure.payment_group_id, failure.failure_reason);
+              failureByGroup.set(
+                failure.payment_group_id,
+                failure.failure_reason,
+              );
             }
           }
         } else {
-          console.warn("Account payment failure RPC unavailable:", failureResponse.status);
+          console.warn(
+            "Account payment failure RPC unavailable:",
+            failureResponse.status,
+          );
         }
       } catch (error) {
         console.warn("Account payment failure RPC request failed:", error);
@@ -238,6 +417,7 @@ export async function GET(request: NextRequest) {
     const bookings = rows.map((booking) => {
       const table = tableById.get(booking.table_id);
       const studio = table ? studioById.get(table.studio_id) : undefined;
+
       const paymentInProgress =
         booking.status === "pending_payment" &&
         Boolean(booking.payment_init_started_at || booking.payment_id);
@@ -248,15 +428,74 @@ export async function GET(request: NextRequest) {
         Boolean(booking.hold_expires_at) &&
         Date.parse(booking.hold_expires_at as string) <= now;
 
-      const studioDevices = studio ? devicesByStudio.get(studio.id) ?? [] : [];
-      const doorDevice = studioDevices.length === 1 ? studioDevices[0] : null;
+      const studioDevices = studio
+        ? devicesByStudio.get(studio.id) ?? []
+        : [];
+
+      const doorDevice = studioDevices.length === 1
+        ? studioDevices[0]
+        : null;
+
       const lastSeenMs = doorDevice?.last_seen_at
         ? Date.parse(doorDevice.last_seen_at)
         : Number.NaN;
+
       const doorOnline =
         Number.isFinite(lastSeenMs) &&
         lastSeenMs <= now &&
         now - lastSeenMs <= 90_000;
+
+      const bookingOperations = operationIdsByBooking.get(booking.id) ?? [];
+      const latestOperation = bookingOperations[0] ?? null;
+
+      const transferUsed = bookingOperations.some(
+        (operation) => operation.status === "completed",
+      );
+
+      const operationRefunds = latestOperation
+        ? refundsByOperation.get(latestOperation.id) ?? []
+        : [];
+
+      const latestRefund = operationRefunds[0] ?? null;
+
+      const manualResolutionRequired = bookingOperations.some(
+        (operation) =>
+          operation.status === "failed" &&
+          isManualResolutionRequired(operation.metadata),
+      );
+
+      const unresolvedRefund = operationRefunds.some((refund) =>
+        isUnresolvedRefundStatus(refund.status),
+      );
+
+      const latestOperationIsActive = latestOperation
+        ? isActiveTransferStatus(latestOperation.status)
+        : false;
+
+      const transferBlocked =
+        latestOperationIsActive ||
+        manualResolutionRequired ||
+        unresolvedRefund;
+
+      const sourcePaymentGroupId =
+        latestOperation?.source_payment_group_id ??
+        booking.payment_group_id;
+
+      const sourcePaymentGroup = sourcePaymentGroupId
+        ? paymentGroupById.get(sourcePaymentGroupId)
+        : undefined;
+
+      const purchaseAt =
+        sourcePaymentGroup?.paid_at ?? booking.created_at;
+
+      const transferDeadlineAt = addThirtyDays(purchaseAt);
+
+      const adjustmentPaymentGroupId =
+        latestOperation?.adjustment_payment_group_id ?? null;
+
+      const adjustmentPaymentGroup = adjustmentPaymentGroupId
+        ? paymentGroupById.get(adjustmentPaymentGroupId)
+        : undefined;
 
       return {
         id: booking.id,
@@ -284,6 +523,29 @@ export async function GET(request: NextRequest) {
         door_controller_online: Boolean(doorDevice) && doorOnline,
         door_state: doorDevice?.door_state ?? null,
         door_last_seen_at: doorDevice?.last_seen_at ?? null,
+
+        // Transfer metadata. The original booking remains the source record.
+        transfer_used: transferUsed,
+        transfer_blocked: transferBlocked,
+        transfer_operation_id: latestOperation?.id ?? null,
+        transfer_status: latestOperation?.status ?? null,
+        transfer_operation_created_at: latestOperation?.created_at ?? null,
+        transfer_operation_updated_at: latestOperation?.updated_at ?? null,
+        transfer_completed_at: latestOperation?.completed_at ?? null,
+        transfer_expires_at: latestOperation?.expires_at ?? null,
+        transfer_manual_resolution_required: manualResolutionRequired,
+
+        transfer_adjustment_payment_group_id: adjustmentPaymentGroupId,
+        transfer_adjustment_payment_status:
+          adjustmentPaymentGroup?.status ?? null,
+
+        transfer_refund_id: latestRefund?.id ?? null,
+        transfer_refund_status: latestRefund?.status ?? null,
+        transfer_refund_amount_rub: latestRefund?.amount_rub ?? null,
+        transfer_refund_failure_reason: latestRefund?.failure_reason ?? null,
+
+        transfer_purchase_at: purchaseAt,
+        transfer_deadline_at: transferDeadlineAt,
       };
     });
 
@@ -293,8 +555,11 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("Account bookings GET error:", error);
+
     return errorResponse(
-      error instanceof Error ? error.message : "Не удалось загрузить бронирования.",
+      error instanceof Error
+        ? error.message
+        : "Не удалось загрузить бронирования.",
       503,
     );
   }
