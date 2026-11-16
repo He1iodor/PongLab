@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -45,6 +44,7 @@ type Booking = {
   transfer_blocked: boolean;
   transfer_operation_id: string | null;
   transfer_status: string | null;
+  transfer_adjustment_payment_group_id: string | null;
   transfer_completed_at: string | null;
   transfer_manual_resolution_required: boolean;
   transfer_adjustment_payment_status: string | null;
@@ -595,6 +595,15 @@ export default function AccountBookingsPanel({
               !booking.transfer_used &&
               !booking.transfer_blocked;
 
+            const canRecoverTransfer =
+              confirmed &&
+              !booking.transfer_used &&
+              !booking.transfer_manual_resolution_required &&
+              Boolean(booking.transfer_operation_id) &&
+              ((booking.transfer_status === "awaiting_payment" &&
+                Boolean(booking.transfer_adjustment_payment_group_id)) ||
+                booking.transfer_status === "processing");
+
             return (
               <article
                 key={booking.id}
@@ -647,13 +656,19 @@ export default function AccountBookingsPanel({
                   <>
                     <TransferStatus booking={booking} />
 
-                    {canShowTransfer && (
+                    {(canShowTransfer || canRecoverTransfer) && (
                       <BookingTransferAction
                         bookingId={booking.id}
                         startAt={booking.start_at}
                         studioId={booking.studio_id}
                         timezone={booking.timezone}
                         sourcePrice={booking.price_rub}
+                        transferDeadlineAt={booking.transfer_deadline_at}
+                        recoveryOperationId={canRecoverTransfer ? booking.transfer_operation_id : null}
+                        recoveryStatus={canRecoverTransfer ? booking.transfer_status : null}
+                        adjustmentPaymentGroupId={canRecoverTransfer ? booking.transfer_adjustment_payment_group_id : null}
+                        refundStatus={canRecoverTransfer ? booking.transfer_refund_status : null}
+                        manualResolutionRequired={booking.transfer_manual_resolution_required}
                         onComplete={() => void load(true)}
                       />
                     )}
