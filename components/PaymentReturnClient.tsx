@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -7,6 +8,7 @@ import {
   Clock3,
   RefreshCw,
   XCircle,
+  AlertTriangle,
 } from "lucide-react";
 
 type PaymentState =
@@ -16,15 +18,28 @@ type PaymentState =
   | "cancelled"
   | "refunded"
   | "refund_required"
+  | "transfer_completed"
+  | "transfer_pending"
+  | "transfer_cancelled"
+  | "transfer_refund_required"
+  | "transfer_refunded"
+  | "transfer_monitoring"
+  | "transfer_review"
+  | "review_required"
   | "error";
 
 type PaymentStatusResponse = {
-  state?: "pending" | "succeeded" | "cancelled" | "refunded";
+  state?: PaymentState;
   error?: string;
   amount_rub?: number;
   booking_count?: number;
   monitor_late_payment?: boolean;
   refund_required?: boolean;
+  confirmation_missing?: boolean;
+  purpose?: "booking" | "transfer_adjustment";
+  transfer_status?: string | null;
+  transfer_completed_at?: string | null;
+  transfer_manual_resolution_required?: boolean;
 };
 
 function money(value: number) {
@@ -35,9 +50,37 @@ function money(value: number) {
   }).format(value);
 }
 
-function resolvedState(result: PaymentStatusResponse): PaymentState {
-  if (result.refund_required) return "refund_required";
+function resolvedState(
+  result: PaymentStatusResponse,
+): PaymentState {
+  if (result.state?.startsWith("transfer_")) {
+    return result.state;
+  }
+
+  if (result.refund_required) {
+    return "refund_required";
+  }
+
+  if (result.confirmation_missing) {
+    return "review_required";
+  }
+
   return result.state ?? "pending";
+}
+
+function isTerminalState(state: PaymentState) {
+  return [
+    "succeeded",
+    "refunded",
+    "refund_required",
+    "cancelled",
+    "transfer_completed",
+    "transfer_cancelled",
+    "transfer_refund_required",
+    "transfer_refunded",
+    "transfer_review",
+    "review_required",
+  ].includes(state);
 }
 
 export default function PaymentReturnClient({
@@ -45,15 +88,17 @@ export default function PaymentReturnClient({
 }: {
   paymentGroupId: string;
 }) {
-  const [state, setState] = useState<PaymentState>("loading");
+  const [state, setState] =
+    useState<PaymentState>("loading");
   const [amount, setAmount] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
-  const [monitoringLatePayment, setMonitoringLatePayment] = useState(false);
+  const [monitoringLatePayment, setMonitoringLatePayment] =
+    useState(false);
+  const [manualResolutionRequired, setManualResolutionRequired] =
+    useState(false);
 
   // Убираем технические параметры Vercel из адресной строки.
-  // Bypass-cookie к этому моменту уже устанавливается Vercel.
-  // Идентификатор бронирования оставляем.
   useEffect(() => {
     const url = new URL(window.location.href);
 
@@ -72,6 +117,28 @@ export default function PaymentReturnClient({
       `${url.pathname}${url.search}${url.hash}`,
     );
   }, []);
+
+  const applyResult = useCallback(
+    (result: PaymentStatusResponse) => {
+      setAmount(
+        typeof result.amount_rub === "number"
+          ? result.amount_rub
+          : null,
+      );
+
+      setMonitoringLatePayment(
+        Boolean(result.monitor_late_payment),
+      );
+
+      setManualResolutionRequired(
+        Boolean(result.transfer_manual_resolution_required),
+      );
+
+      setError("");
+      setState(resolvedState(result));
+    },
+    [],
+  );
 
   const checkPayment = useCallback(
     async (manual = false) => {
@@ -106,16 +173,7 @@ export default function PaymentReturnClient({
           );
         }
 
-        setAmount(
-          typeof result.amount_rub === "number"
-            ? result.amount_rub
-            : null,
-        );
-        setMonitoringLatePayment(
-          Boolean(result.monitor_late_payment),
-        );
-        setError("");
-        setState(resolvedState(result));
+        applyResult(result);
       } catch (caught) {
         setState("error");
         setError(
@@ -127,12 +185,11 @@ export default function PaymentReturnClient({
         if (manual) setChecking(false);
       }
     },
-    [paymentGroupId],
+    [paymentGroupId, applyResult],
   );
 
-  // Обычная оплата проверяется чаще. После локального тайм-аута резерв уже
-  // закрыт, но страница продолжает проверять возможное позднее списание.
-  // После успешного/окончательного статуса YooKassa опрос прекращается.
+  // Опрос продолжается для pending и transfer_monitoring.
+  // После подтверждённого или окончательного статуса прекращается.
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -173,29 +230,18 @@ export default function PaymentReturnClient({
 
         if (stopped) return;
 
-        setAmount(
-          typeof result.amount_rub === "number"
-            ? result.amount_rub
-            : null,
-        );
+        applyResult(result);
 
-        const monitoring = Boolean(result.monitor_late_payment);
         const nextState = resolvedState(result);
 
-        setMonitoringLatePayment(monitoring);
-        setError("");
-        setState(nextState);
-
-        if (
-          nextState === "succeeded" ||
-          nextState === "refunded" ||
-          nextState === "refund_required" ||
-          (nextState === "cancelled" && !monitoring)
-        ) {
+        if (isTerminalState(nextState)) {
           return;
         }
 
-        if (monitoring) {
+        if (
+          nextState === "transfer_monitoring" ||
+          result.monitor_late_payment
+        ) {
           nextDelay = 30_000;
         }
       } catch (caught) {
@@ -222,17 +268,189 @@ export default function PaymentReturnClient({
       stopped = true;
       if (timer) clearTimeout(timer);
     };
-  }, [paymentGroupId]);
+  }, [paymentGroupId, applyResult]);
 
   const showManualCheck =
     state === "pending" ||
     state === "error" ||
-    (state === "cancelled" && monitoringLatePayment);
+    (state === "cancelled" && monitoringLatePayment) ||
+    state === "transfer_pending" ||
+    state === "transfer_monitoring";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#090B18] px-4 py-10 text-white">
       <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#111427] p-6 shadow-2xl sm:p-8">
-        {state === "succeeded" ? (
+        {state === "transfer_completed" ? (
+          <>
+            <CheckCircle2
+              size={44}
+              className="text-emerald-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Перенос выполнен
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              Доплата подтверждена. Перенос бронирования завершён.
+              Новые клуб, дата и время доступны в личном кабинете.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "transfer_pending" ? (
+          <>
+            <Clock3
+              size={44}
+              className="text-[#A77BFF]"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Ожидаем доплату за перенос
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              YooKassa ещё обрабатывает платёж. Исходное бронирование
+              остаётся активным до подтверждения доплаты.
+              Проверяем статус автоматически. Не оплачивайте повторно.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "transfer_monitoring" ? (
+          <>
+            <Clock3
+              size={44}
+              className="text-amber-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Проверяем платёж за перенос
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              Время ожидания подтверждения истекло, поэтому перенос
+              пока не выполнен. Мы продолжаем проверять YooKassa
+              на случай задержки ответа. Исходная бронь остаётся
+              без изменений. Не создавайте повторную оплату.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "transfer_cancelled" ? (
+          <>
+            <XCircle
+              size={44}
+              className="text-rose-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Доплата не прошла
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              Перенос не выполнен. Исходное бронирование сохранено
+              без изменений. Если условия переноса ещё соблюдаются,
+              можно начать новую операцию из личного кабинета.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "transfer_refund_required" ? (
+          <>
+            <AlertTriangle
+              size={44}
+              className="text-amber-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Требуется возврат доплаты
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              YooKassa подтвердила платёж после закрытия резерва
+              для переноса. Перенос не выполнен, исходная бронь
+              сохранена. Не создавайте повторную оплату или перенос.
+              Обратитесь к администрации PongLab для сверки и возврата.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "transfer_refunded" ? (
+          <>
+            <CheckCircle2
+              size={44}
+              className="text-emerald-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Доплата возвращена
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              Возврат доплаты за перенос подтверждён.
+              Исходное бронирование не изменено.
+              Срок поступления средств зависит от банка.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "transfer_review" ? (
+          <>
+            <AlertTriangle
+              size={44}
+              className="text-amber-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Перенос требует проверки
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              Платёжная группа и операция переноса находятся
+              в несогласованном состоянии. Мы не можем подтвердить
+              завершение переноса автоматически.
+              Не создавайте новую оплату или перенос.
+              Обратитесь к администрации PongLab.
+            </p>
+
+            {manualResolutionRequired && (
+              <p className="mt-3 text-xs leading-5 text-amber-200">
+                Для операции установлена необходимость ручного разрешения.
+              </p>
+            )}
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "succeeded" ? (
           <>
             <CheckCircle2
               size={44}
@@ -301,6 +519,29 @@ export default function PaymentReturnClient({
               </p>
             )}
           </>
+        ) : state === "review_required" ? (
+          <>
+            <AlertTriangle
+              size={44}
+              className="text-amber-300"
+            />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Требуется проверка бронирования
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              Платёж отмечен как успешный, но система не подтвердила
+              активное бронирование. Не создавайте новую оплату.
+              Обратитесь к администрации PongLab для сверки операции.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
         ) : state === "cancelled" ? (
           <>
             <XCircle
@@ -317,7 +558,7 @@ export default function PaymentReturnClient({
             <p className="mt-3 text-sm leading-6 text-white/65">
               {monitoringLatePayment
                 ? "Подтверждение не поступило в отведённые 10 минут, поэтому резерв закрыт. Мы продолжаем проверять статус у YooKassa на случай задержки. Не оплачивайте бронирование повторно."
-                : "Оплата не была подтверждена в течение 10 минут или YooKassa отклонила операцию. Резерв закрыт. Если деньги всё же списались, не создавайте повторную оплату — свяжитесь с администрацией PongLab, мы проверим операцию и при необходимости оформим возврат."}
+                : "Оплата не была подтверждена в течение 10 минут или YooKassa отклонила операцию. Резерв закрыт. Если деньги всё же списались, не создавайте повторную оплату — свяжитесь с администрацией PongLab."}
             </p>
 
             {amount !== null && (
@@ -365,8 +606,9 @@ export default function PaymentReturnClient({
             </p>
 
             <p className="mt-2 text-xs leading-5 text-white/45">
-              Автоматическая проверка будет повторена. Не создавайте
-              новый платёж, пока не выяснено состояние текущего.
+              Автоматическая проверка будет повторена.
+              Не создавайте новый платёж, пока не выяснено
+              состояние текущего.
             </p>
           </>
         )}
