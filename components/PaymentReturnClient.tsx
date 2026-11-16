@@ -26,6 +26,9 @@ type PaymentState =
   | "transfer_monitoring"
   | "transfer_review"
   | "review_required"
+  | "late_refund_pending"
+  | "late_refunded"
+  | "late_refund_review"
   | "error";
 
 type PaymentStatusResponse = {
@@ -53,6 +56,13 @@ function money(value: number) {
 function resolvedState(
   result: PaymentStatusResponse,
 ): PaymentState {
+  if (
+    result.state === "late_refunded" ||
+    result.state?.startsWith("late_refund_")
+  ) {
+    return result.state;
+  }
+
   if (result.state?.startsWith("transfer_")) {
     return result.state;
   }
@@ -80,6 +90,8 @@ function isTerminalState(state: PaymentState) {
     "transfer_refunded",
     "transfer_review",
     "review_required",
+    "late_refunded",
+    "late_refund_review",
   ].includes(state);
 }
 
@@ -188,7 +200,8 @@ export default function PaymentReturnClient({
     [paymentGroupId, applyResult],
   );
 
-  // Опрос продолжается для pending и transfer_monitoring.
+  // Опрос продолжается для pending, transfer_monitoring
+  // и late_refund_pending.
   // После подтверждённого или окончательного статуса прекращается.
   useEffect(() => {
     let stopped = false;
@@ -275,12 +288,73 @@ export default function PaymentReturnClient({
     state === "error" ||
     (state === "cancelled" && monitoringLatePayment) ||
     state === "transfer_pending" ||
-    state === "transfer_monitoring";
+    state === "transfer_monitoring" ||
+    state === "late_refund_pending";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#090B18] px-4 py-10 text-white">
       <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#111427] p-6 shadow-2xl sm:p-8">
-        {state === "transfer_completed" ? (
+        {state === "late_refund_pending" ? (
+          <>
+            <Clock3 size={44} className="text-amber-300" />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Возврат обрабатывается
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              YooKassa подтвердила позднюю оплату после закрытия резерва.
+              Бронирование не восстановлено. Мы отправили полный возврат
+              и проверяем его подтверждение. Не создавайте новую оплату.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "late_refunded" ? (
+          <>
+            <CheckCircle2 size={44} className="text-emerald-300" />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Оплата возвращена
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              YooKassa подтвердила полный возврат поздней оплаты.
+              Бронирование не восстановлено. Срок поступления средств
+              на счёт зависит от банка.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "late_refund_review" ? (
+          <>
+            <AlertTriangle size={44} className="text-amber-300" />
+
+            <h1 className="mt-5 text-2xl font-semibold">
+              Возврат требует проверки
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              YooKassa подтвердила позднюю оплату, но автоматический возврат
+              не завершён. Бронирование не восстановлено. Не оплачивайте
+              повторно и обратитесь к администрации PongLab для проверки.
+            </p>
+
+            {amount !== null && (
+              <p className="mt-4 text-lg font-semibold">
+                {money(amount)}
+              </p>
+            )}
+          </>
+        ) : state === "transfer_completed" ? (
           <>
             <CheckCircle2
               size={44}
