@@ -40,6 +40,19 @@ type Booking = {
   door_controller_online: boolean;
   door_state: "open" | "closed" | "unknown" | null;
   door_last_seen_at: string | null;
+
+  transfer_used: boolean;
+  transfer_blocked: boolean;
+  transfer_operation_id: string | null;
+  transfer_status: string | null;
+  transfer_completed_at: string | null;
+  transfer_manual_resolution_required: boolean;
+  transfer_adjustment_payment_status: string | null;
+  transfer_refund_status: string | null;
+  transfer_refund_amount_rub: number | null;
+  transfer_refund_failure_reason: string | null;
+  transfer_purchase_at: string;
+  transfer_deadline_at: string | null;
 };
 
 type CancellationState = {
@@ -114,6 +127,51 @@ function canCancelBooking(booking: Booking, now: number) {
     booking.payment_status === "succeeded" &&
     Number.isFinite(start) &&
     start > now + 24 * 60 * 60 * 1000
+  );
+}
+
+function TransferStatus({ booking }: { booking: Booking }) {
+  if (booking.transfer_used) {
+    return (
+      <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-emerald-200">
+          <CheckCircle2 size={16} />
+          Перенос уже использован
+        </div>
+        <p className="mt-1 text-xs leading-5 text-white/55">
+          Для этого бронирования повторный перенос не предусмотрен.
+        </p>
+      </div>
+    );
+  }
+
+  if (!booking.transfer_blocked) return null;
+
+  let message =
+    "Перенос уже начат. Дождитесь завершения текущей операции.";
+
+  if (booking.transfer_manual_resolution_required) {
+    message =
+      "По переносу требуется ручная проверка. Не создавайте новую операцию. Обратитесь к администратору.";
+  } else if (booking.transfer_refund_status === "pending") {
+    message =
+      "Возврат разницы обрабатывается YooKassa. Исходная бронь остаётся активной до подтверждения.";
+  } else if (booking.transfer_refund_status === "succeeded") {
+    message =
+      "Возврат уже подтверждён. Операция требует дополнительной проверки перед повторным действием.";
+  } else if (booking.transfer_adjustment_payment_status === "pending") {
+    message =
+      "Ожидается подтверждение доплаты. Проверьте статус операции, прежде чем начинать новый перенос.";
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-amber-100">
+        <Clock3 size={16} />
+        Перенос не завершён
+      </div>
+      <p className="mt-1 text-xs leading-5 text-white/65">{message}</p>
+    </div>
   );
 }
 
@@ -527,7 +585,15 @@ export default function AccountBookingsPanel({
             const pending = isPaymentPending(booking);
             const cancellationState = cancellation[booking.id];
             const cancellable = canCancelBooking(booking, now);
-            const isCanceling = cancelingId === booking.id;
+
+            const confirmed =
+              booking.status === "confirmed" &&
+              booking.payment_status === "succeeded";
+
+            const canShowTransfer =
+              confirmed &&
+              !booking.transfer_used &&
+              !booking.transfer_blocked;
 
             return (
               <article
@@ -577,8 +643,21 @@ export default function AccountBookingsPanel({
                   <span className="font-semibold text-white">{money(booking.price_rub)}</span>
                 </div>
 
-                {booking.status === "confirmed" && booking.payment_status === "succeeded" && (
-                  <BookingTransferAction bookingId={booking.id} startAt={booking.start_at} studioId={booking.studio_id} timezone={booking.timezone} sourcePrice={booking.price_rub} onComplete={() => void load(true)} />
+                {confirmed && (
+                  <>
+                    <TransferStatus booking={booking} />
+
+                    {canShowTransfer && (
+                      <BookingTransferAction
+                        bookingId={booking.id}
+                        startAt={booking.start_at}
+                        studioId={booking.studio_id}
+                        timezone={booking.timezone}
+                        sourcePrice={booking.price_rub}
+                        onComplete={() => void load(true)}
+                      />
+                    )}
+                  </>
                 )}
 
                 {pending && (
@@ -686,8 +765,7 @@ export default function AccountBookingsPanel({
                   </div>
                 )}
 
-                {booking.status === "confirmed" &&
-                  booking.payment_status === "succeeded" &&
+                {confirmed &&
                   !cancellable &&
                   Date.parse(booking.start_at) > now &&
                   !cancellationState && (
@@ -696,10 +774,7 @@ export default function AccountBookingsPanel({
                     </p>
                   )}
 
-                {booking.status === "confirmed" &&
-                  booking.payment_status === "succeeded" && (
-                    <DoorAccess booking={booking} now={now} />
-                  )}
+                {confirmed && <DoorAccess booking={booking} now={now} />}
               </article>
             );
           })}
