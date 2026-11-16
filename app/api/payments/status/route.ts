@@ -4,11 +4,13 @@ import {
   getSessionTokenFromRequest,
   getYooKassaPayment,
   isUuid,
+  parseWholeRubleAmount,
   resolveSessionUserId,
   supabaseRpc,
   syncYooKassaPayment,
   type PaymentSyncResult,
 } from "@/lib/yookassa";
+import { processLatePaymentRefund } from "@/lib/yookassa-late-refunds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +34,22 @@ type TransferOperationStatus = {
   status: string;
   completed_at: string | null;
   metadata: Record<string, unknown> | null;
+};
+
+type LateRefundOperation = {
+  id: string;
+  status: string;
+  metadata: Record<string, unknown> | null;
+};
+
+type LateRefundRow = {
+  id: string;
+  status: string;
+  amount_rub: number;
+  failure_reason: string | null;
+  provider_refund_id: string | null;
+  created_at: string;
+  succeeded_at: string | null;
 };
 
 function errorResponse(message: string, status: number) {
@@ -58,19 +76,22 @@ function errorStatusCode(error: unknown): number | null {
   return null;
 }
 
+function getSupabaseConfig() {
+  const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+  const key = process.env.SUPABASE_SECRET_KEY;
+
+  return url && key ? { url, key } : null;
+}
+
 async function readTransferOperation(
   paymentGroupId: string,
   userId: string,
 ): Promise<TransferOperationStatus | null> {
-  const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "");
-  const supabaseKey = process.env.SUPABASE_SECRET_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase configuration is not available.");
-  }
+  const config = getSupabaseConfig();
+  if (!config) throw new Error("Supabase configuration is not available.");
 
   const target = new URL(
-    `${supabaseUrl}/rest/v1/booking_operations`,
+    `${config.url}/rest/v1/booking_operations`,
   );
 
   target.searchParams.set(
@@ -87,19 +108,17 @@ async function readTransferOperation(
 
   const response = await fetch(target, {
     headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
     },
     cache: "no-store",
     signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
-    console.error(
-      "[payment-status] transfer operation lookup failed",
-      { httpStatus: response.status },
-    );
-
+    console.error("[payment-status] transfer operation lookup failed", {
+      httpStatus: response.status,
+    });
     throw new Error("Transfer operation lookup failed.");
   }
 
@@ -112,10 +131,117 @@ async function readTransferOperation(
   return (rows[0] as TransferOperationStatus | undefined) ?? null;
 }
 
+async function readLateRefundOperation(
+  paymentGroupId: string,
+  userId: string,
+): Promise<{
+  operation: LateRefundOperation | null;
+  refund: LateRefundRow | null;
+}> {
+  const config = getSupabaseConfig();
+  if (!config) throw new Error("Supabase configuration is not available.");
+
+  const operationUrl = new URL(
+    `${config.url}/rest/v1/booking_operations`,
+  );
+
+  operationUrl.searchParams.set(
+    "select",
+    "id,status,metadata",
+  );
+  operationUrl.searchParams.set("user_id", `eq.${userId}`);
+  operationUrl.searchParams.set(
+    "source_payment_group_id",
+    `eq.${paymentGroupId}`,
+  );
+  operationUrl.searchParams.set(
+    "operation_type",
+    "eq.late_payment_refund",
+  );
+  operationUrl.searchParams.set("limit", "1");
+
+  const operationResponse = await fetch(operationUrl, {
+    headers: {
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!operationResponse.ok) {
+    console.error("[payment-status] late refund operation lookup failed", {
+      httpStatus: operationResponse.status,
+    });
+    throw new Error("Late refund operation lookup failed.");
+  }
+
+  const operationRows: unknown = await operationResponse.json();
+
+  if (!Array.isArray(operationRows)) {
+    throw new Error("Invalid late refund operation response.");
+  }
+
+  const operation =
+    (operationRows[0] as LateRefundOperation | undefined) ?? null;
+
+  if (!operation) {
+    return { operation: null, refund: null };
+  }
+
+  const refundUrl = new URL(
+    `${config.url}/rest/v1/payment_refunds`,
+  );
+
+  refundUrl.searchParams.set(
+    "select",
+    "id,status,amount_rub,failure_reason,provider_refund_id,created_at,succeeded_at",
+  );
+  refundUrl.searchParams.set(
+    "booking_operation_id",
+    `eq.${operation.id}`,
+  );
+  refundUrl.searchParams.set("order", "created_at.desc");
+  refundUrl.searchParams.set("limit", "1");
+
+  const refundResponse = await fetch(refundUrl, {
+    headers: {
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!refundResponse.ok) {
+    console.error("[payment-status] late refund record lookup failed", {
+      httpStatus: refundResponse.status,
+    });
+    throw new Error("Late refund record lookup failed.");
+  }
+
+  const refundRows: unknown = await refundResponse.json();
+
+  if (!Array.isArray(refundRows)) {
+    throw new Error("Invalid late refund record response.");
+  }
+
+  return {
+    operation,
+    refund: (refundRows[0] as LateRefundRow | undefined) ?? null,
+  };
+}
+
 function hasManualResolution(
   metadata: Record<string, unknown> | null,
 ) {
   return metadata?.manual_resolution_required === true;
+}
+
+function hasRefundRetry(
+  metadata: Record<string, unknown> | null,
+) {
+  return metadata?.refund_retry_required === true;
 }
 
 export async function GET(request: NextRequest) {
@@ -164,9 +290,8 @@ export async function GET(request: NextRequest) {
     }
 
     let syncResult: PaymentSyncResult | null = null;
+    let lateRefundProcessingState: string | null = null;
 
-    // Проверяем обычные незавершённые платежи и платежи,
-    // которые были локально отменены по тайм-ауту.
     if (
       group.provider_payment_id &&
       (group.payment_status === "pending" ||
@@ -183,27 +308,46 @@ export async function GET(request: NextRequest) {
 
       console.info("[payment-status] YooKassa status checked", {
         providerStatus: syncResult.providerStatus,
-        cancellationReason:
-          typeof syncResult.payment.cancellation_details?.reason ===
-          "string"
-            ? syncResult.payment.cancellation_details.reason
-            : null,
         databaseResult: syncResult.databaseResult ?? null,
       });
 
-      // После синхронизации перечитываем состояние БД.
+      if (
+        syncResult.providerStatus === "succeeded" &&
+        syncResult.databaseResult === "late_success_refund_required"
+      ) {
+        const amountRub = parseWholeRubleAmount(payment.amount);
+
+        if (amountRub === null) {
+          throw new Error("Late payment amount is invalid.");
+        }
+
+        const refundResult = await processLatePaymentRefund({
+          paymentGroupId,
+          providerPaymentId: payment.id as string,
+          amountRub,
+        });
+
+        lateRefundProcessingState = refundResult.state;
+
+        console.info("[payment-status] late payment refund checked", {
+          refundState: refundResult.state,
+        });
+      }
+
       group = await readStatus();
 
       if (!group) {
-        return errorResponse(
-          "Бронирование не найдено.",
-          404,
-        );
+        return errorResponse("Бронирование не найдено.", 404);
       }
     }
 
-    // Ищем операцию переноса по adjustment_payment_group_id.
-    // Запрос ограничен текущим владельцем и типом transfer.
+    // Read durable refund state independently from the one-time sync result.
+    // This also makes refresh/re-entry reliable after the initial webhook.
+    const lateRefund = await readLateRefundOperation(
+      paymentGroupId,
+      userId,
+    );
+
     const transferOperation = await readTransferOperation(
       paymentGroupId,
       userId,
@@ -228,9 +372,46 @@ export async function GET(request: NextRequest) {
       Boolean(group.provider_payment_id) &&
       syncResult?.providerStatus === "pending";
 
+    const lateOperation = lateRefund.operation;
+    const lateRefundRow = lateRefund.refund;
+
+    const lateRefundManual =
+      hasManualResolution(lateOperation?.metadata ?? null);
+
+    const lateRefundRetry =
+      hasRefundRetry(lateOperation?.metadata ?? null);
+
+    let lateRefundState: string | null = null;
+
+    if (lateOperation || refundRequired) {
+      if (
+        lateRefundRow?.status === "succeeded" ||
+        lateOperation?.status === "completed" ||
+        group.payment_status === "refunded"
+      ) {
+        lateRefundState = "late_refunded";
+      } else if (lateRefundManual || lateOperation?.status === "failed") {
+        lateRefundState = "late_refund_review";
+      } else if (
+        lateRefundRow?.status === "pending" ||
+        lateRefundRetry ||
+        lateRefundProcessingState === "pending" ||
+        lateRefundProcessingState === "retry_required" ||
+        lateOperation?.status === "processing"
+      ) {
+        lateRefundState = "late_refund_pending";
+      } else if (lateRefundRow?.status === "cancelled") {
+        lateRefundState = "late_refund_review";
+      } else {
+        lateRefundState = "late_refund_pending";
+      }
+    }
+
     let state = baseState;
 
-    if (transferOperation) {
+    if (lateRefundState) {
+      state = lateRefundState;
+    } else if (transferOperation) {
       if (refundRequired) {
         state = "transfer_refund_required";
       } else if (group.payment_status === "refunded") {
@@ -258,10 +439,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Не показываем ложное сообщение об успешной обычной брони,
-    // если платёж успешен, но подтверждённой записи нет.
     const confirmationMissing =
       !transferOperation &&
+      !lateOperation &&
       group.payment_status === "succeeded" &&
       group.booking_count > 0 &&
       group.confirmed_booking_count === 0;
@@ -278,8 +458,7 @@ export async function GET(request: NextRequest) {
         currency: group.currency,
         hold_expires_at: group.hold_expires_at,
         booking_count: group.booking_count,
-        confirmed_booking_count:
-          group.confirmed_booking_count,
+        confirmed_booking_count: group.confirmed_booking_count,
         payment_initialization_started: Boolean(
           group.payment_init_started_at,
         ),
@@ -298,6 +477,17 @@ export async function GET(request: NextRequest) {
           transferOperation
             ? hasManualResolution(transferOperation.metadata)
             : false,
+
+        late_refund_operation_id: lateOperation?.id ?? null,
+        late_refund_operation_status: lateOperation?.status ?? null,
+        late_refund_status: lateRefundRow?.status ?? null,
+        late_refund_amount_rub: lateRefundRow?.amount_rub ?? null,
+        late_refund_failure_reason:
+          lateRefundRow?.failure_reason ?? null,
+        late_refund_succeeded_at:
+          lateRefundRow?.succeeded_at ?? null,
+        late_refund_retry_required: lateRefundRetry,
+        late_refund_manual_resolution_required: lateRefundManual,
       },
       { headers: { "Cache-Control": "no-store" } },
     );
