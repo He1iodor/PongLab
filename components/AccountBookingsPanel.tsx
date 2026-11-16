@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -53,6 +54,14 @@ type Booking = {
   transfer_refund_failure_reason: string | null;
   transfer_purchase_at: string;
   transfer_deadline_at: string | null;
+
+  late_payment_refund_operation_id: string | null;
+  late_payment_refund_payment_group_id: string | null;
+  late_payment_refund_operation_status: string | null;
+  late_payment_refund_status: string | null;
+  late_payment_refund_amount_rub: number | null;
+  late_payment_refund_failure_reason: string | null;
+  late_payment_refund_active: boolean;
 };
 
 type CancellationState = {
@@ -89,8 +98,13 @@ function clockTime(value: string, timezone: string) {
 
 function formatLastSeen(value: string | null) {
   if (!value) return "время сигнала неизвестно";
+
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "время сигнала неизвестно";
+
+  if (Number.isNaN(date.getTime())) {
+    return "время сигнала неизвестно";
+  }
+
   return new Intl.DateTimeFormat("ru-RU", {
     dateStyle: "short",
     timeStyle: "short",
@@ -98,15 +112,27 @@ function formatLastSeen(value: string | null) {
 }
 
 function statusLabel(booking: Booking) {
-  if (booking.effective_status === "expired" || booking.status === "expired") {
+  if (
+    booking.effective_status === "expired" ||
+    booking.status === "expired"
+  ) {
     return "Резерв истёк";
   }
+
   if (booking.status === "cancelled") return "Отменена";
   if (booking.status === "completed") return "Завершена";
-  if (booking.status === "confirmed" && booking.payment_status === "succeeded") {
+
+  if (
+    booking.status === "confirmed" &&
+    booking.payment_status === "succeeded"
+  ) {
     return "Оплачена и подтверждена";
   }
-  if (booking.status === "pending_payment") return "Ожидает оплаты";
+
+  if (booking.status === "pending_payment") {
+    return "Ожидает оплаты";
+  }
+
   return booking.status;
 }
 
@@ -175,23 +201,98 @@ function TransferStatus({ booking }: { booking: Booking }) {
   );
 }
 
-function DoorAccess({ booking, now }: { booking: Booking; now: number }) {
+function LatePaymentRefundStatus({ booking }: { booking: Booking }) {
+  if (!booking.late_payment_refund_status) return null;
+
+  const refunded =
+    booking.late_payment_refund_status === "succeeded" ||
+    booking.late_payment_refund_operation_status === "completed";
+
+  const needsReview =
+    booking.late_payment_refund_status === "cancelled" ||
+    booking.late_payment_refund_status === "failed" ||
+    booking.late_payment_refund_operation_status === "failed";
+
+  if (refunded) {
+    return (
+      <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-emerald-200">
+          <CheckCircle2 size={16} />
+          Поздний платёж возвращён
+        </div>
+        <p className="mt-1 text-xs leading-5 text-white/60">
+          YooKassa подтвердила возврат. Резерв не восстановлен.
+          Срок зачисления средств зависит от банка.
+        </p>
+        {booking.late_payment_refund_amount_rub !== null && (
+          <p className="mt-2 text-sm font-semibold text-white/85">
+            {money(booking.late_payment_refund_amount_rub)}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-amber-100">
+        {needsReview ? (
+          <AlertTriangle size={16} />
+        ) : (
+          <Clock3 size={16} />
+        )}
+        {needsReview
+          ? "Возврат требует проверки"
+          : "Возвращаем поздний платёж"}
+      </div>
+      <p className="mt-1 text-xs leading-5 text-white/65">
+        {needsReview
+          ? "YooKassa не подтвердила завершение возврата. Бронирование не восстановлено. Обратитесь к администрации PongLab для сверки."
+          : "Оплата подтвердилась после закрытия резерва. Система оформляет полный возврат. Бронирование не восстановлено; не создавайте повторную оплату."}
+      </p>
+      {booking.late_payment_refund_amount_rub !== null && (
+        <p className="mt-2 text-sm font-semibold text-white/85">
+          {money(booking.late_payment_refund_amount_rub)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DoorAccess({
+  booking,
+  now,
+}: {
+  booking: Booking;
+  now: number;
+}) {
   const [sending, setSending] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [messageKind, setMessageKind] = useState<"info" | "success" | "error">("info");
+  const [messageKind, setMessageKind] = useState<
+    "info" | "success" | "error"
+  >("info");
 
   const start = Date.parse(booking.start_at);
   const end = Date.parse(booking.end_at);
+
   const inWindow =
-    Number.isFinite(start) && Number.isFinite(end) && start <= now && now < end;
+    Number.isFinite(start) &&
+    Number.isFinite(end) &&
+    start <= now &&
+    now < end;
+
   const confirmed =
-    booking.status === "confirmed" && booking.payment_status === "succeeded";
+    booking.status === "confirmed" &&
+    booking.payment_status === "succeeded";
 
   useEffect(() => {
     if (!expiresAt) return;
 
-    if (booking.door_controller_online && booking.door_state === "open") {
+    if (
+      booking.door_controller_online &&
+      booking.door_state === "open"
+    ) {
       setMessage("Датчик подтвердил открытое состояние двери.");
       setMessageKind("success");
       setExpiresAt(null);
@@ -205,7 +306,12 @@ function DoorAccess({ booking, now }: { booking: Booking; now: number }) {
       setMessageKind("error");
       setExpiresAt(null);
     }
-  }, [expiresAt, now, booking.door_controller_online, booking.door_state]);
+  }, [
+    expiresAt,
+    now,
+    booking.door_controller_online,
+    booking.door_state,
+  ]);
 
   const openDoor = async () => {
     if (
@@ -231,15 +337,26 @@ function DoorAccess({ booking, now }: { booking: Booking; now: number }) {
       });
 
       const result = await response.json().catch(() => ({}));
+
       if (!response.ok) {
         throw new Error(result.error || "Не удалось отправить команду.");
       }
 
-      setExpiresAt(result.expires_at || new Date(Date.now() + 15000).toISOString());
-      setMessage("Команда поставлена в очередь. Ожидаем подтверждение от датчика двери.");
+      setExpiresAt(
+        result.expires_at ||
+          new Date(Date.now() + 15000).toISOString(),
+      );
+
+      setMessage(
+        "Команда поставлена в очередь. Ожидаем подтверждение от датчика двери.",
+      );
       setMessageKind("info");
     } catch (caught) {
-      setMessage(caught instanceof Error ? caught.message : "Ошибка отправки команды.");
+      setMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Ошибка отправки команды.",
+      );
       setMessageKind("error");
     } finally {
       setSending(false);
@@ -289,11 +406,14 @@ function DoorAccess({ booking, now }: { booking: Booking; now: number }) {
         </p>
       ) : (
         <p className="mt-2 text-xs leading-5 text-white/55">
-          В клубе нет единственного активного дверного контроллера. Открытие через кабинет недоступно.
+          В клубе нет единственного активного дверного контроллера.
+          Открытие через кабинет недоступно.
         </p>
       )}
 
-      {inWindow && booking.door_controller_online && booking.door_state === "open" ? (
+      {inWindow &&
+      booking.door_controller_online &&
+      booking.door_state === "open" ? (
         <p className="mt-3 text-sm font-medium text-emerald-300">
           Датчик сообщает, что дверь открыта.
         </p>
@@ -308,7 +428,11 @@ function DoorAccess({ booking, now }: { booking: Booking; now: number }) {
           }
           className="mt-3 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] px-4 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {sending ? <RefreshCw size={15} className="animate-spin" /> : <DoorOpen size={16} />}
+          {sending ? (
+            <RefreshCw size={15} className="animate-spin" />
+          ) : (
+            <DoorOpen size={16} />
+          )}
           {sending ? "Отправляем..." : "Открыть дверь"}
         </button>
       )}
@@ -319,11 +443,12 @@ function DoorAccess({ booking, now }: { booking: Booking; now: number }) {
         </p>
       )}
 
-      {!booking.door_controller_online && booking.door_controller_available && (
-        <p className="mt-2 text-xs text-amber-100/70">
-          Команда заблокирована до восстановления связи с контроллером.
-        </p>
-      )}
+      {!booking.door_controller_online &&
+        booking.door_controller_available && (
+          <p className="mt-2 text-xs text-amber-100/70">
+            Команда заблокирована до восстановления связи с контроллером.
+          </p>
+        )}
 
       {message && (
         <p
@@ -353,7 +478,9 @@ export default function AccountBookingsPanel({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
-  const [cancellation, setCancellation] = useState<Record<string, CancellationState>>({});
+  const [cancellation, setCancellation] = useState<
+    Record<string, CancellationState>
+  >({});
   const [cancelingId, setCancelingId] = useState<string | null>(null);
 
   const load = useCallback(async (manual = false) => {
@@ -369,13 +496,22 @@ export default function AccountBookingsPanel({
       });
 
       const result = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        throw new Error(result.error || "Не удалось загрузить бронирования.");
+        throw new Error(
+          result.error || "Не удалось загрузить бронирования.",
+        );
       }
 
-      setBookings(Array.isArray(result.bookings) ? result.bookings : []);
+      setBookings(
+        Array.isArray(result.bookings) ? result.bookings : [],
+      );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Ошибка загрузки бронирований.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Ошибка загрузки бронирований.",
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -387,7 +523,11 @@ export default function AccountBookingsPanel({
   }, [load]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 5000);
+    const timer = window.setInterval(
+      () => setNow(Date.now()),
+      5000,
+    );
+
     return () => window.clearInterval(timer);
   }, []);
 
@@ -395,10 +535,16 @@ export default function AccountBookingsPanel({
     () =>
       [
         ...new Set(
-          bookings
-            .filter(isPaymentPending)
-            .map((b) => b.payment_group_id)
-            .filter((id): id is string => Boolean(id)),
+          bookings.flatMap((booking) => [
+            ...(isPaymentPending(booking) && booking.payment_group_id
+              ? [booking.payment_group_id]
+              : []),
+            ...(booking.late_payment_refund_active &&
+            booking.late_payment_refund_payment_group_id &&
+            booking.late_payment_refund_status === "pending"
+              ? [booking.late_payment_refund_payment_group_id]
+              : []),
+          ]),
         ),
       ].slice(0, 5),
     [bookings],
@@ -415,24 +561,39 @@ export default function AccountBookingsPanel({
           try {
             const response = await fetch(
               `/api/payments/status?payment_group_id=${encodeURIComponent(id)}`,
-              { credentials: "same-origin", cache: "no-store" },
+              {
+                credentials: "same-origin",
+                cache: "no-store",
+              },
             );
 
             if (!response.ok) return false;
 
             const result = await response.json().catch(() => ({}));
-            return result.state === "succeeded" || result.state === "cancelled";
+
+            return (
+              result.state === "succeeded" ||
+              result.state === "cancelled" ||
+              result.state === "late_refunded" ||
+              result.state === "late_refund_review"
+            );
           } catch {
             return false;
           }
         }),
       );
 
-      if (!stopped && results.some(Boolean)) await load(true);
+      if (!stopped && results.some(Boolean)) {
+        await load(true);
+      }
     };
 
     void check();
-    const timer = window.setInterval(() => void check(), 30000);
+
+    const timer = window.setInterval(
+      () => void check(),
+      30000,
+    );
 
     return () => {
       stopped = true;
@@ -441,16 +602,21 @@ export default function AccountBookingsPanel({
   }, [pendingIds, load]);
 
   const activeConfirmed = bookings.some(
-    (b) =>
-      b.status === "confirmed" &&
-      b.payment_status === "succeeded" &&
-      Date.parse(b.start_at) <= now &&
-      now < Date.parse(b.end_at),
+    (booking) =>
+      booking.status === "confirmed" &&
+      booking.payment_status === "succeeded" &&
+      Date.parse(booking.start_at) <= now &&
+      now < Date.parse(booking.end_at),
   );
 
   useEffect(() => {
     if (!activeConfirmed) return;
-    const timer = window.setInterval(() => void load(true), 15000);
+
+    const timer = window.setInterval(
+      () => void load(true),
+      15000,
+    );
+
     return () => window.clearInterval(timer);
   }, [activeConfirmed, load]);
 
@@ -470,23 +636,33 @@ export default function AccountBookingsPanel({
     if (cancelingId) return;
 
     setCancelingId(bookingId);
+
     setCancellation((current) => ({
       ...current,
-      [bookingId]: { status: "processing", message: "Проверяем возможность возврата..." },
+      [bookingId]: {
+        status: "processing",
+        message: "Проверяем возможность возврата...",
+      },
     }));
 
     try {
-      const response = await fetch("/api/account/bookings/cancel", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: bookingId }),
-      });
+      const response = await fetch(
+        "/api/account/bookings/cancel",
+        {
+          method: "POST",
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking_id: bookingId }),
+        },
+      );
 
       const result = await response.json().catch(() => ({}));
 
-      if (response.status === 202 || result.state === "processing") {
+      if (
+        response.status === 202 ||
+        result.state === "processing"
+      ) {
         setCancellation((current) => ({
           ...current,
           [bookingId]: {
@@ -500,7 +676,9 @@ export default function AccountBookingsPanel({
       }
 
       if (!response.ok) {
-        throw new Error(result.error || "Не удалось выполнить отмену.");
+        throw new Error(
+          result.error || "Не удалось выполнить отмену.",
+        );
       }
 
       if (result.state === "completed") {
@@ -516,7 +694,9 @@ export default function AccountBookingsPanel({
         return;
       }
 
-      throw new Error("Сервер не подтвердил завершение возврата.");
+      throw new Error(
+        "Сервер не подтвердил завершение возврата.",
+      );
     } catch (caught) {
       setCancellation((current) => ({
         ...current,
@@ -554,21 +734,32 @@ export default function AccountBookingsPanel({
           disabled={refreshing}
           className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 px-3 text-sm text-white/70 hover:bg-white/[0.06] disabled:opacity-50"
         >
-          <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
+          <RefreshCw
+            size={15}
+            className={refreshing ? "animate-spin" : ""}
+          />
           Обновить
         </button>
       </div>
 
       {error && (
-        <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">
+        <p
+          role="alert"
+          className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200"
+        >
           {error}
         </p>
       )}
 
       {sorted.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center">
-          <CalendarDays size={26} className="mx-auto text-[#B99AFF]" />
-          <h3 className="mt-3 font-semibold text-white">Бронирований пока нет</h3>
+          <CalendarDays
+            size={26}
+            className="mx-auto text-[#B99AFF]"
+          />
+          <h3 className="mt-3 font-semibold text-white">
+            Бронирований пока нет
+          </h3>
           <p className="mt-2 text-sm text-white/50">
             Создайте первую бронь, чтобы она появилась здесь.
           </p>
@@ -599,9 +790,12 @@ export default function AccountBookingsPanel({
               confirmed &&
               !booking.transfer_used &&
               !booking.transfer_manual_resolution_required &&
+              !booking.late_payment_refund_active &&
               Boolean(booking.transfer_operation_id) &&
               ((booking.transfer_status === "awaiting_payment" &&
-                Boolean(booking.transfer_adjustment_payment_group_id)) ||
+                Boolean(
+                  booking.transfer_adjustment_payment_group_id,
+                )) ||
                 booking.transfer_status === "processing");
 
             return (
@@ -612,12 +806,21 @@ export default function AccountBookingsPanel({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="flex items-center gap-2 font-semibold text-white">
-                      <CalendarDays size={16} className="text-[#B99AFF]" />
-                      {dateTime(booking.start_at, booking.timezone)}
+                      <CalendarDays
+                        size={16}
+                        className="text-[#B99AFF]"
+                      />
+                      {dateTime(
+                        booking.start_at,
+                        booking.timezone,
+                      )}
                     </h3>
                     <p className="mt-2 flex items-center gap-2 text-sm text-white/55">
                       <Clock3 size={14} />
-                      До {clockTime(booking.end_at, booking.timezone)}
+                      До {clockTime(
+                        booking.end_at,
+                        booking.timezone,
+                      )}
                     </p>
                   </div>
 
@@ -628,28 +831,44 @@ export default function AccountBookingsPanel({
 
                 <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-2">
                   <div className="flex gap-2">
-                    <MapPin size={15} className="mt-0.5 text-white/40" />
+                    <MapPin
+                      size={15}
+                      className="mt-0.5 text-white/40"
+                    />
                     <div>
                       <p className="text-xs text-white/40">Клуб</p>
-                      <p className="mt-1 text-sm text-white/80">{booking.studio_name}</p>
+                      <p className="mt-1 text-sm text-white/80">
+                        {booking.studio_name}
+                      </p>
                       {booking.studio_address && (
-                        <p className="mt-1 text-xs text-white/45">{booking.studio_address}</p>
+                        <p className="mt-1 text-xs text-white/45">
+                          {booking.studio_address}
+                        </p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex gap-2">
-                    <Table2 size={15} className="mt-0.5 text-white/40" />
+                    <Table2
+                      size={15}
+                      className="mt-0.5 text-white/40"
+                    />
                     <div>
                       <p className="text-xs text-white/40">Стол</p>
-                      <p className="mt-1 text-sm text-white/80">{booking.table_name}</p>
+                      <p className="mt-1 text-sm text-white/80">
+                        {booking.table_name}
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
-                  <span className="text-sm text-white/50">Стоимость</span>
-                  <span className="font-semibold text-white">{money(booking.price_rub)}</span>
+                  <span className="text-sm text-white/50">
+                    Стоимость
+                  </span>
+                  <span className="font-semibold text-white">
+                    {money(booking.price_rub)}
+                  </span>
                 </div>
 
                 {confirmed && (
@@ -664,11 +883,29 @@ export default function AccountBookingsPanel({
                         timezone={booking.timezone}
                         sourcePrice={booking.price_rub}
                         transferDeadlineAt={booking.transfer_deadline_at}
-                        recoveryOperationId={canRecoverTransfer ? booking.transfer_operation_id : null}
-                        recoveryStatus={canRecoverTransfer ? booking.transfer_status : null}
-                        adjustmentPaymentGroupId={canRecoverTransfer ? booking.transfer_adjustment_payment_group_id : null}
-                        refundStatus={canRecoverTransfer ? booking.transfer_refund_status : null}
-                        manualResolutionRequired={booking.transfer_manual_resolution_required}
+                        recoveryOperationId={
+                          canRecoverTransfer
+                            ? booking.transfer_operation_id
+                            : null
+                        }
+                        recoveryStatus={
+                          canRecoverTransfer
+                            ? booking.transfer_status
+                            : null
+                        }
+                        adjustmentPaymentGroupId={
+                          canRecoverTransfer
+                            ? booking.transfer_adjustment_payment_group_id
+                            : null
+                        }
+                        refundStatus={
+                          canRecoverTransfer
+                            ? booking.transfer_refund_status
+                            : null
+                        }
+                        manualResolutionRequired={
+                          booking.transfer_manual_resolution_required
+                        }
                         onComplete={() => void load(true)}
                       />
                     )}
@@ -677,9 +914,13 @@ export default function AccountBookingsPanel({
 
                 {pending && (
                   <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3 text-xs leading-5 text-amber-100/80">
-                    Платёж уже инициирован. Система проверяет его каждые 30 секунд, пока этот раздел открыт. Не создавайте повторную бронь до окончательного статуса.
+                    Платёж уже инициирован. Система проверяет его каждые
+                    30 секунд, пока этот раздел открыт. Не создавайте
+                    повторную бронь до окончательного статуса.
                   </div>
                 )}
+
+                <LatePaymentRefundStatus booking={booking} />
 
                 {cancellable && !cancellationState && (
                   <div className="mt-4 border-t border-white/10 pt-4">
@@ -696,7 +937,8 @@ export default function AccountBookingsPanel({
                       Отменить бронирование
                     </button>
                     <p className="mt-2 text-xs leading-5 text-white/40">
-                      При отмене более чем за 24 часа до начала возвращается полная стоимость.
+                      При отмене более чем за 24 часа до начала
+                      возвращается полная стоимость.
                     </p>
                   </div>
                 )}
@@ -704,13 +946,19 @@ export default function AccountBookingsPanel({
                 {cancellationState?.status === "confirm" && (
                   <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
                     <div className="flex items-start gap-2">
-                      <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-200" />
+                      <AlertTriangle
+                        size={18}
+                        className="mt-0.5 shrink-0 text-amber-200"
+                      />
                       <div>
                         <p className="text-sm font-semibold text-white">
                           Подтвердить отмену?
                         </p>
                         <p className="mt-1 text-xs leading-5 text-white/60">
-                          Будет запрошен полный возврат стоимости бронирования на исходный способ оплаты. Бронь отменится только после подтверждения возврата YooKassa.
+                          Будет запрошен полный возврат стоимости
+                          бронирования на исходный способ оплаты.
+                          Бронь отменится только после подтверждения
+                          возврата YooKassa.
                         </p>
                       </div>
                     </div>
@@ -754,11 +1002,20 @@ export default function AccountBookingsPanel({
                   >
                     <div className="flex items-start gap-2">
                       {cancellationState.status === "completed" ? (
-                        <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-300" />
+                        <CheckCircle2
+                          size={17}
+                          className="mt-0.5 shrink-0 text-emerald-300"
+                        />
                       ) : cancellationState.status === "error" ? (
-                        <AlertTriangle size={17} className="mt-0.5 shrink-0 text-red-300" />
+                        <AlertTriangle
+                          size={17}
+                          className="mt-0.5 shrink-0 text-red-300"
+                        />
                       ) : (
-                        <RefreshCw size={17} className="mt-0.5 shrink-0 animate-spin text-amber-200" />
+                        <RefreshCw
+                          size={17}
+                          className="mt-0.5 shrink-0 animate-spin text-amber-200"
+                        />
                       )}
 
                       <p className="text-xs leading-5 text-white/80">
@@ -785,11 +1042,15 @@ export default function AccountBookingsPanel({
                   Date.parse(booking.start_at) > now &&
                   !cancellationState && (
                     <p className="mt-3 text-xs leading-5 text-white/40">
-                      Самостоятельная отмена доступна только более чем за 24 часа до начала. Для обращения по более поздней отмене свяжитесь с администратором.
+                      Самостоятельная отмена доступна только более
+                      чем за 24 часа до начала. Для обращения по более
+                      поздней отмене свяжитесь с администратором.
                     </p>
                   )}
 
-                {confirmed && <DoorAccess booking={booking} now={now} />}
+                {confirmed && (
+                  <DoorAccess booking={booking} now={now} />
+                )}
               </article>
             );
           })}
