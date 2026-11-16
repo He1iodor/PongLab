@@ -1,4 +1,3 @@
-
 import {
   createYooKassaRefund,
   getYooKassaRefund,
@@ -23,12 +22,13 @@ export type LateRefundResult =
   | { state: "retry_required" }
   | { state: "review_required" };
 
-const SAFE_IDEMPOTENCY_WINDOW_MS =
-  23 * 60 * 60 * 1000;
+const SAFE_IDEMPOTENCY_WINDOW_MS = 23 * 60 * 60 * 1000;
 
-function parseProviderAmount(
-  refund: YooKassaRefund,
-): number | null {
+type ManualReviewReason =
+  | "provider_refund_ambiguous"
+  | "idempotency_window_expired_without_provider_refund";
+
+function parseProviderAmount(refund: YooKassaRefund): number | null {
   const amount = refund.amount;
 
   if (
@@ -40,18 +40,12 @@ function parseProviderAmount(
   }
 
   const match = amount.value.match(/^(\d+)(?:\.(\d{1,2}))?$/);
-
   if (!match) return null;
 
   const rubles = Number(match[1]);
-  const kopecks = Number(
-    (match[2] ?? "").padEnd(2, "0") || "0",
-  );
+  const kopecks = Number((match[2] ?? "").padEnd(2, "0") || "0");
 
-  if (!Number.isSafeInteger(rubles) || kopecks !== 0) {
-    return null;
-  }
-
+  if (!Number.isSafeInteger(rubles) || kopecks !== 0) return null;
   return rubles;
 }
 
@@ -70,23 +64,13 @@ function validateRefund(
     (expected.refundId && refund.id !== expected.refundId) ||
     refund.payment_id !== expected.paymentId ||
     parseProviderAmount(refund) !== expected.amountRub ||
-    !["pending", "succeeded", "canceled"].includes(
-      String(refund.status),
-    )
+    !["pending", "succeeded", "canceled"].includes(String(refund.status))
   ) {
     throw new Error("YooKassa refund response validation failed.");
   }
 }
 
-/**
- * Получает время создания локальной записи возврата.
- *
- * Используем service key, поэтому RLS не требует отдельной
- * политики чтения для внутренней таблицы payment_refunds.
- */
-async function getLocalRefundCreatedAt(
-  refundId: string,
-): Promise<number> {
+async function getLocalRefundCreatedAt(refundId: string): Promise<number> {
   const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "");
   const supabaseKey = process.env.SUPABASE_SECRET_KEY?.trim();
 
@@ -94,10 +78,7 @@ async function getLocalRefundCreatedAt(
     throw new Error("Supabase configuration is not available.");
   }
 
-  const url = new URL(
-    `${supabaseUrl}/rest/v1/payment_refunds`,
-  );
-
+  const url = new URL(`${supabaseUrl}/rest/v1/payment_refunds`);
   url.searchParams.set("select", "created_at");
   url.searchParams.set("id", `eq.${refundId}`);
   url.searchParams.set("limit", "1");
@@ -125,13 +106,10 @@ async function getLocalRefundCreatedAt(
     !rows[0] ||
     typeof rows[0].created_at !== "string"
   ) {
-    throw new Error(
-      "Local refund creation timestamp was not found.",
-    );
+    throw new Error("Local refund creation timestamp was not found.");
   }
 
   const createdAt = Date.parse(rows[0].created_at);
-
   if (!Number.isFinite(createdAt)) {
     throw new Error("Local refund creation timestamp is invalid.");
   }
@@ -140,14 +118,28 @@ async function getLocalRefundCreatedAt(
 }
 
 /**
- * Проверяет, не существует ли уже возврат в YooKassa.
- *
- * Если возврат найден однозначно, получаем его актуальное состояние
- * по ID и передаём в существующую финализацию.
- *
- * Если найдено несколько возвратов или найден возврат с другой суммой,
- * автоматически ничего не создаём.
+ * Durably records manual review in booking_operations.metadata.
+ * The operation becomes failed while the refund row remains pending,
+ * preserving the unresolved financial item and blocking another POST.
  */
+async function persistManualReview(args: {
+  refundId: string;
+  reason: ManualReviewReason;
+}): Promise<"review_required" | "refunded"> {
+  const result = await supabaseRpc<string>(
+    "mark_late_payment_refund_review",
+    {
+      p_refund_id: args.refundId,
+      p_reason: args.reason,
+    },
+  );
+
+  if (result === "review_required") return "review_required";
+  if (result === "refunded") return "refunded";
+
+  throw new Error("Manual refund review state was not persisted.");
+}
+
 async function findExistingProviderRefund(args: {
   paymentId: string;
   amountRub: number;
@@ -158,15 +150,8 @@ async function findExistingProviderRefund(args: {
 > {
   const refunds = await listYooKassaRefunds(args.paymentId);
 
-  if (refunds.length === 0) {
-    return { state: "none" };
-  }
-
-  // Любой существующий возврат по платежу требует сверки.
-  // Автоматически создавать ещё один возврат нельзя.
-  if (refunds.length !== 1) {
-    return { state: "ambiguous" };
-  }
+  if (refunds.length === 0) return { state: "none" };
+  if (refunds.length !== 1) return { state: "ambiguous" };
 
   const candidate = refunds[0];
 
@@ -186,10 +171,7 @@ async function findExistingProviderRefund(args: {
     refundId: candidate.id,
   });
 
-  return {
-    state: "found",
-    refund,
-  };
+  return { state: "found", refund };
 }
 
 export async function processLatePaymentRefund(args: {
@@ -216,22 +198,12 @@ export async function processLatePaymentRefund(args: {
   );
 
   if (!prepared || typeof prepared !== "object") {
-    throw new Error(
-      "Invalid late payment refund preparation response.",
-    );
+    throw new Error("Invalid late payment refund preparation response.");
   }
 
-  if (prepared.state === "refunded") {
-    return { state: "refunded" };
-  }
-
-  if (prepared.state === "retry_required") {
-    return { state: "retry_required" };
-  }
-
-  if (prepared.state === "review_required") {
-    return { state: "review_required" };
-  }
+  if (prepared.state === "refunded") return { state: "refunded" };
+  if (prepared.state === "retry_required") return { state: "retry_required" };
+  if (prepared.state === "review_required") return { state: "review_required" };
 
   if (
     prepared.state !== "pending" ||
@@ -239,18 +211,14 @@ export async function processLatePaymentRefund(args: {
     typeof prepared.provider_payment_id !== "string" ||
     typeof prepared.amount_rub !== "number"
   ) {
-    throw new Error(
-      "Late payment refund is not ready for processing.",
-    );
+    throw new Error("Late payment refund is not ready for processing.");
   }
 
   if (
     prepared.provider_payment_id !== args.providerPaymentId ||
     prepared.amount_rub !== args.amountRub
   ) {
-    throw new Error(
-      "Prepared refund does not match the late payment.",
-    );
+    throw new Error("Prepared refund does not match the late payment.");
   }
 
   if (
@@ -263,12 +231,8 @@ export async function processLatePaymentRefund(args: {
   let providerRefund: YooKassaRefund;
 
   if (typeof prepared.provider_refund_id === "string") {
-    // ID уже сохранён в БД — только проверяем состояние.
-    providerRefund = await getYooKassaRefund(
-      prepared.provider_refund_id,
-    );
+    providerRefund = await getYooKassaRefund(prepared.provider_refund_id);
   } else {
-    // Сначала ищем уже созданный возврат у YooKassa.
     const existing = await findExistingProviderRefund({
       paymentId: args.providerPaymentId,
       amountRub: args.amountRub,
@@ -279,39 +243,40 @@ export async function processLatePaymentRefund(args: {
     } else if (existing.state === "ambiguous") {
       console.error(
         "[yookassa-late-refund] existing provider refunds are ambiguous",
-        {
-          paymentGroupId: args.paymentGroupId,
-        },
+        { paymentGroupId: args.paymentGroupId },
       );
 
-      return { state: "review_required" };
+      return {
+        state: await persistManualReview({
+          refundId: prepared.refund_id,
+          reason: "provider_refund_ambiguous",
+        }),
+      };
     } else {
-      // Возврат не найден. Проверяем возраст локальной записи.
-      const createdAt = await getLocalRefundCreatedAt(
-        prepared.refund_id,
-      );
-
+      const createdAt = await getLocalRefundCreatedAt(prepared.refund_id);
       const ageMs = Date.now() - createdAt;
 
-      // Локальная запись старше безопасного окна.
-      // Повторный POST запрещён: ключ YooKassa уже может утратить
-      // идемпотентность. Безопаснее ручная сверка, чем двойной возврат.
+      if (ageMs < 0) {
+        throw new Error("Local refund creation timestamp is in the future.");
+      }
+
       if (ageMs >= SAFE_IDEMPOTENCY_WINDOW_MS) {
         console.error(
           "[yookassa-late-refund] idempotency window exceeded without provider refund",
           {
             paymentGroupId: args.paymentGroupId,
-            refundAgeHours: Math.floor(
-              ageMs / (60 * 60 * 1000),
-            ),
+            refundAgeHours: Math.floor(ageMs / (60 * 60 * 1000)),
           },
         );
 
-        return { state: "review_required" };
+        return {
+          state: await persistManualReview({
+            refundId: prepared.refund_id,
+            reason: "idempotency_window_expired_without_provider_refund",
+          }),
+        };
       }
 
-      // В пределах безопасного окна повторяем запрос
-      // с тем же сохранённым ключом идемпотентности.
       providerRefund = await createYooKassaRefund({
         paymentId: args.providerPaymentId,
         amountRub: args.amountRub,
@@ -341,19 +306,11 @@ export async function processLatePaymentRefund(args: {
     },
   );
 
-  if (result === "refunded") {
-    return { state: "refunded" };
-  }
-
-  if (result === "retry_required") {
-    return { state: "retry_required" };
-  }
-
+  if (result === "refunded") return { state: "refunded" };
+  if (result === "retry_required") return { state: "retry_required" };
   if (result === "pending" || result === "refund_recorded") {
     return { state: "pending" };
   }
 
-  throw new Error(
-    "Late payment refund finalization was not confirmed.",
-  );
+  throw new Error("Late payment refund finalization was not confirmed.");
 }
