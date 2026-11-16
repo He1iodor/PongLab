@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock3,
   Loader2,
+  RefreshCw,
   X,
 } from "lucide-react";
 
@@ -31,6 +32,12 @@ type Props = {
   studioId: string | null;
   timezone: string;
   sourcePrice: number;
+  transferDeadlineAt?: string | null;
+  recoveryOperationId?: string | null;
+  recoveryStatus?: string | null;
+  adjustmentPaymentGroupId?: string | null;
+  refundStatus?: string | null;
+  manualResolutionRequired?: boolean;
   onComplete: () => void;
 };
 
@@ -73,6 +80,12 @@ export default function BookingTransferAction({
   studioId,
   timezone,
   sourcePrice,
+  transferDeadlineAt = null,
+  recoveryOperationId = null,
+  recoveryStatus = null,
+  adjustmentPaymentGroupId = null,
+  refundStatus = null,
+  manualResolutionRequired = false,
   onComplete,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -89,14 +102,33 @@ export default function BookingTransferAction({
   const [operationId, setOperationId] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [refundPending, setRefundPending] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [recoveryMessageKind, setRecoveryMessageKind] = useState<"info" | "error" | "success">("info");
 
   const startMs = Date.parse(startAt);
+  const deadlineMs = transferDeadlineAt ? Date.parse(transferDeadlineAt) : Number.NaN;
   const hoursUntilStart = (startMs - Date.now()) / 3_600_000;
+
   const canSelfTransfer =
-    Number.isFinite(startMs) && startMs > Date.now() && hoursUntilStart >= 2;
+    Number.isFinite(startMs) &&
+    startMs > Date.now() &&
+    hoursUntilStart >= 2 &&
+    Number.isFinite(deadlineMs) &&
+    deadlineMs > Date.now();
+
+  const isRecoveryMode =
+    Boolean(recoveryOperationId) &&
+    !manualResolutionRequired &&
+    ((recoveryStatus === "awaiting_payment" && Boolean(adjustmentPaymentGroupId)) ||
+      recoveryStatus === "processing");
 
   const selectedStudio = studios.find((studio) => studio.id === studioIdSelected);
   const targetTimezone = selectedStudio?.timezone || "Europe/Moscow";
+
+  const deadlineDate = Number.isFinite(deadlineMs)
+    ? localDateInZone(new Date(deadlineMs), targetTimezone)
+    : "";
 
   useEffect(() => {
     if (!open || studios.length > 0) return;
@@ -176,7 +208,9 @@ export default function BookingTransferAction({
           (slot) =>
             slot.duration_minutes === 60 &&
             Array.isArray(slot.available_tables) &&
-            slot.available_tables.length > 0,
+            slot.available_tables.length > 0 &&
+            Number.isFinite(deadlineMs) &&
+            Date.parse(slot.start_at) <= deadlineMs,
         );
 
         setSlots(eligible);
@@ -201,7 +235,7 @@ export default function BookingTransferAction({
     return () => {
       cancelled = true;
     };
-  }, [open, studioIdSelected, date]);
+  }, [open, studioIdSelected, date, deadlineMs]);
 
   const slot = useMemo(
     () => slots.find((item) => item.start_at === selectedSlot),
@@ -254,6 +288,75 @@ export default function BookingTransferAction({
     throw new Error(
       result.error || "Не удалось подтвердить возврат. Исходная бронь не изменена.",
     );
+  };
+
+  const recoverTransfer = async () => {
+    if (!recoveryOperationId || recoveryBusy || manualResolutionRequired) return;
+
+    setRecoveryBusy(true);
+    setRecoveryMessage("");
+    setRecoveryMessageKind("info");
+
+    try {
+      if (recoveryStatus === "awaiting_payment" && adjustmentPaymentGroupId) {
+        const response = await fetch("/api/payments/create", {
+          method: "POST",
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ payment_group_id: adjustmentPaymentGroupId }),
+        });
+
+        const payment = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            payment.error ||
+              "Не удалось восстановить доплату. Исходная бронь остаётся активной.",
+          );
+        }
+
+        if (payment.state === "succeeded") {
+          setRecoveryMessage("Доплата подтверждена. Перенос завершён.");
+          setRecoveryMessageKind("success");
+          onComplete();
+          return;
+        }
+
+        if (
+          typeof payment.confirmation_url === "string" &&
+          payment.confirmation_url.startsWith("https://")
+        ) {
+          window.location.assign(payment.confirmation_url);
+          return;
+        }
+
+        throw new Error(
+          "Платёж пока не завершён и ссылка на оплату не получена. Обновите кабинет и проверьте статус ещё раз.",
+        );
+      }
+
+      if (recoveryStatus === "processing") {
+        await processRefund(recoveryOperationId);
+        setRecoveryMessage(
+          "Проверка возврата выполнена. Если YooKassa ещё обрабатывает возврат, исходная бронь остаётся активной.",
+        );
+        setRecoveryMessageKind("info");
+        onComplete();
+        return;
+      }
+
+      throw new Error("Для этой операции нет доступного автоматического действия.");
+    } catch (error) {
+      setRecoveryMessage(
+        error instanceof Error
+          ? error.message
+          : "Не удалось восстановить перенос. Попробуйте позже.",
+      );
+      setRecoveryMessageKind("error");
+    } finally {
+      setRecoveryBusy(false);
+    }
   };
 
   const startTransfer = async () => {
@@ -366,6 +469,61 @@ export default function BookingTransferAction({
     }
   };
 
+  if (manualResolutionRequired) return null;
+
+  if (isRecoveryMode) {
+    return (
+      <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-amber-100">
+          <Clock3 size={16} />
+          {recoveryStatus === "awaiting_payment"
+            ? "Ожидается доплата за перенос"
+            : refundStatus === "pending"
+              ? "Возврат разницы обрабатывается"
+              : "Перенос ожидает завершения возврата"}
+        </div>
+
+        <p className="mt-1 text-xs leading-5 text-white/60">
+          {recoveryStatus === "awaiting_payment"
+            ? "Можно продолжить оплату. Исходная бронь не изменится до подтверждения доплаты."
+            : "Можно повторно проверить возврат через существующую операцию. Новая операция переноса не создаётся."}
+        </p>
+
+        {recoveryMessage && (
+          <p
+            role="status"
+            className={
+              "mt-2 text-xs leading-5 " +
+              (recoveryMessageKind === "error"
+                ? "text-red-200"
+                : recoveryMessageKind === "success"
+                  ? "text-emerald-200"
+                  : "text-white/65")
+            }
+          >
+            {recoveryMessage}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={() => void recoverTransfer()}
+          disabled={recoveryBusy}
+          className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-200/25 bg-amber-200/10 px-4 text-sm font-semibold text-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {recoveryBusy ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <RefreshCw size={15} />
+          )}
+          {recoveryStatus === "awaiting_payment"
+            ? "Продолжить оплату"
+            : "Проверить возврат"}
+        </button>
+      </div>
+    );
+  }
+
   if (!canSelfTransfer) return null;
 
   return (
@@ -399,6 +557,7 @@ export default function BookingTransferAction({
                   Продолжительность — ровно 60 минут.
                 </p>
               </div>
+
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -439,6 +598,8 @@ export default function BookingTransferAction({
                   </span>
                   <input
                     type="date"
+                    min={localDateInZone(new Date(), targetTimezone)}
+                    max={deadlineDate}
                     value={date}
                     onChange={(event) => {
                       setDate(event.target.value);
@@ -495,10 +656,12 @@ export default function BookingTransferAction({
                       <span>Текущая стоимость</span>
                       <span>{money(sourcePrice)}</span>
                     </div>
+
                     <div className="mt-2 flex justify-between gap-3 text-white/60">
                       <span>Новый тариф</span>
                       <span>{money(slot.price_rub)}</span>
                     </div>
+
                     <div className="mt-2 border-t border-white/10 pt-2">
                       {priceDifference > 0 ? (
                         <div className="flex justify-between gap-3 font-semibold text-amber-100">
@@ -517,6 +680,7 @@ export default function BookingTransferAction({
                         </div>
                       )}
                     </div>
+
                     <p className="mt-2 text-xs text-white/45">
                       Свободный стол будет выбран сервером при подтверждении переноса.
                     </p>
@@ -563,6 +727,7 @@ export default function BookingTransferAction({
                   >
                     Закрыть
                   </button>
+
                   {!refundPending && (
                     <button
                       type="button"
