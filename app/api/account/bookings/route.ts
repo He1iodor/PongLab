@@ -54,6 +54,16 @@ type BookingOperationRow = {
   updated_at: string;
 };
 
+type LatePaymentOperationRow = {
+  id: string;
+  booking_id: string;
+  status: string;
+  operation_type: string;
+  source_payment_group_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
 type PaymentRefundRow = {
   id: string;
   booking_operation_id: string;
@@ -233,8 +243,7 @@ export async function GET(request: NextRequest) {
 
     const bookingIds = uniqueIds(rows.map((booking) => booking.id));
 
-    // Transfer history is read from existing booking_operations.
-    // It is intentionally owner-scoped and limited to transfer operations.
+    // Transfer history remains separate from late-payment refunds.
     const operations = await getRows<BookingOperationRow>(
       config.url,
       config.key,
@@ -267,6 +276,42 @@ export async function GET(request: NextRequest) {
         )
       : [];
 
+    // Late-payment refund operations are stored separately.
+    // One payment group can be linked to several original bookings.
+    const latePaymentOperations = await getRows<LatePaymentOperationRow>(
+      config.url,
+      config.key,
+      "booking_operations",
+      {
+        select:
+          "id,booking_id,status,operation_type,source_payment_group_id,metadata,created_at",
+        user_id: `eq.${userId}`,
+        booking_id: `in.(${bookingIds.join(",")})`,
+        operation_type: "eq.late_payment_refund",
+        order: "created_at.desc",
+        limit: "500",
+      },
+    );
+
+    const latePaymentOperationIds = uniqueIds(
+      latePaymentOperations.map((operation) => operation.id),
+    );
+
+    const latePaymentRefunds = latePaymentOperationIds.length
+      ? await getRows<PaymentRefundRow>(
+          config.url,
+          config.key,
+          "payment_refunds",
+          {
+            select:
+              "id,booking_operation_id,payment_group_id,status,amount_rub,failure_reason,created_at,succeeded_at",
+            booking_operation_id: `in.(${latePaymentOperationIds.join(",")})`,
+            order: "created_at.desc",
+            limit: "500",
+          },
+        )
+      : [];
+
     const operationIdsByBooking = new Map<string, BookingOperationRow[]>();
 
     for (const operation of operations) {
@@ -283,13 +328,53 @@ export async function GET(request: NextRequest) {
       refundsByOperation.set(refund.booking_operation_id, list);
     }
 
-    // Read payment groups to obtain the original purchase timestamp
-    // and the state of an adjustment payment, if one exists.
+    const latePaymentOperationsByBooking = new Map<
+      string,
+      LatePaymentOperationRow[]
+    >();
+
+    for (const operation of latePaymentOperations) {
+      const metadataBookingIdsValue =
+        operation.metadata?.late_payment_booking_ids;
+
+      const metadataBookingIds = Array.isArray(metadataBookingIdsValue)
+        ? metadataBookingIdsValue.filter(
+            (id: unknown): id is string => typeof id === "string",
+          )
+        : [];
+
+      const linkedBookingIds = uniqueIds([
+        operation.booking_id,
+        ...metadataBookingIds,
+      ]);
+
+      for (const bookingId of linkedBookingIds) {
+        const list =
+          latePaymentOperationsByBooking.get(bookingId) ?? [];
+        list.push(operation);
+        latePaymentOperationsByBooking.set(bookingId, list);
+      }
+    }
+
+    const lateRefundsByOperation = new Map<string, PaymentRefundRow[]>();
+
+    for (const refund of latePaymentRefunds) {
+      const list =
+        lateRefundsByOperation.get(refund.booking_operation_id) ?? [];
+      list.push(refund);
+      lateRefundsByOperation.set(refund.booking_operation_id, list);
+    }
+
+    // Existing payment-group data is used for the purchase timestamp
+    // and the existing transfer deadline calculation.
     const paymentGroupIds = uniqueIds([
       ...rows.map((booking) => booking.payment_group_id),
       ...operations.map((operation) => operation.source_payment_group_id),
       ...operations.map((operation) => operation.adjustment_payment_group_id),
       ...refunds.map((refund) => refund.payment_group_id),
+      ...latePaymentOperations.map(
+        (operation) => operation.source_payment_group_id,
+      ),
     ]);
 
     const paymentGroups = paymentGroupIds.length
@@ -339,8 +424,8 @@ export async function GET(request: NextRequest) {
 
     const studioById = new Map(studios.map((studio) => [studio.id, studio]));
 
-    // A door controller is valid for this endpoint only when the studio has
-    // exactly one active door device. This matches the existing unlock API.
+    // A door controller is valid only when the studio has exactly one
+    // active door device. This matches the existing unlock API.
     const devices = studioIds.length
       ? await getRows<DeviceRow>(
           config.url,
@@ -432,9 +517,8 @@ export async function GET(request: NextRequest) {
         ? devicesByStudio.get(studio.id) ?? []
         : [];
 
-      const doorDevice = studioDevices.length === 1
-        ? studioDevices[0]
-        : null;
+      const doorDevice =
+        studioDevices.length === 1 ? studioDevices[0] : null;
 
       const lastSeenMs = doorDevice?.last_seen_at
         ? Date.parse(doorDevice.last_seen_at)
@@ -445,8 +529,28 @@ export async function GET(request: NextRequest) {
         lastSeenMs <= now &&
         now - lastSeenMs <= 90_000;
 
-      const bookingOperations = operationIdsByBooking.get(booking.id) ?? [];
+      const bookingOperations =
+        operationIdsByBooking.get(booking.id) ?? [];
       const latestOperation = bookingOperations[0] ?? null;
+
+      const bookingLatePaymentOperations =
+        latePaymentOperationsByBooking.get(booking.id) ?? [];
+      const latestLatePaymentOperation =
+        bookingLatePaymentOperations[0] ?? null;
+
+      const latestLatePaymentRefunds = latestLatePaymentOperation
+        ? lateRefundsByOperation.get(latestLatePaymentOperation.id) ?? []
+        : [];
+
+      const latestLatePaymentRefund =
+        latestLatePaymentRefunds[0] ?? null;
+
+      const latePaymentRefundActive =
+        bookingLatePaymentOperations.some(
+          (operation) =>
+            operation.status !== "completed" ||
+            operation.metadata?.manual_resolution_required === true,
+        );
 
       const transferUsed = bookingOperations.some(
         (operation) => operation.status === "completed",
@@ -475,7 +579,8 @@ export async function GET(request: NextRequest) {
       const transferBlocked =
         latestOperationIsActive ||
         manualResolutionRequired ||
-        unresolvedRefund;
+        unresolvedRefund ||
+        latePaymentRefundActive;
 
       const sourcePaymentGroupId =
         latestOperation?.source_payment_group_id ??
@@ -524,7 +629,7 @@ export async function GET(request: NextRequest) {
         door_state: doorDevice?.door_state ?? null,
         door_last_seen_at: doorDevice?.last_seen_at ?? null,
 
-        // Transfer metadata. The original booking remains the source record.
+        // Existing transfer metadata.
         transfer_used: transferUsed,
         transfer_blocked: transferBlocked,
         transfer_operation_id: latestOperation?.id ?? null,
@@ -546,6 +651,26 @@ export async function GET(request: NextRequest) {
 
         transfer_purchase_at: purchaseAt,
         transfer_deadline_at: transferDeadlineAt,
+
+        // Late-payment refund metadata. This is not transfer-refund metadata.
+        late_payment_refund_operation_id:
+          latestLatePaymentOperation?.id ?? null,
+        late_payment_refund_payment_group_id:
+          latestLatePaymentOperation?.source_payment_group_id ?? null,
+        late_payment_refund_operation_status:
+          latestLatePaymentOperation?.status ?? null,
+        late_payment_refund_status:
+          latestLatePaymentRefund?.status ??
+          latestLatePaymentOperation?.status ??
+          null,
+        late_payment_refund_amount_rub:
+          latestLatePaymentRefund?.amount_rub ??
+          (typeof latestLatePaymentOperation?.metadata?.refund_amount_rub === "number"
+            ? latestLatePaymentOperation.metadata.refund_amount_rub
+            : null),
+        late_payment_refund_failure_reason:
+          latestLatePaymentRefund?.failure_reason ?? null,
+        late_payment_refund_active: latePaymentRefundActive,
       };
     });
 
