@@ -16,10 +16,11 @@ type PreparedRefund = {
   amount_rub?: number;
 };
 
-type RefundResult =
+export type LateRefundResult =
   | { state: "refunded" }
   | { state: "pending" }
-  | { state: "retry_required" };
+  | { state: "retry_required" }
+  | { state: "review_required" };
 
 function parseProviderAmount(refund: YooKassaRefund): number | null {
   const amount = refund.amount;
@@ -50,17 +51,17 @@ function validateRefund(
   expected: {
     paymentId: string;
     amountRub: number;
+    refundId?: string;
   },
 ) {
   if (
     typeof refund.id !== "string" ||
     refund.id.length < 1 ||
     refund.id.length > 200 ||
+    (expected.refundId && refund.id !== expected.refundId) ||
     refund.payment_id !== expected.paymentId ||
     parseProviderAmount(refund) !== expected.amountRub ||
-    !["pending", "succeeded", "canceled"].includes(
-      String(refund.status),
-    )
+    !["pending", "succeeded", "canceled"].includes(String(refund.status))
   ) {
     throw new Error("YooKassa refund response validation failed.");
   }
@@ -70,7 +71,7 @@ export async function processLatePaymentRefund(args: {
   paymentGroupId: string;
   providerPaymentId: string;
   amountRub: number;
-}): Promise<RefundResult> {
+}): Promise<LateRefundResult> {
   if (
     !args.paymentGroupId ||
     !args.providerPaymentId ||
@@ -97,6 +98,14 @@ export async function processLatePaymentRefund(args: {
     return { state: "refunded" };
   }
 
+  if (prepared.state === "retry_required") {
+    return { state: "retry_required" };
+  }
+
+  if (prepared.state === "review_required") {
+    return { state: "review_required" };
+  }
+
   if (
     prepared.state !== "pending" ||
     typeof prepared.refund_id !== "string" ||
@@ -120,9 +129,8 @@ export async function processLatePaymentRefund(args: {
     throw new Error("Refund idempotency data is missing.");
   }
 
-  // If YooKassa already returned a refund ID, inspect that refund.
-  // Otherwise repeat POST with the same persisted idempotency key.
-  // A network error deliberately leaves the DB row pending.
+  // При сетевой ошибке запись остаётся pending.
+  // Повторный POST использует тот же сохранённый ключ идемпотентности.
   const providerRefund =
     typeof prepared.provider_refund_id === "string"
       ? await getYooKassaRefund(prepared.provider_refund_id)
@@ -135,6 +143,7 @@ export async function processLatePaymentRefund(args: {
   validateRefund(providerRefund, {
     paymentId: args.providerPaymentId,
     amountRub: args.amountRub,
+    refundId: prepared.provider_refund_id ?? undefined,
   });
 
   const result = await supabaseRpc<string>(
