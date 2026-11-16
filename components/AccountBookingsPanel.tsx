@@ -39,7 +39,6 @@ type Booking = {
   door_controller_available: boolean;
   door_controller_online: boolean;
   door_state: "open" | "closed" | "unknown" | null;
-  door_last_seen_at: string | null;
 
   transfer_used: boolean;
   transfer_blocked: boolean;
@@ -94,21 +93,6 @@ function clockTime(value: string, timezone: string) {
     minute: "2-digit",
     timeZone: timezone || "Europe/Moscow",
   }).format(new Date(value));
-}
-
-function formatLastSeen(value: string | null) {
-  if (!value) return "время сигнала неизвестно";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "время сигнала неизвестно";
-  }
-
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
 }
 
 function statusLabel(booking: Booking) {
@@ -282,9 +266,15 @@ function DoorAccess({
     start <= now &&
     now < end;
 
-  const confirmed =
+  const paid =
+    booking.payment_status === "succeeded" &&
+    (booking.status === "confirmed" ||
+      booking.status === "completed");
+
+  const active =
     booking.status === "confirmed" &&
-    booking.payment_status === "succeeded";
+    booking.payment_status === "succeeded" &&
+    inWindow;
 
   useEffect(() => {
     if (!expiresAt) return;
@@ -316,8 +306,7 @@ function DoorAccess({
   const openDoor = async () => {
     if (
       sending ||
-      !inWindow ||
-      !confirmed ||
+      !active ||
       !booking.door_controller_available ||
       !booking.door_controller_online
     ) {
@@ -363,7 +352,15 @@ function DoorAccess({
     }
   };
 
-  if (!confirmed) return null;
+  if (!paid) return null;
+
+  if (!active) {
+    return (
+      <p className="mt-4 border-t border-white/10 pt-4 text-xs leading-5 text-white/50">
+        Кнопка доступа активируется только во время оплаченного бронирования.
+      </p>
+    );
+  }
 
   return (
     <div className="mt-4 rounded-xl border border-white/10 bg-black/15 p-4">
@@ -386,33 +383,14 @@ function DoorAccess({
         )}
       </div>
 
-      {booking.door_controller_available ? (
+      {!booking.door_controller_available && (
         <p className="mt-2 text-xs leading-5 text-white/55">
-          {booking.door_controller_online
-            ? `Последний сигнал: ${formatLastSeen(booking.door_last_seen_at)}. Состояние двери: ${
-                booking.door_state === "open"
-                  ? "открыта"
-                  : booking.door_state === "closed"
-                    ? "закрыта"
-                    : "не определено"
-              }.`
-            : `Последнее известное состояние: ${
-                booking.door_state === "open"
-                  ? "открыта"
-                  : booking.door_state === "closed"
-                    ? "закрыта"
-                    : "не определено"
-              }. Последний сигнал: ${formatLastSeen(booking.door_last_seen_at)}. Это не текущее состояние двери.`}
-        </p>
-      ) : (
-        <p className="mt-2 text-xs leading-5 text-white/55">
-          В клубе нет единственного активного дверного контроллера.
-          Открытие через кабинет недоступно.
+          Открытие через кабинет временно недоступно.
+          Обратитесь к администратору.
         </p>
       )}
 
-      {inWindow &&
-      booking.door_controller_online &&
+      {booking.door_controller_online &&
       booking.door_state === "open" ? (
         <p className="mt-3 text-sm font-medium text-emerald-300">
           Датчик сообщает, что дверь открыта.
@@ -421,7 +399,6 @@ function DoorAccess({
         <button
           onClick={() => void openDoor()}
           disabled={
-            !inWindow ||
             !booking.door_controller_available ||
             !booking.door_controller_online ||
             sending
@@ -435,12 +412,6 @@ function DoorAccess({
           )}
           {sending ? "Отправляем..." : "Открыть дверь"}
         </button>
-      )}
-
-      {!inWindow && (
-        <p className="mt-2 text-xs text-white/40">
-          Кнопка доступа активируется только во время оплаченного бронирования.
-        </p>
       )}
 
       {!booking.door_controller_online &&
