@@ -44,6 +44,7 @@ type LateRefundOperation = {
 
 type LateRefundRow = {
   id: string;
+  payment_group_id: string;
   status: string;
   amount_rub: number;
   failure_reason: string | null;
@@ -145,10 +146,7 @@ async function readLateRefundOperation(
     `${config.url}/rest/v1/booking_operations`,
   );
 
-  operationUrl.searchParams.set(
-    "select",
-    "id,status,metadata",
-  );
+  operationUrl.searchParams.set("select", "id,status,metadata");
   operationUrl.searchParams.set("user_id", `eq.${userId}`);
   operationUrl.searchParams.set(
     "source_payment_group_id",
@@ -195,7 +193,7 @@ async function readLateRefundOperation(
 
   refundUrl.searchParams.set(
     "select",
-    "id,status,amount_rub,failure_reason,provider_refund_id,created_at,succeeded_at",
+    "id,payment_group_id,status,amount_rub,failure_reason,provider_refund_id,created_at,succeeded_at",
   );
   refundUrl.searchParams.set(
     "booking_operation_id",
@@ -226,10 +224,14 @@ async function readLateRefundOperation(
     throw new Error("Invalid late refund record response.");
   }
 
-  return {
-    operation,
-    refund: (refundRows[0] as LateRefundRow | undefined) ?? null,
-  };
+  const refund =
+    (refundRows[0] as LateRefundRow | undefined) ?? null;
+
+  if (refund && refund.payment_group_id !== paymentGroupId) {
+    throw new Error("Late refund payment group mismatch.");
+  }
+
+  return { operation, refund };
 }
 
 function hasManualResolution(
@@ -292,6 +294,7 @@ export async function GET(request: NextRequest) {
     let syncResult: PaymentSyncResult | null = null;
     let lateRefundProcessingState: string | null = null;
 
+    // Recheck pending and locally timed-out payments at YooKassa.
     if (
       group.provider_payment_id &&
       (group.payment_status === "pending" ||
@@ -317,13 +320,13 @@ export async function GET(request: NextRequest) {
       ) {
         const amountRub = parseWholeRubleAmount(payment.amount);
 
-        if (amountRub === null) {
-          throw new Error("Late payment amount is invalid.");
+        if (amountRub === null || typeof payment.id !== "string") {
+          throw new Error("Late payment amount or ID is invalid.");
         }
 
         const refundResult = await processLatePaymentRefund({
           paymentGroupId,
-          providerPaymentId: payment.id as string,
+          providerPaymentId: payment.id,
           amountRub,
         });
 
@@ -341,8 +344,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Read durable refund state independently from the one-time sync result.
-    // This also makes refresh/re-entry reliable after the initial webhook.
+    // Durable state is read separately so refresh/re-entry does not depend
+    // on the one-time result returned by apply_payment_group_success.
     const lateRefund = await readLateRefundOperation(
       paymentGroupId,
       userId,
@@ -390,20 +393,23 @@ export async function GET(request: NextRequest) {
         group.payment_status === "refunded"
       ) {
         lateRefundState = "late_refunded";
-      } else if (lateRefundManual || lateOperation?.status === "failed") {
+      } else if (
+        lateRefundManual ||
+        lateOperation?.status === "failed" ||
+        lateRefundRow?.status === "cancelled" ||
+        lateRefundRow?.status === "failed" ||
+        lateRefundProcessingState === "retry_required" ||
+        lateRefundProcessingState === "review_required"
+      ) {
         lateRefundState = "late_refund_review";
       } else if (
         lateRefundRow?.status === "pending" ||
-        lateRefundRetry ||
         lateRefundProcessingState === "pending" ||
-        lateRefundProcessingState === "retry_required" ||
         lateOperation?.status === "processing"
       ) {
         lateRefundState = "late_refund_pending";
-      } else if (lateRefundRow?.status === "cancelled") {
-        lateRefundState = "late_refund_review";
       } else {
-        lateRefundState = "late_refund_pending";
+        lateRefundState = "late_refund_review";
       }
     }
 
