@@ -12,6 +12,8 @@ type BookingSettings = {
   minimum_notice_minutes: number;
   hold_minutes: number;
   allow_same_day_booking: boolean;
+  extension_offer_enabled: boolean;
+  extension_offer_discount_percent: number;
   updated_at?: string;
 };
 
@@ -22,6 +24,8 @@ const DEFAULTS = {
   minimum_notice_minutes: 0,
   hold_minutes: 5,
   allow_same_day_booking: true,
+  extension_offer_enabled: false,
+  extension_offer_discount_percent: 50,
 };
 
 function errorResponse(message: string, status: number) {
@@ -62,10 +66,14 @@ function validate(body: Record<string, unknown>) {
     return "Горизонт бронирования должен быть от 1 до 365 дней.";
   if (!validInt(body.minimum_notice_minutes, 0, 10080))
     return "Минимальное время до начала должно быть от 0 до 10080 минут.";
- if (body.hold_minutes !== 5)
-  return "Время оплаты и доплаты фиксировано и составляет 5 минут.";
+  if (body.hold_minutes !== 5)
+    return "Время оплаты и доплаты фиксировано и составляет 5 минут.";
   if (typeof body.allow_same_day_booking !== "boolean")
     return "Укажите, разрешено ли бронирование на сегодня.";
+  if (typeof body.extension_offer_enabled !== "boolean")
+    return "Укажите, включено ли предложение продления.";
+  if (!validInt(body.extension_offer_discount_percent, 1, 90))
+    return "Скидка на продление должна быть от 1 до 90 процентов.";
   return null;
 }
 
@@ -103,7 +111,8 @@ async function ensureRow(url: string, key: string, studioId: string) {
   });
   if (!create.ok) throw new Error("Не удалось создать настройки бронирования.");
   const created = await create.json();
-  if (!Array.isArray(created) || !created[0]) throw new Error("Не удалось подтвердить настройки бронирования.");
+  if (!Array.isArray(created) || !created[0])
+    throw new Error("Не удалось подтвердить настройки бронирования.");
   return created[0] as BookingSettings;
 }
 
@@ -158,8 +167,10 @@ export async function PUT(request: NextRequest) {
       allowed_durations_minutes: [60],
       booking_horizon_days: data.booking_horizon_days,
       minimum_notice_minutes: data.minimum_notice_minutes,
-      hold_minutes: data.hold_minutes,
+      hold_minutes: 5,
       allow_same_day_booking: data.allow_same_day_booking,
+      extension_offer_enabled: data.extension_offer_enabled,
+      extension_offer_discount_percent: data.extension_offer_discount_percent,
       updated_at: new Date().toISOString(),
     };
 
