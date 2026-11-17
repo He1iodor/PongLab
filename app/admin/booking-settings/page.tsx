@@ -19,7 +19,7 @@ const DEFAULTS: Omit<Settings, "studio_id"> = {
   allowed_durations_minutes: [60],
   booking_horizon_days: 30,
   minimum_notice_minutes: 0,
-  hold_minutes: 10,
+  hold_minutes: 5,
   allow_same_day_booking: true,
 };
 
