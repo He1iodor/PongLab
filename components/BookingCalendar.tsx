@@ -132,6 +132,7 @@ export default function BookingCalendar() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [offerAccepted, setOfferAccepted] = useState(false);
+  const [customerComment, setCustomerComment] = useState("");
   const [creatingHold, setCreatingHold] = useState(false);
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [holdError, setHoldError] = useState("");
@@ -381,6 +382,13 @@ export default function BookingCalendar() {
       return;
     }
 
+    const normalizedComment = customerComment.trim();
+
+    if (normalizedComment.length > 500) {
+      setHoldError("Комментарий не должен превышать 500 символов.");
+      return;
+    }
+
     setCreatingHold(true);
     setHoldError("");
     setHoldResult(null);
@@ -393,6 +401,7 @@ export default function BookingCalendar() {
         body: JSON.stringify({
           studio_id: studioId,
           date,
+          customer_comment: normalizedComment || null,
           groups: bookingGroups.map((group) => ({
             start_at: group.start_at,
             duration_minutes: 60,
@@ -467,8 +476,6 @@ export default function BookingCalendar() {
         );
       }
 
-      // Если сервер уже подтвердил оплату, открываем страницу
-      // проверки результата, а не пытаемся создать новый платёж.
       if (result.state === "succeeded") {
         window.location.assign(
           `/payment/return?payment_group_id=${encodeURIComponent(
@@ -591,6 +598,7 @@ export default function BookingCalendar() {
                   setHoldError("");
                   setHoldResult(null);
                   setOfferAccepted(false);
+                  setCustomerComment("");
                 }}
                 className="h-12 w-full rounded-xl border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
               >
@@ -627,7 +635,10 @@ export default function BookingCalendar() {
                   min={minDate}
                   max={maxDate}
                   value={date}
-                  onChange={(event) => setDate(event.target.value)}
+                  onChange={(event) => {
+                    setDate(event.target.value);
+                    setCustomerComment("");
+                  }}
                   className="h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#101326] px-3 pr-11 text-sm text-white outline-none focus:border-[#8F5BFF] [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-11 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
                 />
 
@@ -810,12 +821,15 @@ export default function BookingCalendar() {
                     key={group.start_at}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-semibold text-white">
                         Бронь {index + 1}: {group.starts_at}–{group.ends_at}
                       </p>
                       <p className="mt-1 text-xs leading-5 text-white/50">
-                        60 минут · Стол назначается автоматически
+                        60 минут · Стол назначается автоматически. Для выбора
+                        конкретного стола оставьте комментарий. Также
+                        воспользуйтесь возможностью окна комментариев для
+                        пожеланий.
                       </p>
                     </div>
                     <p className="text-base font-semibold text-[#C8B2FF]">
@@ -835,6 +849,40 @@ export default function BookingCalendar() {
                 <span className="text-xl font-semibold text-white">
                   {money(totalPrice)}
                 </span>
+              </div>
+
+              <div className="space-y-2 border-t border-white/10 pt-4">
+                <label
+                  htmlFor="booking-customer-comment"
+                  className="block text-sm font-medium text-white/85"
+                >
+                  Комментарий к бронированию
+                  <span className="ml-2 font-normal text-white/45">
+                    необязательно
+                  </span>
+                </label>
+
+                <textarea
+                  id="booking-customer-comment"
+                  value={customerComment}
+                  onChange={(event) =>
+                    setCustomerComment(event.target.value.slice(0, 500))
+                  }
+                  maxLength={500}
+                  rows={3}
+                  disabled={Boolean(holdResult) || creatingHold}
+                  placeholder="Например: хочу играть за конкретным столом; есть пожелания по оборудованию или организации занятия..."
+                  className="w-full resize-y rounded-xl border border-white/15 bg-[#101326] px-3 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/35 focus:border-[#8F5BFF] disabled:opacity-60"
+                />
+
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs leading-5 text-white/45">
+                    Комментарий увидит администрация клуба.
+                  </p>
+                  <span className="shrink-0 text-xs tabular-nums text-white/45">
+                    {customerComment.length}/500
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-4 border-t border-white/10 pt-4">
