@@ -12,6 +12,10 @@ import {
   DoorOpen,
   Wifi,
   WifiOff,
+  X,
+  AlertTriangle,
+  CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 
 export type AccountBooking = {
@@ -34,6 +38,16 @@ export type AccountBooking = {
   studio_name: string;
   studio_address: string | null;
   timezone: string;
+  transfer_used: boolean;
+  transfer_blocked: boolean;
+  transfer_operation_id: string | null;
+  transfer_status: string | null;
+  transfer_adjustment_payment_group_id: string | null;
+  transfer_manual_resolution_required: boolean;
+  transfer_adjustment_payment_status: string | null;
+  transfer_refund_status: string | null;
+  transfer_deadline_at: string | null;
+  late_payment_refund_active: boolean;
   door_controller_available?: boolean;
   door_controller_online?: boolean;
   door_state?: "open" | "closed" | "unknown" | null;
@@ -47,6 +61,11 @@ type MyBookingsPanelProps = {
 type CancellationDetails = {
   reason: string | null;
   party: string | null;
+};
+
+type CancellationState = {
+  status: "confirm" | "processing" | "completed" | "error";
+  message?: string;
 };
 
 function money(value: number) {
@@ -239,10 +258,14 @@ function getStatus(booking: AccountBooking, now: number) {
     };
   }
 
-  if (booking.status === "completed") {
+  if (
+    booking.status === "completed" ||
+    (booking.status === "confirmed" && booking.payment_status === "succeeded" &&
+      Number.isFinite(Date.parse(booking.end_at)) && Date.parse(booking.end_at) <= now)
+  ) {
     return {
-      label: "Завершена",
-      className: "border-white/10 bg-white/5 text-white/55",
+      label: "Сессия состоялась",
+      className: "border-sky-300/25 bg-sky-300/10 text-sky-200",
     };
   }
 
@@ -507,6 +530,8 @@ export default function MyBookingsPanel({
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [cancellationUi, setCancellationUi] = useState<Record<string, CancellationState>>({});
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
 
   const loadBookings = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true);
@@ -696,6 +721,43 @@ export default function MyBookingsPanel({
 
     return aUpcoming ? aStart - bStart : bStart - aStart;
   });
+  const canCancelBooking = (booking: AccountBooking) => {
+    const start = Date.parse(booking.start_at);
+    return booking.status === "confirmed" && booking.payment_status === "succeeded" && Number.isFinite(start) && start > now + 24 * 60 * 60 * 1000;
+  };
+
+  const cancelBooking = async (bookingId: string) => {
+    if (cancelingId) return;
+    setCancelingId(bookingId);
+    setCancellationUi((current) => ({ ...current, [bookingId]: { status: "processing", message: "Проверяем возможность возврата..." } }));
+    try {
+      const response = await fetch("/api/account/bookings/cancel", {
+        method: "POST", credentials: "same-origin", cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 202 || result.state === "processing") {
+        setCancellationUi((current) => ({ ...current, [bookingId]: {
+          status: "processing",
+          message: result.message || "Возврат обрабатывается. Бронирование пока остаётся активным. Нажмите «Проверить возврат» позже.",
+        }}));
+        return;
+      }
+      if (!response.ok) throw new Error(result.error || "Не удалось выполнить отмену.");
+      if (result.state === "completed") {
+        setCancellationUi((current) => ({ ...current, [bookingId]: { status: "completed", message: "Возврат подтверждён. Бронирование отменено." } }));
+        await loadBookings(true);
+        return;
+      }
+      throw new Error("Сервер не подтвердил завершение возврата.");
+    } catch (caught) {
+      setCancellationUi((current) => ({ ...current, [bookingId]: {
+        status: "error", message: caught instanceof Error ? caught.message : "Ошибка проверки возврата. Попробуйте позже.",
+      }}));
+    } finally { setCancelingId(null); }
+  };
+
 
   return (
     <section className="w-full min-w-0 space-y-5">
@@ -775,6 +837,18 @@ export default function MyBookingsPanel({
           {sortedBookings.map((booking) => {
             const status = getStatus(booking, now);
             const paymentInProgress = isPaymentInProgress(booking);
+            const confirmed = booking.status === "confirmed" && booking.payment_status === "succeeded";
+            const startMs = Date.parse(booking.start_at);
+            const hoursUntilStart = (startMs - now) / (60 * 60 * 1000);
+            const deadlineMs = booking.transfer_deadline_at ? Date.parse(booking.transfer_deadline_at) : Number.NaN;
+            const canStartTransfer = confirmed && !booking.transfer_used && !booking.transfer_blocked &&
+              !booking.late_payment_refund_active && Number.isFinite(startMs) && hoursUntilStart >= 2 && hoursUntilStart <= 24 &&
+              Number.isFinite(deadlineMs) && deadlineMs > now;
+            const canRecoverTransfer = confirmed && !booking.transfer_used && !booking.transfer_manual_resolution_required &&
+              !booking.late_payment_refund_active && Boolean(booking.transfer_operation_id) &&
+              ((booking.transfer_status === "awaiting_payment" && Boolean(booking.transfer_adjustment_payment_group_id)) || booking.transfer_status === "processing");
+            const cancellationState = cancellationUi[booking.id];
+            const cancellable = canCancelBooking(booking);
 
             const isTemporary =
               !paymentInProgress &&
@@ -884,17 +958,62 @@ export default function MyBookingsPanel({
                   </span>
                 </div>
 
-                {booking.status === "confirmed" &&
-                  booking.payment_status === "succeeded" && (
-                    <BookingTransferAction
-                      bookingId={booking.id}
-                      startAt={booking.start_at}
-                      studioId={booking.studio_id}
-                      timezone={booking.timezone}
-                      sourcePrice={booking.price_rub}
-                      onComplete={() => void loadBookings(true)}
-                    />
-                  )}
+                {confirmed && (canStartTransfer || canRecoverTransfer) && (
+                  <BookingTransferAction
+                    bookingId={booking.id}
+                    startAt={booking.start_at}
+                    studioId={booking.studio_id}
+                    timezone={booking.timezone}
+                    sourcePrice={booking.price_rub}
+                    transferDeadlineAt={booking.transfer_deadline_at}
+                    recoveryOperationId={canRecoverTransfer ? booking.transfer_operation_id : null}
+                    recoveryStatus={canRecoverTransfer ? booking.transfer_status : null}
+                    adjustmentPaymentGroupId={canRecoverTransfer ? booking.transfer_adjustment_payment_group_id : null}
+                    refundStatus={canRecoverTransfer ? booking.transfer_refund_status : null}
+                    manualResolutionRequired={booking.transfer_manual_resolution_required}
+                    onComplete={() => void loadBookings(true)}
+                  />
+                )}
+
+                {cancellable && !cancellationState && (
+                  <div className="mt-4 border-t border-white/10 pt-4">
+                    <button type="button" onClick={() => setCancellationUi((current) => ({ ...current, [booking.id]: { status: "confirm" } }))}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-400/25 px-4 text-sm text-red-200 transition hover:bg-red-400/10">
+                      <X size={15} /> Отменить бронирование
+                    </button>
+                    <p className="mt-2 text-xs leading-5 text-white/40">При отмене более чем за 24 часа до начала возвращается полная стоимость.</p>
+                  </div>
+                )}
+
+                {cancellationState?.status === "confirm" && (
+                  <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-200" />
+                      <div>
+                        <p className="text-sm font-semibold text-white">Подтвердить отмену?</p>
+                        <p className="mt-1 text-xs leading-5 text-white/60">Будет запрошен полный возврат стоимости бронирования. Бронь отменится только после подтверждения возврата YooKassa.</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => void cancelBooking(booking.id)} disabled={Boolean(cancelingId)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-500/90 px-4 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">Подтвердить отмену</button>
+                      <button type="button" onClick={() => setCancellationUi((current) => { const next = { ...current }; delete next[booking.id]; return next; })} className="h-10 rounded-xl border border-white/10 px-4 text-sm text-white/70 hover:bg-white/[0.06]">Не отменять</button>
+                    </div>
+                  </div>
+                )}
+
+                {(cancellationState?.status === "processing" || cancellationState?.status === "error" || cancellationState?.status === "completed") && (
+                  <div className={"mt-4 rounded-xl border p-3 " + (cancellationState.status === "completed" ? "border-emerald-400/20 bg-emerald-400/[0.06]" : cancellationState.status === "error" ? "border-red-400/20 bg-red-400/[0.06]" : "border-amber-300/20 bg-amber-300/[0.06]")}>
+                    <div className="flex items-start gap-2">
+                      {cancellationState.status === "completed" ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-300" /> : cancellationState.status === "error" ? <AlertTriangle size={17} className="mt-0.5 shrink-0 text-red-300" /> : <RefreshCw size={17} className="mt-0.5 shrink-0 animate-spin text-amber-200" />}
+                      <p className="text-xs leading-5 text-white/80">{cancellationState.message}</p>
+                    </div>
+                    {(cancellationState.status === "processing" || cancellationState.status === "error") && (
+                      <button type="button" onClick={() => void cancelBooking(booking.id)} disabled={Boolean(cancelingId)} className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg border border-white/15 px-3 text-xs text-white/80 hover:bg-white/[0.06] disabled:opacity-50">
+                        <RotateCcw size={13} /> Проверить возврат
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {paymentInProgress && (
                   <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
