@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwner } from "@/app/lib/owner-auth";
 
@@ -17,6 +18,7 @@ type BookingRow = {
   payment_id: string | null;
   payment_init_started_at: string | null;
   hold_expires_at: string | null;
+  customer_comment: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -168,7 +170,7 @@ export async function GET(request: NextRequest) {
 
     const bookingParams: Record<string, string> = {
       select:
-        "id,user_id,table_id,start_at,end_at,status,payment_status,price_rub,payment_provider,payment_id,payment_init_started_at,hold_expires_at,created_at,updated_at",
+        "id,user_id,table_id,start_at,end_at,status,payment_status,price_rub,payment_provider,payment_id,payment_init_started_at,hold_expires_at,customer_comment,created_at,updated_at",
       order: "created_at.desc",
       limit: "500",
     };
@@ -294,6 +296,9 @@ export async function GET(request: NextRequest) {
         payment_provider: booking.payment_provider,
         hold_expires_at: booking.hold_expires_at,
 
+        // Комментарий клиента доступен только в административном API.
+        customer_comment: booking.customer_comment ?? null,
+
         payment_started: Boolean(
           booking.payment_id ||
             booking.payment_init_started_at,
@@ -375,7 +380,7 @@ export async function POST(request: NextRequest) {
       "bookings",
       {
         select:
-          "id,status,payment_status,payment_id,payment_init_started_at,user_id,table_id,start_at,end_at,price_rub,payment_provider,hold_expires_at,created_at,updated_at",
+          "id,status,payment_status,payment_id,payment_init_started_at,user_id,table_id,start_at,end_at,price_rub,payment_provider,hold_expires_at,customer_comment,created_at,updated_at",
         id: `eq.${data.booking_id}`,
         limit: "1",
       },
