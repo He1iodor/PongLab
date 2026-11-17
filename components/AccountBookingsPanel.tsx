@@ -803,13 +803,18 @@ export default function AccountBookingsPanel({
                   </div>
 
                   <span
-                    className={`rounded-full border px-3 py-1.5 text-xs ${
-                      booking.status === "completed" ||
-                      (booking.status === "confirmed" && booking.payment_status === "succeeded" &&
-                        Number.isFinite(Date.parse(booking.end_at)) && Date.parse(booking.end_at) <= now)
-                        ? "border-sky-300/25 bg-sky-300/10 text-sky-200"
-                        : "border-white/10 bg-white/[0.04] text-white/70"
-                    }`}
+                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+  booking.status === "completed" ||
+  (booking.status === "confirmed" &&
+    booking.payment_status === "succeeded" &&
+    Number.isFinite(Date.parse(booking.end_at)) &&
+    Date.parse(booking.end_at) <= now)
+    ? "border-sky-300/30 bg-sky-400/15 text-sky-200"
+    : booking.status === "confirmed" &&
+        booking.payment_status === "succeeded"
+      ? "border-emerald-400/40 bg-emerald-500/20 text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.12)]"
+      : "border-white/10 bg-white/[0.04] text-white/70"
+}`}
                   >
                     {statusLabel(booking, now)}
                   </span>
