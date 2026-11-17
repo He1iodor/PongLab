@@ -826,10 +826,10 @@ export default function BookingCalendar() {
                         Бронь {index + 1}: {group.starts_at}–{group.ends_at}
                       </p>
                       <p className="mt-1 text-xs leading-5 text-white/50">
-                        60 минут · Стол назначается автоматически. Для выбора
-                        конкретного стола оставьте комментарий. Также
+                        60 минут · Стол назначается автоматически · Для выбора
+                        конкретного стола оставьте комментарий · Также
                         воспользуйтесь возможностью окна комментариев для
-                        пожеланий.
+                        пожеланий
                       </p>
                     </div>
                     <p className="text-base font-semibold text-[#C8B2FF]">
@@ -856,7 +856,7 @@ export default function BookingCalendar() {
                   htmlFor="booking-customer-comment"
                   className="block text-sm font-medium text-white/85"
                 >
-                  Комментарий к бронированию
+                  Комментарий к бронированию:
                   <span className="ml-2 font-normal text-white/45">
                     необязательно
                   </span>
@@ -871,13 +871,13 @@ export default function BookingCalendar() {
                   maxLength={500}
                   rows={3}
                   disabled={Boolean(holdResult) || creatingHold}
-                  placeholder="Например: хочу играть за конкретным столом; есть пожелания по оборудованию или организации занятия..."
+                  placeholder="Ваш комментарий"
                   className="w-full resize-y rounded-xl border border-white/15 bg-[#101326] px-3 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/35 focus:border-[#8F5BFF] disabled:opacity-60"
                 />
 
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs leading-5 text-white/45">
-                    Комментарий увидит администрация клуба.
+                    Комментарий увидит администрация клуба
                   </p>
                   <span className="shrink-0 text-xs tabular-nums text-white/45">
                     {customerComment.length}/500
