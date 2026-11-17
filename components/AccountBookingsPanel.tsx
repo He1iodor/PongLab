@@ -359,7 +359,13 @@ function DoorAccess({
     }
   };
 
-  if (!paid) return null;
+  if (
+  !paid ||
+  booking.status === "completed" ||
+  (Number.isFinite(end) && end <= now)
+) {
+  return null;
+}
 
   if (!active) {
     return (
