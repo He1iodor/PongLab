@@ -95,7 +95,7 @@ function clockTime(value: string, timezone: string) {
   }).format(new Date(value));
 }
 
-function statusLabel(booking: Booking) {
+function statusLabel(booking: Booking, now: number) {
   if (
     booking.effective_status === "expired" ||
     booking.status === "expired"
@@ -104,7 +104,14 @@ function statusLabel(booking: Booking) {
   }
 
   if (booking.status === "cancelled") return "Отменена";
-  if (booking.status === "completed") return "Завершена";
+
+  if (
+    booking.status === "completed" ||
+    (booking.status === "confirmed" && booking.payment_status === "succeeded" &&
+      Number.isFinite(Date.parse(booking.end_at)) && Date.parse(booking.end_at) <= now)
+  ) {
+    return "Сессия состоялась";
+  }
 
   if (
     booking.status === "confirmed" &&
@@ -795,8 +802,16 @@ export default function AccountBookingsPanel({
                     </p>
                   </div>
 
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/70">
-                    {statusLabel(booking)}
+                  <span
+                    className={`rounded-full border px-3 py-1.5 text-xs ${
+                      booking.status === "completed" ||
+                      (booking.status === "confirmed" && booking.payment_status === "succeeded" &&
+                        Number.isFinite(Date.parse(booking.end_at)) && Date.parse(booking.end_at) <= now)
+                        ? "border-sky-300/25 bg-sky-300/10 text-sky-200"
+                        : "border-white/10 bg-white/[0.04] text-white/70"
+                    }`}
+                  >
+                    {statusLabel(booking, now)}
                   </span>
                 </div>
 
