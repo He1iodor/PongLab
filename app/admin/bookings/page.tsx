@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -38,6 +39,7 @@ type Booking = {
   payment_provider: string | null;
   hold_expires_at: string | null;
   payment_started: boolean;
+  customer_comment: string | null;
 
   created_at: string;
   updated_at: string;
@@ -383,6 +385,7 @@ export default function AdminBookingsPage() {
             booking.studio_address ?? "",
             booking.table_name,
             booking.id,
+            booking.customer_comment ?? "",
           ]
             .join(" ")
             .toLocaleLowerCase("ru-RU");
@@ -554,7 +557,7 @@ export default function AdminBookingsPage() {
                 onChange={(event) =>
                   setSearch(event.target.value)
                 }
-                placeholder="Телефон, клуб, стол…"
+                placeholder="Телефон, клуб, стол, комментарий…"
                 className={inputClass}
               />
             </label>
@@ -678,6 +681,17 @@ export default function AdminBookingsPage() {
                     </p>
                   </div>
                 </div>
+
+                {booking.customer_comment && (
+                  <div className="mt-4 rounded-xl border border-violet-300/15 bg-violet-300/[0.06] px-4 py-3">
+                    <p className="text-xs font-semibold text-violet-200">
+                      Комментарий клиента
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-white/85">
+                      {booking.customer_comment}
+                    </p>
+                  </div>
+                )}
 
                 {booking.effective_status === "pending_payment" &&
                   booking.hold_expires_at && (
