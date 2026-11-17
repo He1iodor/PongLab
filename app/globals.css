@@ -127,7 +127,16 @@ body,
   filter: blur(10px);
   opacity: 0.6;
 }
+/* Единый белый индикатор календаря во всех полях даты */
+input[type="date"] {
+  color-scheme: dark;
+}
 
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1);
+  opacity: 1;
+  cursor: pointer;
+}
 /* extra glow */
 .orbit-glow {
   filter: drop-shadow(0 0 12px rgba(143, 91, 255, 0.6));
