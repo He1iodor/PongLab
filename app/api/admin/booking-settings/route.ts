@@ -20,7 +20,7 @@ const DEFAULTS = {
   allowed_durations_minutes: [60],
   booking_horizon_days: 30,
   minimum_notice_minutes: 0,
-  hold_minutes: 10,
+  hold_minutes: 5,
   allow_same_day_booking: true,
 };
 
@@ -62,8 +62,8 @@ function validate(body: Record<string, unknown>) {
     return "Горизонт бронирования должен быть от 1 до 365 дней.";
   if (!validInt(body.minimum_notice_minutes, 0, 10080))
     return "Минимальное время до начала должно быть от 0 до 10080 минут.";
-  if (!validInt(body.hold_minutes, 1, 60))
-    return "Время удержания неоплаченной брони должно быть от 1 до 60 минут.";
+ if (body.hold_minutes !== 5)
+  return "Время оплаты и доплаты фиксировано и составляет 5 минут.";
   if (typeof body.allow_same_day_booking !== "boolean")
     return "Укажите, разрешено ли бронирование на сегодня.";
   return null;
