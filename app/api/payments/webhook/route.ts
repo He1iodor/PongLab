@@ -365,15 +365,16 @@ async function processRefundNotification(
         rpcPayload,
       );
 
-      const acceptedResults = new Set([
-        "completed",
-        "refund_recorded",
-        "pending",
-        "retry_required",
-        "manual_resolution_required",
-        "terminal_refund_state",
-        "already_completed",
-      ]);
+const acceptedResults = new Set([
+  "completed",
+  "refund_recorded",
+  "pending",
+  "retry_required",
+  "manual_resolution_required",
+  "terminal_refund_state",
+  "terminal_operation_state",
+  "already_completed",
+]);
 
       if (!acceptedResults.has(databaseResult)) {
         throw new Error("Unexpected transfer refund finalization result.");
