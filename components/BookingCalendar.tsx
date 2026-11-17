@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -7,7 +8,6 @@ import {
   Clock3,
   MapPin,
   RefreshCw,
-  Table2,
 } from "lucide-react";
 
 type Studio = {
@@ -41,7 +41,6 @@ type Slot = {
 
 type SelectedSlot = {
   key: string;
-  tableId: string;
 };
 
 type HoldResult = {
@@ -52,20 +51,18 @@ type HoldResult = {
     end_at: string;
     price_rub: number;
     hold_expires_at: string;
-    table_id: string;
   }>;
   total_price_rub: number;
   hold_expires_at: string;
 };
 
 type BookingGroup = {
-  slots: Slot[];
-  tableId: string;
+  slot: Slot;
   start_at: string;
   end_at: string;
   starts_at: string;
   ends_at: string;
-  duration_minutes: number;
+  duration_minutes: 60;
   price_rub: number;
 };
 
@@ -165,39 +162,21 @@ export default function BookingCalendar() {
     [slots, selectedSlots],
   );
 
-  // Объединяем соседние выбранные слоты только при совпадении стола.
-  const bookingGroups = useMemo(() => {
-    const groups: BookingGroup[] = [];
-
-    for (const { selection, slot } of resolvedSelectedSlots) {
-      const previous = groups[groups.length - 1];
-
-      if (
-        previous &&
-        previous.end_at === slot.start_at &&
-        previous.tableId === selection.tableId
-      ) {
-        previous.slots.push(slot);
-        previous.end_at = slot.end_at;
-        previous.ends_at = slot.ends_at;
-        previous.duration_minutes += slot.duration_minutes;
-        previous.price_rub += slot.price_rub;
-      } else {
-        groups.push({
-          slots: [slot],
-          tableId: selection.tableId,
-          start_at: slot.start_at,
-          end_at: slot.end_at,
-          starts_at: slot.starts_at,
-          ends_at: slot.ends_at,
-          duration_minutes: slot.duration_minutes,
-          price_rub: slot.price_rub,
-        });
-      }
-    }
-
-    return groups;
-  }, [resolvedSelectedSlots]);
+  // Каждый выбранный час становится отдельной бронью на 60 минут.
+  // Стол назначается сервером при создании резерва.
+  const bookingGroups = useMemo(
+    () =>
+      resolvedSelectedSlots.map(({ slot }) => ({
+        slot,
+        start_at: slot.start_at,
+        end_at: slot.end_at,
+        starts_at: slot.starts_at,
+        ends_at: slot.ends_at,
+        duration_minutes: 60 as const,
+        price_rub: slot.price_rub,
+      })),
+    [resolvedSelectedSlots],
+  );
 
   const totalPrice = bookingGroups.reduce(
     (total, group) => total + group.price_rub,
@@ -387,26 +366,9 @@ export default function BookingCalendar() {
       return;
     }
 
-    const defaultTableId = slot.available_tables[0]?.id;
-    if (!defaultTableId) return;
+    if (slot.available_tables.length === 0) return;
 
-    setSelectedSlots((current) => [
-      ...current,
-      { key, tableId: defaultTableId },
-    ]);
-  };
-
-  const selectTableForSlot = (key: string, tableId: string) => {
-    setHoldError("");
-    setHoldResult(null);
-
-    setSelectedSlots((current) =>
-      current.map((selection) =>
-        selection.key === key ? { ...selection, tableId } : selection,
-      ),
-    );
-
-    setSelectionError("");
+    setSelectedSlots((current) => [...current, { key }]);
   };
 
   const createHold = async () => {
@@ -432,9 +394,8 @@ export default function BookingCalendar() {
           studio_id: studioId,
           date,
           groups: bookingGroups.map((group) => ({
-            table_id: group.tableId,
             start_at: group.start_at,
-            duration_minutes: group.duration_minutes,
+            duration_minutes: 60,
           })),
         }),
       });
@@ -769,8 +730,8 @@ export default function BookingCalendar() {
 
                       <span className="mt-1 block text-xs leading-4 text-white/45">
                         {slot.available_tables.length
-                          ? `Свободно столов: ${slot.available_tables.length}`
-                          : "Нет свободных столов"}
+                          ? "Свободно"
+                          : "Нет свободных мест"}
                       </span>
                     </button>
                   );
@@ -791,7 +752,7 @@ export default function BookingCalendar() {
           {resolvedSelectedSlots.length > 0 && (
             <div className="space-y-5 rounded-xl border border-[#8F5BFF]/25 bg-[#6B30CE]/10 p-4 sm:p-5">
               <div className="flex items-start gap-3">
-                <Table2
+                <CalendarDays
                   size={20}
                   className="mt-0.5 shrink-0 text-[#A77BFF]"
                 />
@@ -800,9 +761,9 @@ export default function BookingCalendar() {
                     Выбранные слоты
                   </p>
                   <p className="mt-1 text-xs leading-5 text-white/50">
-                    Можно выбрать несколько периодов. Пересекающиеся слоты
-                    нельзя добавить одновременно. Для каждого периода можно
-                    назначить стол.
+                    Можно выбрать несколько часовых слотов. Каждый слот
+                    оформляется отдельной бронью на 60 минут. Стол автоматически
+                    назначит система.
                   </p>
                 </div>
               </div>
@@ -811,7 +772,7 @@ export default function BookingCalendar() {
                 {resolvedSelectedSlots.map(({ selection, slot }) => (
                   <div
                     key={selection.key}
-                    className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(150px,220px)_auto] sm:items-center"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-white/10 bg-black/10 p-3"
                   >
                     <div>
                       <p className="text-sm font-semibold text-white">
@@ -822,28 +783,6 @@ export default function BookingCalendar() {
                         {money(slot.price_rub)}
                       </p>
                     </div>
-
-                    <label className="block">
-                      <span className="mb-1 block text-xs text-white/50">
-                        Стол
-                      </span>
-                      <select
-                        value={selection.tableId}
-                        onChange={(event) =>
-                          selectTableForSlot(
-                            selection.key,
-                            event.target.value,
-                          )
-                        }
-                        className="h-10 w-full rounded-lg border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
-                      >
-                        {slot.available_tables.map((table) => (
-                          <option key={table.id} value={table.id}>
-                            {table.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
 
                     <button
                       type="button"
@@ -866,35 +805,24 @@ export default function BookingCalendar() {
                   </span>
                 </div>
 
-                {bookingGroups.map((group, index) => {
-                  const tableName =
-                    group.slots[0]?.available_tables.find(
-                      (table) => table.id === group.tableId,
-                    )?.name ?? "Выбранный стол";
-
-                  return (
-                    <div
-                      key={`${group.start_at}|${group.tableId}`}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          Бронь {index + 1}: {group.starts_at}–{group.ends_at}
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-white/50">
-                          {durationLabel(group.duration_minutes)} ·{" "}
-                          {tableName}
-                          {group.slots.length > 1
-                            ? ` · объединено слотов: ${group.slots.length}`
-                            : ""}
-                        </p>
-                      </div>
-                      <p className="text-base font-semibold text-[#C8B2FF]">
-                        {money(group.price_rub)}
+                {bookingGroups.map((group, index) => (
+                  <div
+                    key={group.start_at}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        Бронь {index + 1}: {group.starts_at}–{group.ends_at}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-white/50">
+                        60 минут · Стол назначается автоматически
                       </p>
                     </div>
-                  );
-                })}
+                    <p className="text-base font-semibold text-[#C8B2FF]">
+                      {money(group.price_rub)}
+                    </p>
+                  </div>
+                ))}
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
