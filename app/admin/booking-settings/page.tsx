@@ -12,6 +12,8 @@ type Settings = {
   minimum_notice_minutes: number;
   hold_minutes: number;
   allow_same_day_booking: boolean;
+  extension_offer_enabled: boolean;
+  extension_offer_discount_percent: number;
 };
 
 const DEFAULTS: Omit<Settings, "studio_id"> = {
@@ -21,6 +23,8 @@ const DEFAULTS: Omit<Settings, "studio_id"> = {
   minimum_notice_minutes: 0,
   hold_minutes: 5,
   allow_same_day_booking: true,
+  extension_offer_enabled: false,
+  extension_offer_discount_percent: 50,
 };
 
 const inputClass = "mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 text-white outline-none focus:border-violet-400";
@@ -78,10 +82,8 @@ export default function BookingSettingsPage() {
     setMessage("");
   }
 
-
   async function save() {
     if (!settings || saving) return;
-
     setSaving(true); setError(""); setMessage("");
     try {
       const response = await fetch("/api/admin/booking-settings", {
@@ -94,7 +96,7 @@ export default function BookingSettingsPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Не удалось сохранить настройки.");
       setSettings({ ...DEFAULTS, ...data.settings, studio_id: studioId });
-      setMessage("Настройки сохранены и применены к расчёту доступных слотов.");
+      setMessage("Настройки сохранены.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка сохранения настроек.");
     } finally { setSaving(false); }
@@ -146,15 +148,11 @@ export default function BookingSettingsPage() {
                 <input type="number" min={0} max={10080} step={5} value={settings.minimum_notice_minutes} onChange={(e) => update("minimum_notice_minutes", Number(e.target.value))} className={inputClass} />
                 <span className="mt-2 block text-xs text-white/45">0 — можно бронировать ближайший ещё не начавшийся слот.</span>
               </label>
-             <div className="block text-sm">
-  <span>Срок оплаты и доплаты при переносе</span>
-  <div className="mt-2 flex h-11 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white/80">
-    5 минут
-  </div>
-  <span className="mt-2 block text-xs text-white/45">
-    Фиксированный срок. Изменение через административную панель недоступно.
-  </span>
-</div>
+              <div className="block text-sm">
+                <span>Срок оплаты и доплаты при переносе</span>
+                <div className="mt-2 flex h-11 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white/80">5 минут</div>
+                <span className="mt-2 block text-xs text-white/45">Фиксированный срок. Изменение через административную панель недоступно.</span>
+              </div>
             </div>
             <label className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 p-4 text-sm">
               <input type="checkbox" checked={settings.allow_same_day_booking} onChange={(e) => update("allow_same_day_booking", e.target.checked)} className="mt-1 h-4 w-4 accent-violet-500" />
@@ -162,6 +160,44 @@ export default function BookingSettingsPage() {
             </label>
           </section>
 
+          <section className={`${cardClass} mt-6`}>
+            <h2 className="text-xl font-semibold">Автоматическое предложение продления</h2>
+            <p className="mt-2 text-sm leading-6 text-white/55">
+              За 15 минут до окончания оплаченной сессии клиенту будет предложено продлить её
+              ещё на 60 минут на том же столе, если следующий час свободен и клуб открыт.
+              Новое время окончания устанавливается только после успешной оплаты.
+            </p>
+            <label className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 p-4 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.extension_offer_enabled}
+                onChange={(e) => update("extension_offer_enabled", e.target.checked)}
+                className="mt-1 h-4 w-4 accent-violet-500"
+              />
+              <span>
+                <span className="block font-medium">Включить автоматическое предложение</span>
+                <span className="mt-1 block text-xs leading-5 text-white/45">
+                  Уведомление появится в личном кабинете. Выключение остановит создание новых предложений;
+                  уже выданные предложения сохранятся до окончания срока действия.
+                </span>
+              </span>
+            </label>
+            <label className="mt-5 block max-w-sm text-sm">
+              Скидка на дополнительный час, %
+              <input
+                type="number"
+                min={1}
+                max={90}
+                step={1}
+                value={settings.extension_offer_discount_percent}
+                onChange={(e) => update("extension_offer_discount_percent", Number(e.target.value))}
+                className={inputClass}
+              />
+              <span className="mt-2 block text-xs leading-5 text-white/45">
+                По умолчанию 50%. Допустимый диапазон — от 1 до 90%. Цена фиксируется в момент создания предложения.
+              </span>
+            </label>
+          </section>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => void save()} disabled={saving} className="rounded-xl bg-violet-500 px-6 py-3 font-semibold transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Сохраняем…" : "Сохранить настройки"}</button>
