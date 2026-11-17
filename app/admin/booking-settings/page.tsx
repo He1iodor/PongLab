@@ -146,10 +146,15 @@ export default function BookingSettingsPage() {
                 <input type="number" min={0} max={10080} step={5} value={settings.minimum_notice_minutes} onChange={(e) => update("minimum_notice_minutes", Number(e.target.value))} className={inputClass} />
                 <span className="mt-2 block text-xs text-white/45">0 — можно бронировать ближайший ещё не начавшийся слот.</span>
               </label>
-              <label className="block text-sm">Удержание неоплаченной брони
-                <input type="number" min={1} max={60} step={1} value={settings.hold_minutes} onChange={(e) => update("hold_minutes", Number(e.target.value))} className={inputClass} />
-                <span className="mt-2 block text-xs text-white/45">В минутах. Создание и автоматическое истечение брони должны использовать это значение.</span>
-              </label>
+             <div className="block text-sm">
+  <span>Срок оплаты и доплаты при переносе</span>
+  <div className="mt-2 flex h-11 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white/80">
+    5 минут
+  </div>
+  <span className="mt-2 block text-xs text-white/45">
+    Фиксированный срок. Изменение через административную панель недоступно.
+  </span>
+</div>
             </div>
             <label className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 p-4 text-sm">
               <input type="checkbox" checked={settings.allow_same_day_booking} onChange={(e) => update("allow_same_day_booking", e.target.checked)} className="mt-1 h-4 w-4 accent-violet-500" />
