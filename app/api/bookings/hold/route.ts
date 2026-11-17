@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { GET as getAvailability } from "@/app/api/availability/route";
 import {
@@ -19,9 +20,8 @@ type AvailableSlot = {
 };
 
 type RequestedGroup = {
-  table_id: string;
   start_at: string;
-  duration_minutes: number;
+  duration_minutes: 60;
 };
 
 function errorResponse(message: string, status: number) {
@@ -165,73 +165,43 @@ async function expireOldHolds(
 
 function parseRequestedGroups(
   data: Record<string, unknown>,
-): {
-  groups: RequestedGroup[];
-  legacySingleGroup: boolean;
-} | null {
-  // Новый формат: массив отдельных групп бронирования.
-  if (Array.isArray(data.groups)) {
-    if (data.groups.length < 1 || data.groups.length > 10) {
+): RequestedGroup[] | null {
+  // Каждая запись — ровно один час. table_id от клиента не принимается
+  // и не используется: стол выбирается сервером после проверки availability.
+  const rawGroups = Array.isArray(data.groups)
+    ? data.groups
+    : typeof data.start_at === "string"
+      ? [{ start_at: data.start_at, duration_minutes: data.duration_minutes }]
+      : null;
+
+  if (!rawGroups || rawGroups.length < 1 || rawGroups.length > 10) {
+    return null;
+  }
+
+  const groups: RequestedGroup[] = [];
+
+  for (const raw of rawGroups) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       return null;
     }
 
-    const groups: RequestedGroup[] = [];
+    const item = raw as Record<string, unknown>;
 
-    for (const raw of data.groups) {
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-        return null;
-      }
-
-      const item = raw as Record<string, unknown>;
-
-      if (
-        !isUuid(item.table_id) ||
-        typeof item.start_at !== "string" ||
-        !Number.isFinite(Date.parse(item.start_at)) ||
-        !Number.isInteger(item.duration_minutes) ||
-        (item.duration_minutes as number) < 60 ||
-        (item.duration_minutes as number) > 480 ||
-        (item.duration_minutes as number) % 60 !== 0
-      ) {
-        return null;
-      }
-
-      groups.push({
-        table_id: item.table_id,
-        start_at: new Date(item.start_at).toISOString(),
-        duration_minutes: item.duration_minutes as number,
-      });
+    if (
+      typeof item.start_at !== "string" ||
+      !Number.isFinite(Date.parse(item.start_at)) ||
+      item.duration_minutes !== 60
+    ) {
+      return null;
     }
 
-    return {
-      groups,
-      legacySingleGroup: false,
-    };
+    groups.push({
+      start_at: new Date(item.start_at).toISOString(),
+      duration_minutes: 60,
+    });
   }
 
-  // Старый формат оставлен для совместимости с одиночной бронью.
-  if (
-    isUuid(data.table_id) &&
-    typeof data.start_at === "string" &&
-    Number.isFinite(Date.parse(data.start_at)) &&
-    Number.isInteger(data.duration_minutes) &&
-    (data.duration_minutes as number) >= 60 &&
-    (data.duration_minutes as number) <= 480 &&
-    (data.duration_minutes as number) % 60 === 0
-  ) {
-    return {
-      groups: [
-        {
-          table_id: data.table_id,
-          start_at: new Date(data.start_at).toISOString(),
-          duration_minutes: data.duration_minutes as number,
-        },
-      ],
-      legacySingleGroup: true,
-    };
-  }
-
-  return null;
+  return groups;
 }
 
 export async function POST(request: NextRequest) {
@@ -282,7 +252,7 @@ export async function POST(request: NextRequest) {
   const data = body as Record<string, unknown>;
   const studioId = data.studio_id;
   const date = data.date;
-  const parsedGroups = parseRequestedGroups(data);
+  const groups = parseRequestedGroups(data);
 
   if (!isUuid(studioId)) {
     return errorResponse("Не удалось определить клуб.", 400);
@@ -292,38 +262,20 @@ export async function POST(request: NextRequest) {
     return errorResponse("Укажите корректную дату бронирования.", 400);
   }
 
-  if (!parsedGroups) {
+  if (!groups) {
     return errorResponse(
-      "Переданы некорректные слоты. Обновите календарь и попробуйте снова.",
+      "Переданы некорректные слоты. Каждый слот должен длиться ровно 60 минут. Обновите календарь и попробуйте снова.",
       400,
     );
   }
 
-  const groups = parsedGroups.groups;
-
-  // Не принимаем пересекающиеся периоды на одном столе.
-  for (let i = 0; i < groups.length; i++) {
-    const a = groups[i];
-    const aStart = Date.parse(a.start_at);
-    const aEnd = aStart + a.duration_minutes * 60_000;
-
-    for (let j = i + 1; j < groups.length; j++) {
-      const b = groups[j];
-
-      if (a.table_id !== b.table_id) {
-        continue;
-      }
-
-      const bStart = Date.parse(b.start_at);
-      const bEnd = bStart + b.duration_minutes * 60_000;
-
-      if (aStart < bEnd && bStart < aEnd) {
-        return errorResponse(
-          "Выбраны пересекающиеся периоды для одного стола.",
-          400,
-        );
-      }
-    }
+  // Один и тот же час нельзя включить в группу дважды.
+  const uniqueStarts = new Set(groups.map((group) => group.start_at));
+  if (uniqueStarts.size !== groups.length) {
+    return errorResponse(
+      "Один и тот же временной слот выбран несколько раз.",
+      400,
+    );
   }
 
   const tokenHash = createHash("sha256")
@@ -363,7 +315,10 @@ export async function POST(request: NextRequest) {
 
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: "Слишком много попыток бронирования. Подождите немного и повторите попытку." },
+        {
+          error:
+            "Слишком много попыток бронирования. Подождите немного и повторите попытку.",
+        },
         {
           status: 429,
           headers: {
@@ -383,7 +338,7 @@ export async function POST(request: NextRequest) {
       new Date().toISOString(),
     );
 
-    // Читаем разрешённые длительности и время удержания.
+    // Читаем время удержания.
     const settingsRows = await readRows(
       config.url,
       config.key,
@@ -406,19 +361,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    for (const group of groups) {
-      if (
-        group.duration_minutes < 60 ||
-        group.duration_minutes > 480 ||
-        group.duration_minutes % 60 !== 0
-      ) {
-        return errorResponse(
-          "Бронирование должно состоять из целого количества часовых слотов.",
-          400,
-        );
-      }
-    }
-
     const holdMinutes = Number(settings.hold_minutes);
 
     if (
@@ -432,8 +374,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем каждый час отдельно. В БД создаётся одна бронь на выбранную
-    // группу соседних часов, а цена суммируется по часовым тарифам.
+    // Для каждого часа сервер повторно проверяет доступность и сам выбирает
+    // первый свободный стол. Клиент не передаёт table_id.
     const validated: Array<{
       table_id: string;
       start_at: string;
@@ -442,84 +384,66 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     for (const group of groups) {
-      const groupStartMs = Date.parse(group.start_at);
-      const hours = group.duration_minutes / 60;
-      let totalPrice = 0;
-      let firstStartAt = "";
-      let finalEndAt = "";
+      const availabilityUrl = new URL(
+        "/api/availability",
+        request.url,
+      );
 
-      for (let index = 0; index < hours; index++) {
-        const segmentStart = new Date(
-          groupStartMs + index * 60 * 60_000,
+      availabilityUrl.searchParams.set("studio_id", studioId);
+      availabilityUrl.searchParams.set("date", date);
+      availabilityUrl.searchParams.set("duration_minutes", "60");
+
+      // Внутренний вызов подписан серверным токеном и не расходует
+      // публичный лимит запросов календаря.
+      const availabilityResponse = await getAvailability(
+        new NextRequest(availabilityUrl, {
+          headers: {
+            "x-ponglab-internal-availability":
+              createInternalAvailabilityToken(config.key),
+          },
+        }),
+      );
+
+      const availabilityData = await availabilityResponse
+        .json()
+        .catch(() => ({}));
+
+      if (!availabilityResponse.ok) {
+        return errorResponse(
+          availabilityData.error ||
+            "Не удалось проверить доступность слота.",
+          availabilityResponse.status,
         );
+      }
 
-        const availabilityUrl = new URL(
-          "/api/availability",
-          request.url,
+      const slots = Array.isArray(availabilityData.slots)
+        ? (availabilityData.slots as AvailableSlot[])
+        : [];
+
+      const slot = slots.find(
+        (candidate) =>
+          Date.parse(candidate.start_at) === Date.parse(group.start_at) &&
+          Number(candidate.duration_minutes) === 60 &&
+          Array.isArray(candidate.available_tables) &&
+          candidate.available_tables.length > 0,
+      );
+
+      const assignedTable = slot?.available_tables[0];
+
+      if (!slot || !assignedTable?.id) {
+        console.error("Booking hold slot is no longer available.");
+
+        return errorResponse(
+          "Один из выбранных часовых слотов уже недоступен или тариф изменился. Обновите календарь.",
+          409,
         );
-
-        availabilityUrl.searchParams.set("studio_id", studioId);
-        availabilityUrl.searchParams.set("date", date);
-        availabilityUrl.searchParams.set("duration_minutes", "60");
-
-        // Внутренний вызов подписан серверным токеном и не расходует
-        // публичный лимит запросов календаря.
-        const availabilityResponse = await getAvailability(
-          new NextRequest(availabilityUrl, {
-            headers: {
-              "x-ponglab-internal-availability":
-                createInternalAvailabilityToken(config.key),
-            },
-          }),
-        );
-
-        const availabilityData = await availabilityResponse
-          .json()
-          .catch(() => ({}));
-
-        if (!availabilityResponse.ok) {
-          return errorResponse(
-            availabilityData.error ||
-              "Не удалось проверить доступность слота.",
-            availabilityResponse.status,
-          );
-        }
-
-        const slots = Array.isArray(availabilityData.slots)
-          ? (availabilityData.slots as AvailableSlot[])
-          : [];
-
-        const slot = slots.find(
-          (candidate) =>
-            Date.parse(candidate.start_at) === segmentStart.getTime() &&
-            Number(candidate.duration_minutes) === 60 &&
-            candidate.available_tables.some(
-              (table) => table.id === group.table_id,
-            ),
-        );
-
-        if (!slot) {
-          console.error("Booking hold hourly segment is no longer available.");
-
-          return errorResponse(
-            "Один из выбранных часовых слотов уже недоступен или тариф изменился. Обновите календарь.",
-            409,
-          );
-        }
-
-        if (index === 0) {
-          firstStartAt = slot.start_at;
-        }
-
-        finalEndAt = slot.end_at;
-        totalPrice += Number(slot.price_rub);
       }
 
       validated.push({
-        table_id: group.table_id,
-        start_at: firstStartAt,
-        end_at: finalEndAt,
-        price_rub: totalPrice,
+        table_id: assignedTable.id,
+        start_at: slot.start_at,
+        end_at: slot.end_at,
+        price_rub: Number(slot.price_rub),
       });
     }
 
@@ -528,7 +452,6 @@ export async function POST(request: NextRequest) {
     ).toISOString();
 
     // Создаём группу платежа и все связанные брони одной транзакцией PostgreSQL.
-    // Платёжный провайдер — YooKassa. Сам платёж подключим следующим этапом.
     const rpcResponse = await fetch(
       `${config.url}/rest/v1/rpc/create_payment_group_with_bookings`,
       {
@@ -615,7 +538,6 @@ export async function POST(request: NextRequest) {
       price_rub: number;
       status: string;
       hold_expires_at: string;
-      table_id: string;
     }) => ({
       id: row.id,
       start_at: row.start_at,
@@ -623,7 +545,6 @@ export async function POST(request: NextRequest) {
       price_rub: row.price_rub,
       status: row.status,
       hold_expires_at: row.hold_expires_at,
-      table_id: row.table_id,
     }));
 
     return NextResponse.json(
@@ -633,9 +554,6 @@ export async function POST(request: NextRequest) {
         total_price_rub: Number(createdGroup.total_price_rub),
         hold_expires_at: createdGroup.hold_expires_at ?? holdExpiresAt,
         next_step: "payment",
-        ...(parsedGroups.legacySingleGroup
-          ? { booking: bookings[0] }
-          : {}),
       },
       {
         status: 201,
