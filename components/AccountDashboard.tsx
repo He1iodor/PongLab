@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bell, CalendarDays, BarChart3, LogOut, RefreshCw, UserRound } from "lucide-react";
 import AccountBookingsPanel from "@/components/AccountBookingsPanel";
+import BookingExtensionOffers from "@/components/BookingExtensionOffers";
 import AccountNotificationsPanel from "@/components/AccountNotificationsPanel";
 import AccountProfilePanel from "@/components/AccountProfilePanel";
 import AccountStatsPanel from "@/components/AccountStatsPanel";
@@ -83,7 +84,10 @@ export default function AccountDashboard() {
         </nav>
 
         <main className="min-h-[420px] rounded-3xl border border-white/10 bg-[#101326] p-4 sm:p-6">
-          {tab === "bookings" && <AccountBookingsPanel onCreateBooking={() => setTab("new")} />}
+          {tab === "bookings" && <>
+            <BookingExtensionOffers />
+            <AccountBookingsPanel onCreateBooking={() => setTab("new")} />
+          </>}
           {tab === "profile" && <AccountProfilePanel />}
           {tab === "stats" && <AccountStatsPanel />}
           {tab === "notifications" && <AccountNotificationsPanel />}
