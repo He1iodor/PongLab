@@ -250,6 +250,32 @@ export async function POST(request: NextRequest) {
   }
 
   const data = body as Record<string, unknown>;
+
+  // Необязательный комментарий клиента.
+  // Пустая строка и строка из пробелов сохраняются как null.
+  const rawCustomerComment = data.customer_comment;
+
+  if (
+    rawCustomerComment !== undefined &&
+    rawCustomerComment !== null &&
+    typeof rawCustomerComment !== "string"
+  ) {
+    return errorResponse("Некорректный формат комментария.", 400);
+  }
+
+  const customerComment =
+    typeof rawCustomerComment === "string"
+      ? rawCustomerComment.trim()
+      : "";
+
+  // Считаем Unicode-символы, а не UTF-16 code units.
+  if ([...customerComment].length > 500) {
+    return errorResponse(
+      "Комментарий не должен превышать 500 символов.",
+      400,
+    );
+  }
+
   const studioId = data.studio_id;
   const date = data.date;
   const groups = parseRequestedGroups(data);
@@ -271,6 +297,7 @@ export async function POST(request: NextRequest) {
 
   // Один и тот же час нельзя включить в группу дважды.
   const uniqueStarts = new Set(groups.map((group) => group.start_at));
+
   if (uniqueStarts.size !== groups.length) {
     return errorResponse(
       "Один и тот же временной слот выбран несколько раз.",
@@ -422,7 +449,8 @@ export async function POST(request: NextRequest) {
 
       const slot = slots.find(
         (candidate) =>
-          Date.parse(candidate.start_at) === Date.parse(group.start_at) &&
+          Date.parse(candidate.start_at) ===
+            Date.parse(group.start_at) &&
           Number(candidate.duration_minutes) === 60 &&
           Array.isArray(candidate.available_tables) &&
           candidate.available_tables.length > 0,
@@ -452,6 +480,7 @@ export async function POST(request: NextRequest) {
     ).toISOString();
 
     // Создаём группу платежа и все связанные брони одной транзакцией PostgreSQL.
+    // Используется новая сигнатура RPC с необязательным комментарием.
     const rpcResponse = await fetch(
       `${config.url}/rest/v1/rpc/create_payment_group_with_bookings`,
       {
@@ -471,6 +500,7 @@ export async function POST(request: NextRequest) {
             end_at: item.end_at,
             price_rub: item.price_rub,
           })),
+          p_customer_comment: customerComment || null,
         }),
         cache: "no-store",
       },
