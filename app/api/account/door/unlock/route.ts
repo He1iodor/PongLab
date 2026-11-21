@@ -44,8 +44,14 @@ export async function POST(request: NextRequest) {
     return errorResponse("Некорректный запрос.", 400);
   }
 
-  const data = body as Record<string, unknown>;
-  const bookingId = data.booking_id;
+const data = body as Record<string, unknown>;
+const bookingId = data.booking_id;
+const requestChannel =
+  data.request_channel === undefined ? "web" : data.request_channel;
+
+if (requestChannel !== "web" && requestChannel !== "telegram") {
+  return errorResponse("Недопустимый источник запроса.", 400);
+}
 
   if (!isUuid(bookingId)) {
     return errorResponse(
@@ -101,11 +107,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Общая проверка прав и создание команды открытия.
-    const result = await requestBookingDoorAccess({
-      userId,
-      bookingId,
-      requestChannel: "web",
-    });
+const result = await requestBookingDoorAccess({
+  userId,
+  bookingId,
+  requestChannel,
+});
 
     return NextResponse.json(result, {
       status: 201,
