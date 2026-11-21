@@ -9,7 +9,11 @@ export type ApiRateLimitRoute =
   | "availability"
   | "booking_hold"
   | "telegram_link";
-
+export type ApiRateLimitRoute =
+  | "availability"
+  | "booking_hold"
+  | "telegram_link"
+  | "telegram_webhook";
 type ApiRateLimitResult = {
   allowed: boolean;
   remaining: number;
