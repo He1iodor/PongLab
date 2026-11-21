@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BookingCalendar from "@/components/BookingCalendar";
 import {
   X,
@@ -20,6 +20,11 @@ type PersonalAccountModalProps = {
 };
 
 type AccountRole = "owner" | "staff" | "customer" | null;
+type PersonalAccountModalProps = {
+  open: boolean;
+  onClose: () => void;
+  onAuthenticated?: () => void;
+};
 type SessionStatus = "checking" | "authenticated" | "unauthenticated" | "error";
 
 const ANIMATION_DURATION = 500;
@@ -55,6 +60,7 @@ async function fetchAccountRole(): Promise<AccountRole> {
 export default function PersonalAccountModal({
   open,
   onClose,
+  onAuthenticated,
 }: PersonalAccountModalProps) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
@@ -75,6 +81,20 @@ export default function PersonalAccountModal({
   const [logoutError, setLogoutError] = useState("");
   const [accountRole, setAccountRole] = useState<AccountRole>(null);
   const [isLoadingRole, setIsLoadingRole] = useState(false);
+  const authRedirected = useRef(false);
+
+useEffect(() => {
+  if (!open || !onAuthenticated || authRedirected.current) {
+    return;
+  }
+
+  if (sessionStatus !== "authenticated" && !authSuccess) {
+    return;
+  }
+
+  authRedirected.current = true;
+  onAuthenticated();
+}, [open, onAuthenticated, sessionStatus, authSuccess]);
 
   useEffect(() => {
     let frame1 = 0;
