@@ -253,9 +253,11 @@ function LatePaymentRefundStatus({ booking }: { booking: Booking }) {
 function DoorAccess({
   booking,
   now,
+  requestChannel,
 }: {
   booking: Booking;
   now: number;
+  requestChannel: "web" | "telegram";
 }) {
   const [sending, setSending] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
