@@ -123,7 +123,7 @@ export default function MiniAppClient() {
         if (!response.ok || result.authenticated !== true) {
           setStatus("unauthenticated");
           setError(
-            "Откройте PongLab через Telegram или сначала войдите в аккаунт на сайте.",
+           "Для входа подтвердите номер телефона. После авторизации вы автоматически вернётесь в приложение.",
           );
           return;
         }
@@ -255,12 +255,21 @@ export default function MiniAppClient() {
               </button>
             )}
 
-            <a
-              href="/"
-              className="mt-4 rounded-xl border border-white/10 px-5 py-3 text-sm text-white/75"
-            >
-              Перейти на сайт PongLab
-            </a>
+           {status === "unauthenticated" ? (
+  <a
+    href="/login"
+    className="mt-6 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] px-6 text-sm font-semibold text-white"
+  >
+    Войти по номеру телефона
+  </a>
+) : (
+  <a
+    href="/"
+    className="mt-4 rounded-xl border border-white/10 px-5 py-3 text-sm text-white/75"
+  >
+    Перейти на сайт PongLab
+  </a>
+)}
           </div>
         )}
 
