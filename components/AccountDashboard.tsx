@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Bell,
   CalendarDays,
@@ -41,7 +42,13 @@ const tabs: Array<{
 ];
 
 export default function AccountDashboard() {
-  const [tab, setTab] = useState<Tab>("bookings");
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+
+  const initialTab: Tab =
+    requestedTab === "telegram" ? "telegram" : "bookings";
+
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [fullName, setFullName] = useState("");
