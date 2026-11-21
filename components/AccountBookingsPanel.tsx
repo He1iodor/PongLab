@@ -881,7 +881,8 @@ export default function AccountBookingsPanel({
                   <>
                     <TransferStatus booking={booking} />
 
-                    {(canShowTransfer || canRecoverTransfer) && (
+                    {showTransferActions &&
+  (canShowTransfer || canRecoverTransfer) && (
                       <BookingTransferAction
                         bookingId={booking.id}
                         startAt={booking.start_at}
@@ -1055,7 +1056,11 @@ export default function AccountBookingsPanel({
                   )}
 
                 {confirmed && (
-                  <DoorAccess booking={booking} now={now} />
+<DoorAccess
+  booking={booking}
+  now={now}
+  requestChannel={doorRequestChannel}
+/>
                 )}
               </article>
             );
