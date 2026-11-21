@@ -412,8 +412,8 @@ CHECK (request_channel IN ('web', 'telegram'));
 -- 6. EXTEND EXISTING RATE LIMITER
 -- ============================================================
 
--- Reuse the existing api_rate_limits table.
--- Existing availability and booking_hold limits are preserved.
+-- Existing api_rate_limits table and cleanup mechanism are preserved.
+-- Only the supported route keys and their limits are extended.
 
 CREATE OR REPLACE FUNCTION public.consume_api_rate_limit(
     p_route_key text,
@@ -867,7 +867,7 @@ BEGIN
         WHEN 'failed'
             THEN 'Контроллер сообщил, что не смог выполнить команду открытия двери. Обратитесь к администрации PongLab.'
         ELSE
-            THEN 'Команда открытия двери истекла или не была выполнена. Попробуйте отправить запрос повторно во время оплаченного занятия.'
+            'Команда открытия двери истекла или не была выполнена. Попробуйте отправить запрос повторно во время оплаченного занятия.'
     END;
 
     INSERT INTO public.messaging_outbox (
