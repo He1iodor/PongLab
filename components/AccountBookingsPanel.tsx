@@ -331,7 +331,10 @@ function DoorAccess({
         credentials: "same-origin",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: booking.id }),
+        body: JSON.stringify({
+  booking_id: booking.id,
+  request_channel: requestChannel,
+}),
       });
 
       const result = await response.json().catch(() => ({}));
@@ -456,8 +459,12 @@ function DoorAccess({
 
 export default function AccountBookingsPanel({
   onCreateBooking,
+  showTransferActions = true,
+  doorRequestChannel = "web",
 }: {
   onCreateBooking: () => void;
+  showTransferActions?: boolean;
+  doorRequestChannel?: "web" | "telegram";
 }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
