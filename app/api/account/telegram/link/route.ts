@@ -1,3 +1,4 @@
+
 import { createHash, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -19,22 +20,21 @@ type SupabaseConfig = {
 
 type TelegramAccountRow = {
   telegram_user_id: number | string | null;
+  username: string | null;
+  linked_at: string | null;
   unlinked_at: string | null;
 };
 
 function getConfig(): SupabaseConfig | null {
   const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
   const key = process.env.SUPABASE_SECRET_KEY;
-
   return url && key ? { url, key } : null;
 }
 
 function noStoreJson(body: unknown, status = 200) {
   return NextResponse.json(body, {
     status,
-    headers: {
-      "Cache-Control": "no-store",
-    },
+    headers: { "Cache-Control": "no-store" },
   });
 }
 
@@ -43,6 +43,50 @@ function apiHeaders(key: string) {
     apikey: key,
     Authorization: `Bearer ${key}`,
   };
+}
+
+async function getAuthenticatedUserId(request: NextRequest) {
+  const sessionToken = getSessionTokenFromRequest(request);
+  if (!sessionToken) return null;
+  return resolveSessionUserId(sessionToken);
+}
+
+async function getTelegramAccount(
+  config: SupabaseConfig,
+  userId: string,
+): Promise<TelegramAccountRow | null> {
+  const target = new URL(
+    `${config.url}/rest/v1/telegram_accounts`,
+  );
+
+  target.searchParams.set(
+    "select",
+    "telegram_user_id,username,linked_at,unlinked_at",
+  );
+  target.searchParams.set("user_id", `eq.${userId}`);
+  target.searchParams.set("limit", "1");
+
+  const response = await fetch(target, {
+    headers: apiHeaders(config.key),
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!response.ok) {
+    console.error(
+      "Telegram account lookup failed:",
+      response.status,
+    );
+    throw new Error("Не удалось проверить привязку Telegram.");
+  }
+
+  const rows: unknown = await response.json();
+
+  if (!Array.isArray(rows)) {
+    throw new Error("Некорректный ответ Telegram account lookup.");
+  }
+
+  return (rows[0] as TelegramAccountRow | undefined) ?? null;
 }
 
 function rateLimitResponse(retryAfterSeconds: number) {
@@ -63,49 +107,54 @@ function rateLimitResponse(retryAfterSeconds: number) {
   );
 }
 
-async function isTelegramAlreadyLinked(
-  config: SupabaseConfig,
-  userId: string,
-): Promise<boolean> {
-  const target = new URL(
-    `${config.url}/rest/v1/telegram_accounts`,
-  );
+export async function GET(request: NextRequest) {
+  const config = getConfig();
 
-  target.searchParams.set(
-    "select",
-    "telegram_user_id,unlinked_at",
-  );
-  target.searchParams.set("user_id", `eq.${userId}`);
-  target.searchParams.set("limit", "1");
+  if (!config) {
+    return noStoreJson(
+      { error: "Сервис временно недоступен." },
+      503,
+    );
+  }
 
-  const response = await fetch(target, {
-    headers: apiHeaders(config.key),
-    cache: "no-store",
-    signal: AbortSignal.timeout(10000),
-  });
+  try {
+    const userId = await getAuthenticatedUserId(request);
 
-  if (!response.ok) {
-    console.error(
-      "Telegram account lookup failed:",
-      response.status,
+    if (!userId) {
+      return noStoreJson(
+        {
+          authenticated: false,
+          error: "Войдите в личный кабинет.",
+        },
+        401,
+      );
+    }
+
+    const account = await getTelegramAccount(config, userId);
+
+    const linked = Boolean(
+      account &&
+      account.telegram_user_id !== null &&
+      account.unlinked_at === null,
     );
 
-    throw new Error("Не удалось проверить привязку Telegram.");
+    return noStoreJson({
+      authenticated: true,
+      linked,
+      username: linked ? account?.username ?? null : null,
+      linked_at: linked ? account?.linked_at ?? null : null,
+    });
+  } catch (error) {
+    console.error(
+      "Telegram account status failed:",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+
+    return noStoreJson(
+      { error: "Не удалось проверить статус Telegram." },
+      503,
+    );
   }
-
-  const rows: unknown = await response.json();
-
-  if (!Array.isArray(rows)) {
-    throw new Error("Некорректный ответ Telegram account lookup.");
-  }
-
-  const account = rows[0] as TelegramAccountRow | undefined;
-
-  return Boolean(
-    account &&
-    account.telegram_user_id !== null &&
-    account.unlinked_at === null,
-  );
 }
 
 export async function POST(request: NextRequest) {
@@ -135,9 +184,7 @@ export async function POST(request: NextRequest) {
     !botUsername ||
     !/^[A-Za-z0-9_]{5,32}$/.test(botUsername)
   ) {
-    console.error(
-      "TELEGRAM_BOT_USERNAME is missing or invalid.",
-    );
+    console.error("TELEGRAM_BOT_USERNAME is missing or invalid.");
 
     return noStoreJson(
       { error: "Привязка Telegram пока не настроена." },
@@ -146,20 +193,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Пользователь определяется только по серверной сессии сайта.
-    const sessionToken = getSessionTokenFromRequest(request);
-
-    if (!sessionToken) {
-      return noStoreJson(
-        {
-          authenticated: false,
-          error: "Войдите в личный кабинет.",
-        },
-        401,
-      );
-    }
-
-    const userId = await resolveSessionUserId(sessionToken);
+    const userId = await getAuthenticatedUserId(request);
 
     if (!userId) {
       return noStoreJson(
@@ -171,7 +205,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Ограничение по аккаунту.
     const userLimit = await consumeApiRateLimit({
       supabaseUrl: config.url,
       serviceKey: config.key,
@@ -183,7 +216,6 @@ export async function POST(request: NextRequest) {
       return rateLimitResponse(userLimit.retryAfterSeconds);
     }
 
-    // Дополнительное ограничение по IP.
     const clientIp = getRateLimitClientIp(request);
 
     if (!clientIp) {
@@ -204,8 +236,15 @@ export async function POST(request: NextRequest) {
       return rateLimitResponse(ipLimit.retryAfterSeconds);
     }
 
-    // Проверяем, не подключён ли Telegram уже к этому аккаунту.
-    if (await isTelegramAlreadyLinked(config, userId)) {
+    const account = await getTelegramAccount(config, userId);
+
+    const alreadyLinked = Boolean(
+      account &&
+      account.telegram_user_id !== null &&
+      account.unlinked_at === null,
+    );
+
+    if (alreadyLinked) {
       return noStoreJson(
         {
           linked: true,
@@ -216,8 +255,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 24 случайных байта дают 32 символа base64url.
-    // Такой параметр подходит для Telegram deep link.
     const code = randomBytes(24).toString("base64url");
 
     const codeHash = createHash("sha256")
@@ -228,8 +265,6 @@ export async function POST(request: NextRequest) {
       Date.now() + 10 * 60 * 1000,
     ).toISOString();
 
-    // Код сохраняется только в виде хеша.
-    // SQL-функция атомарно отзывает предыдущие коды пользователя.
     const rpcResponse = await fetch(
       `${config.url}/rest/v1/rpc/create_telegram_link_code`,
       {
