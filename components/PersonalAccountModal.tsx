@@ -14,11 +14,6 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-type PersonalAccountModalProps = {
-  open: boolean;
-  onClose: () => void;
-};
-
 type AccountRole = "owner" | "staff" | "customer" | null;
 type PersonalAccountModalProps = {
   open: boolean;
