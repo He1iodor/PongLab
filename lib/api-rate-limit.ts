@@ -1,4 +1,3 @@
-
 import {
   createHash,
   createHmac,
@@ -8,7 +7,8 @@ import { isIP } from "node:net";
 
 export type ApiRateLimitRoute =
   | "availability"
-  | "booking_hold";
+  | "booking_hold"
+  | "telegram_link";
 
 type ApiRateLimitResult = {
   allowed: boolean;
@@ -125,7 +125,6 @@ export async function consumeApiRateLimit({
   }
 
   const data: unknown = await response.json();
-
   const row = Array.isArray(data) ? data[0] : data;
 
   if (
@@ -137,7 +136,6 @@ export async function consumeApiRateLimit({
   }
 
   const result = row as Record<string, unknown>;
-
   const remaining = Number(result.remaining);
   const retryAfterSeconds = Number(result.retry_after_seconds);
 
