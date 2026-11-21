@@ -255,9 +255,16 @@ export default function MiniAppClient() {
               </button>
             )}
 
-           {status === "unauthenticated" ? (
+          {status === "unlinked" ? (
   <a
-    href="/login"
+    href="/login?returnTo=%2Faccount%3Ftab%3Dtelegram"
+    className="mt-6 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] px-6 text-sm font-semibold text-white"
+  >
+    Войти и подключить Telegram
+  </a>
+) : status === "unauthenticated" ? (
+  <a
+    href="/login?returnTo=%2Fminiapp"
     className="mt-6 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] px-6 text-sm font-semibold text-white"
   >
     Войти по номеру телефона
