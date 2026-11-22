@@ -1,3 +1,4 @@
+
 import type { NextConfig } from "next";
 
 const securityHeaders = [
@@ -42,6 +43,12 @@ const noIndexNoFollow = [
 ];
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/api/max/check": [
+      "./certs/russian_trusted_root_ca.pem",
+    ],
+  },
+
   async headers() {
     return [
       {
