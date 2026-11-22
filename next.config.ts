@@ -41,7 +41,7 @@ const noIndexNoFollow = [
     value: "noindex, nofollow",
   },
 ];
-
+// Rebuild Preview with the additional MAX CA certificate.
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/max/check": [
