@@ -13,6 +13,37 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function logMaxConnectionError(error: unknown) {
+  const diagnostics: Array<Record<string, string>> = [];
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (!(current instanceof Error)) {
+      diagnostics.push({
+        value: String(current).slice(0, 300),
+      });
+      break;
+    }
+
+    const item: Record<string, string> = {
+      name: current.name,
+      message: current.message.slice(0, 500),
+    };
+
+    const code = (current as Error & { code?: unknown }).code;
+
+    if (typeof code === "string") {
+      item.code = code;
+    }
+
+    diagnostics.push(item);
+
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+
+  console.error("MAX connection diagnostics:", diagnostics);
+}
+
 export async function GET(request: NextRequest) {
   const access = await requireOwner(request);
 
@@ -34,7 +65,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof MaxApiError) {
-      console.error("MAX bot check failed:", error.status);
+      console.error("MAX API returned HTTP status:", error.status);
 
       return json(
         {
@@ -46,10 +77,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.error(
-      "MAX bot check failed:",
-      error instanceof Error ? error.message : "Unknown error",
-    );
+    logMaxConnectionError(error);
 
     return json(
       {
