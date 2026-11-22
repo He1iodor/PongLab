@@ -2,6 +2,7 @@
 export type TelegramNotificationKey =
   | "booking_pending"
   | "booking_confirmed"
+  | "booking_confirmed_update"
   | "payment_succeeded"
   | "payment_failed"
   | "payment_refunded"
@@ -27,10 +28,7 @@ type NotificationTemplate = {
   message: string;
 };
 
-const templates: Record<
-  TelegramNotificationKey,
-  NotificationTemplate
-> = {
+const templates: Record<TelegramNotificationKey, NotificationTemplate> = {
   booking_pending: {
     title: "Временный резерв создан",
     message: "Место зарезервировано на время оплаты.",
@@ -41,6 +39,11 @@ const templates: Record<
     message: "Оплата прошла, бронирование подтверждено.",
   },
 
+  booking_confirmed_update: {
+    title: "Бронирование подтверждено",
+    message: "Ваше бронирование подтверждено.",
+  },
+
   payment_succeeded: {
     title: "Оплата прошла",
     message: "Платёж подтверждён, бронирование оплачено.",
@@ -48,8 +51,7 @@ const templates: Record<
 
   payment_failed: {
     title: "Платёж не завершён",
-    message:
-      "Оплата отменена или не прошла. Проверьте статус бронирования.",
+    message: "Оплата отменена или не прошла. Проверьте статус бронирования.",
   },
 
   payment_refunded: {
@@ -59,26 +61,22 @@ const templates: Record<
 
   schedule_changed: {
     title: "Изменилось время бронирования",
-    message:
-      "Проверьте новое время посещения в личном кабинете.",
+    message: "Проверьте новое время посещения в личном кабинете.",
   },
 
   training_completed: {
     title: "Тренировка завершена",
-    message:
-      "Завершённая тренировка добавлена в статистику.",
+    message: "Завершённая тренировка добавлена в статистику.",
   },
 
   booking_expired: {
     title: "Временный резерв истёк",
-    message:
-      "Время удержания места закончилось, бронь закрыта.",
+    message: "Время удержания места закончилось, бронь закрыта.",
   },
 
   booking_cancelled: {
     title: "Бронирование отменено",
-    message:
-      "Статус бронирования изменён на «отменено».",
+    message: "Статус бронирования изменён на «отменено».",
   },
 
   extension_offer: {
@@ -88,19 +86,19 @@ const templates: Record<
   },
 
   door_completed: {
-    title: "Дверь",
+    title: "",
     message:
       "Контроллер подтвердил успешное выполнение команды открытия двери.",
   },
 
   door_failed: {
-    title: "Дверь",
+    title: "",
     message:
       "Контроллер сообщил, что не смог выполнить команду открытия двери. Обратитесь к администрации PongLab.",
   },
 
   door_expired: {
-    title: "Дверь",
+    title: "",
     message:
       "Команда открытия двери истекла или не была выполнена. Попробуйте отправить запрос повторно во время оплаченного занятия.",
   },
@@ -110,18 +108,15 @@ function interpolate(
   text: string,
   variables: TelegramNotificationVariables
 ): string {
-  return text.replace(
-    /\{([a-z_]+)\}/g,
-    (placeholder, key: string) => {
-      const value = variables[key as keyof TelegramNotificationVariables];
+  return text.replace(/\{([a-z_]+)\}/g, (_placeholder, key: string) => {
+    const value = variables[key as keyof TelegramNotificationVariables];
 
-      if (value === undefined || value === null) {
-        return "";
-      }
-
-      return String(value);
+    if (value === undefined || value === null) {
+      return "";
     }
-  );
+
+    return String(value);
+  });
 }
 
 export function renderTelegramNotification(
