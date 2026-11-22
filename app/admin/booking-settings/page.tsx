@@ -1,9 +1,11 @@
+
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 type Club = { id: string; name: string; is_active: boolean };
+
 type Settings = {
   studio_id: string;
   slot_interval_minutes: number;
@@ -27,13 +29,20 @@ const DEFAULTS: Omit<Settings, "studio_id"> = {
   extension_offer_discount_percent: 50,
 };
 
-const inputClass = "mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 text-white outline-none focus:border-violet-400";
-const cardClass = "rounded-2xl border border-white/10 bg-[#151121] p-5 sm:p-6";
+const inputClass =
+  "mt-2 w-full rounded-xl border border-white/10 bg-[#201a2e] px-4 py-3 text-white outline-none focus:border-violet-400";
+
+const cardClass =
+  "rounded-2xl border border-white/10 bg-[#151121] p-5 sm:p-6";
 
 export default function BookingSettingsPage() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [studioId, setStudioId] = useState("");
   const [settings, setSettings] = useState<Settings | null>(null);
+
+  const [extensionDiscountInput, setExtensionDiscountInput] =
+    useState("50");
+
   const [loadingClubs, setLoadingClubs] = useState(true);
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,167 +52,457 @@ export default function BookingSettingsPage() {
   const loadClubs = useCallback(async () => {
     setLoadingClubs(true);
     setError("");
+
     try {
-      const response = await fetch("/api/admin/clubs", { cache: "no-store", credentials: "same-origin" });
+      const response = await fetch("/api/admin/clubs", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Не удалось загрузить клубы.");
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Не удалось загрузить клубы.",
+        );
+      }
+
       const next: Club[] = data.clubs ?? [];
+
       setClubs(next);
-      setStudioId((current) => current && next.some((club) => club.id === current)
-        ? current : next.find((club) => club.is_active)?.id ?? "");
+
+      setStudioId((current) =>
+        current && next.some((club) => club.id === current)
+          ? current
+          : next.find((club) => club.is_active)?.id ?? "",
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка загрузки клубов.");
-    } finally { setLoadingClubs(false); }
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Ошибка загрузки клубов.",
+      );
+    } finally {
+      setLoadingClubs(false);
+    }
   }, []);
 
   const loadSettings = useCallback(async () => {
-    if (!studioId) { setSettings(null); return; }
+    if (!studioId) {
+      setSettings(null);
+      return;
+    }
+
     setLoadingSettings(true);
     setError("");
     setMessage("");
+
     try {
-      const response = await fetch(`/api/admin/booking-settings?studio_id=${encodeURIComponent(studioId)}`, {
-        cache: "no-store", credentials: "same-origin",
-      });
+      const response = await fetch(
+        `/api/admin/booking-settings?studio_id=${encodeURIComponent(studioId)}`,
+        {
+          cache: "no-store",
+          credentials: "same-origin",
+        },
+      );
+
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Не удалось загрузить настройки.");
-      setSettings({ ...DEFAULTS, ...data.settings, studio_id: studioId });
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Не удалось загрузить настройки.",
+        );
+      }
+
+      const nextSettings = {
+        ...DEFAULTS,
+        ...data.settings,
+        studio_id: studioId,
+      };
+
+      setSettings(nextSettings);
+
+      setExtensionDiscountInput(
+        String(nextSettings.extension_offer_discount_percent),
+      );
     } catch (e) {
       setSettings(null);
-      setError(e instanceof Error ? e.message : "Ошибка загрузки настроек.");
-    } finally { setLoadingSettings(false); }
+
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Ошибка загрузки настроек.",
+      );
+    } finally {
+      setLoadingSettings(false);
+    }
   }, [studioId]);
 
-  useEffect(() => { void loadClubs(); }, [loadClubs]);
-  useEffect(() => { void loadSettings(); }, [loadSettings]);
+  useEffect(() => {
+    void loadClubs();
+  }, [loadClubs]);
 
-  function update<K extends keyof Omit<Settings, "studio_id">>(key: K, value: Settings[K]) {
-    setSettings((current) => current ? { ...current, [key]: value } : current);
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  function update<K extends keyof Omit<Settings, "studio_id">>(
+    key: K,
+    value: Settings[K],
+  ) {
+    setSettings((current) =>
+      current ? { ...current, [key]: value } : current,
+    );
+
     setMessage("");
   }
 
   async function save() {
     if (!settings || saving) return;
-    setSaving(true); setError(""); setMessage("");
+
+    const discountText = extensionDiscountInput.trim();
+    const discount = Number(discountText);
+
+    if (
+      !/^\d+$/.test(discountText) ||
+      !Number.isInteger(discount) ||
+      discount < 1 ||
+      discount > 90
+    ) {
+      setError(
+        "Укажите целую скидку от 1 до 90 процентов.",
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
     try {
-      const response = await fetch("/api/admin/booking-settings", {
-        method: "PUT",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
-      });
+      const response = await fetch(
+        "/api/admin/booking-settings",
+        {
+          method: "PUT",
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...settings,
+            extension_offer_discount_percent: discount,
+          }),
+        },
+      );
+
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Не удалось сохранить настройки.");
-      setSettings({ ...DEFAULTS, ...data.settings, studio_id: studioId });
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Не удалось сохранить настройки.",
+        );
+      }
+
+      const savedSettings = {
+        ...DEFAULTS,
+        ...data.settings,
+        studio_id: studioId,
+      };
+
+      setSettings(savedSettings);
+
+      setExtensionDiscountInput(
+        String(savedSettings.extension_offer_discount_percent),
+      );
+
       setMessage("Настройки сохранены.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка сохранения настроек.");
-    } finally { setSaving(false); }
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Ошибка сохранения настроек.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const activeClub = clubs.find((club) => club.id === studioId);
+  const activeClub = clubs.find(
+    (club) => club.id === studioId,
+  );
 
   return (
     <main className="min-h-screen bg-[#0b0914] px-4 py-8 text-white sm:px-8">
       <div className="mx-auto max-w-5xl">
-        <Link href="/admin" className="text-sm text-violet-300 transition hover:text-violet-200">← Панель владельца</Link>
+        <Link
+          href="/admin"
+          className="text-sm text-violet-300 transition hover:text-violet-200"
+        >
+          ← Панель владельца
+        </Link>
+
         <header className="mt-6">
-          <p className="text-xs font-semibold tracking-[0.24em] text-violet-300">PONGLAB · УПРАВЛЕНИЕ</p>
-          <h1 className="mt-3 text-3xl font-semibold">Настройки бронирования</h1>
+          <p className="text-xs font-semibold tracking-[0.24em] text-violet-300">
+            PONGLAB · УПРАВЛЕНИЕ
+          </p>
+
+          <h1 className="mt-3 text-3xl font-semibold">
+            Настройки бронирования
+          </h1>
+
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-            Настройки хранятся отдельно для каждого клуба. Один слот всегда длится 60 минут;
-            соседние часы можно выбрать вместе, а стоимость рассчитывается по тарифу каждого часа.
+            Настройки хранятся отдельно для каждого клуба. Один слот
+            всегда длится 60 минут; соседние часы можно выбрать
+            вместе, а стоимость рассчитывается по тарифу каждого часа.
           </p>
         </header>
 
-        {message && <p className="mt-6 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200">{message}</p>}
-        {error && <p role="alert" className="mt-6 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">{error}</p>}
+        {message && (
+          <p className="mt-6 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-200">
+            {message}
+          </p>
+        )}
+
+        {error && (
+          <p
+            role="alert"
+            className="mt-6 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200"
+          >
+            {error}
+          </p>
+        )}
 
         <section className={`${cardClass} mt-8`}>
-          <label className="block text-sm">Клуб
-            <select value={studioId} onChange={(e) => setStudioId(e.target.value)} disabled={loadingClubs || clubs.length === 0} className={inputClass}>
-              <option value="">{loadingClubs ? "Загружаем клубы…" : "Выберите клуб"}</option>
-              {clubs.map((club) => <option key={club.id} value={club.id}>{club.name}{club.is_active ? "" : " (отключён)"}</option>)}
+          <label className="block text-sm">
+            Клуб
+
+            <select
+              value={studioId}
+              onChange={(e) => setStudioId(e.target.value)}
+              disabled={loadingClubs || clubs.length === 0}
+              className={inputClass}
+            >
+              <option value="">
+                {loadingClubs
+                  ? "Загружаем клубы…"
+                  : "Выберите клуб"}
+              </option>
+
+              {clubs.map((club) => (
+                <option key={club.id} value={club.id}>
+                  {club.name}
+                  {club.is_active ? "" : " (отключён)"}
+                </option>
+              ))}
             </select>
           </label>
-          {!loadingClubs && clubs.length === 0 && <p className="mt-3 text-sm text-amber-200/80">Сначала создайте клуб в разделе «Города и клубы».</p>}
+
+          {!loadingClubs && clubs.length === 0 && (
+            <p className="mt-3 text-sm text-amber-200/80">
+              Сначала создайте клуб в разделе «Города и клубы».
+            </p>
+          )}
         </section>
 
-        {studioId && (loadingSettings || !settings) && <p className="mt-6 text-sm text-white/50">{loadingSettings ? "Загружаем настройки…" : "Настройки не загружены. Проверьте сообщение об ошибке и попробуйте обновить страницу."}</p>}
+        {studioId && (loadingSettings || !settings) && (
+          <p className="mt-6 text-sm text-white/50">
+            {loadingSettings
+              ? "Загружаем настройки…"
+              : "Настройки не загружены. Проверьте сообщение об ошибке и попробуйте обновить страницу."}
+          </p>
+        )}
 
-        {settings && !loadingSettings && <>
-          <section className={`${cardClass} mt-6`}>
-            <h2 className="text-xl font-semibold">Правила календаря</h2>
-            <p className="mt-1 text-sm text-white/50">{activeClub?.name}</p>
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              <div className="rounded-xl border border-violet-300/20 bg-violet-300/5 p-4 text-sm">
-                <p className="font-medium">Фиксированная длительность слота</p>
-                <p className="mt-2 text-white/60">60 минут. Начало — каждый час. Для бронирования нескольких часов выберите соседние слоты в календаре.</p>
-              </div>
-              <label className="block text-sm">На сколько дней вперёд открывать бронирование
-                <input type="number" min={1} max={365} step={1} value={settings.booking_horizon_days} onChange={(e) => update("booking_horizon_days", Number(e.target.value))} className={inputClass} />
-              </label>
-              <label className="block text-sm">Минимум минут до начала брони
-                <input type="number" min={0} max={10080} step={5} value={settings.minimum_notice_minutes} onChange={(e) => update("minimum_notice_minutes", Number(e.target.value))} className={inputClass} />
-                <span className="mt-2 block text-xs text-white/45">0 — можно бронировать ближайший ещё не начавшийся слот.</span>
-              </label>
-              <div className="block text-sm">
-                <span>Срок оплаты и доплаты при переносе</span>
-                <div className="mt-2 flex h-11 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white/80">5 минут</div>
-                <span className="mt-2 block text-xs text-white/45">Фиксированный срок. Изменение через административную панель недоступно.</span>
-              </div>
-            </div>
-            <label className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 p-4 text-sm">
-              <input type="checkbox" checked={settings.allow_same_day_booking} onChange={(e) => update("allow_same_day_booking", e.target.checked)} className="mt-1 h-4 w-4 accent-violet-500" />
-              <span><span className="block font-medium">Разрешить бронирование на сегодня</span><span className="mt-1 block text-xs leading-5 text-white/45">Если выключить, клиентам будут недоступны слоты на текущую дату клуба.</span></span>
-            </label>
-          </section>
+        {settings && !loadingSettings && (
+          <>
+            <section className={`${cardClass} mt-6`}>
+              <h2 className="text-xl font-semibold">
+                Правила календаря
+              </h2>
 
-          <section className={`${cardClass} mt-6`}>
-            <h2 className="text-xl font-semibold">Автоматическое предложение продления</h2>
-            <p className="mt-2 text-sm leading-6 text-white/55">
-              За 15 минут до окончания оплаченной сессии клиенту будет предложено продлить её
-              ещё на 60 минут на том же столе, если следующий час свободен и клуб открыт.
-              Новое время окончания устанавливается только после успешной оплаты.
-            </p>
-            <label className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 p-4 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.extension_offer_enabled}
-                onChange={(e) => update("extension_offer_enabled", e.target.checked)}
-                className="mt-1 h-4 w-4 accent-violet-500"
-              />
-              <span>
-                <span className="block font-medium">Включить автоматическое предложение</span>
-                <span className="mt-1 block text-xs leading-5 text-white/45">
-                  Уведомление появится в личном кабинете. Выключение остановит создание новых предложений;
-                  уже выданные предложения сохранятся до окончания срока действия.
+              <p className="mt-1 text-sm text-white/50">
+                {activeClub?.name}
+              </p>
+
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <div className="rounded-xl border border-violet-300/20 bg-violet-300/5 p-4 text-sm">
+                  <p className="font-medium">
+                    Фиксированная длительность слота
+                  </p>
+
+                  <p className="mt-2 text-white/60">
+                    60 минут. Начало — каждый час. Для бронирования
+                    нескольких часов выберите соседние слоты в календаре.
+                  </p>
+                </div>
+
+                <label className="block text-sm">
+                  На сколько дней вперёд открывать бронирование
+
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    step={1}
+                    value={settings.booking_horizon_days}
+                    onChange={(e) =>
+                      update(
+                        "booking_horizon_days",
+                        Number(e.target.value),
+                      )
+                    }
+                    className={inputClass}
+                  />
+                </label>
+
+                <label className="block text-sm">
+                  Минимум минут до начала брони
+
+                  <input
+                    type="number"
+                    min={0}
+                    max={10080}
+                    step={5}
+                    value={settings.minimum_notice_minutes}
+                    onChange={(e) =>
+                      update(
+                        "minimum_notice_minutes",
+                        Number(e.target.value),
+                      )
+                    }
+                    className={inputClass}
+                  />
+
+                  <span className="mt-2 block text-xs text-white/45">
+                    0 — можно бронировать ближайший ещё не начавшийся слот.
+                  </span>
+                </label>
+
+                <div className="block text-sm">
+                  <span>Срок оплаты и доплаты при переносе</span>
+
+                  <div className="mt-2 flex h-11 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white/80">
+                    5 минут
+                  </div>
+
+                  <span className="mt-2 block text-xs text-white/45">
+                    Фиксированный срок. Изменение через административную
+                    панель недоступно.
+                  </span>
+                </div>
+              </div>
+
+              <label className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 p-4 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.allow_same_day_booking}
+                  onChange={(e) =>
+                    update(
+                      "allow_same_day_booking",
+                      e.target.checked,
+                    )
+                  }
+                  className="mt-1 h-4 w-4 accent-violet-500"
+                />
+
+                <span>
+                  <span className="block font-medium">
+                    Разрешить бронирование на сегодня
+                  </span>
+
+                  <span className="mt-1 block text-xs leading-5 text-white/45">
+                    Если выключить, клиентам будут недоступны слоты
+                    на текущую дату клуба.
+                  </span>
                 </span>
-              </span>
-            </label>
-            <label className="mt-5 block max-w-sm text-sm">
-              Скидка на дополнительный час, %
-              <input
-                type="number"
-                min={1}
-                max={90}
-                step={1}
-                value={settings.extension_offer_discount_percent}
-                onChange={(e) => update("extension_offer_discount_percent", Number(e.target.value))}
-                className={inputClass}
-              />
-              <span className="mt-2 block text-xs leading-5 text-white/45">
-                По умолчанию 50%. Допустимый диапазон — от 1 до 90%. Цена фиксируется в момент создания предложения.
-              </span>
-            </label>
-          </section>
+              </label>
+            </section>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button type="button" onClick={() => void save()} disabled={saving} className="rounded-xl bg-violet-500 px-6 py-3 font-semibold transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Сохраняем…" : "Сохранить настройки"}</button>
-            <button type="button" onClick={() => void loadSettings()} disabled={saving || loadingSettings} className="rounded-xl border border-white/15 px-5 py-3 text-sm hover:bg-white/5 disabled:opacity-50">Отменить изменения</button>
-          </div>
-        </>}
+            <section className={`${cardClass} mt-6`}>
+              <h2 className="text-xl font-semibold">
+                Автоматическое предложение продления
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-white/55">
+                За 15 минут до окончания оплаченной сессии клиенту
+                будет предложено продлить её ещё на 60 минут на том
+                же столе, если следующий час свободен и клуб открыт.
+                Новое время окончания устанавливается только после
+                успешной оплаты.
+              </p>
+
+              <label className="mt-5 flex items-start gap-3 rounded-xl border border-white/10 p-4 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.extension_offer_enabled}
+                  onChange={(e) =>
+                    update(
+                      "extension_offer_enabled",
+                      e.target.checked,
+                    )
+                  }
+                  className="mt-1 h-4 w-4 accent-violet-500"
+                />
+
+                <span>
+                  <span className="block font-medium">
+                    Включить автоматическое предложение
+                  </span>
+
+                  <span className="mt-1 block text-xs leading-5 text-white/45">
+                    Уведомление появится в личном кабинете. Выключение
+                    остановит создание новых предложений; уже выданные
+                    предложения сохранятся до окончания срока действия.
+                  </span>
+                </span>
+              </label>
+
+              <label className="mt-5 block max-w-sm text-sm">
+                Скидка на дополнительный час, %
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={2}
+                  value={extensionDiscountInput}
+                  onChange={(e) => {
+                    setExtensionDiscountInput(
+                      e.target.value.replace(/\D/g, ""),
+                    );
+                    setMessage("");
+                  }}
+                  className={inputClass}
+                />
+
+                <span className="mt-2 block text-xs leading-5 text-white/45">
+                  По умолчанию 50%. Допустимый диапазон — от 1 до 90%.
+                  Цена фиксируется в момент создания предложения.
+                </span>
+              </label>
+            </section>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void save()}
+                disabled={saving}
+                className="rounded-xl bg-violet-500 px-6 py-3 font-semibold transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Сохраняем…" : "Сохранить настройки"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void loadSettings()}
+                disabled={saving || loadingSettings}
+                className="rounded-xl border border-white/15 px-5 py-3 text-sm hover:bg-white/5 disabled:opacity-50"
+              >
+                Отменить изменения
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </main>
   );
