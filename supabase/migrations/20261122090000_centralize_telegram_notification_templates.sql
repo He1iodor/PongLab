@@ -143,9 +143,9 @@ BEGIN
         IF NEW.event_key ~
            '^extension-offer:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
         THEN
-            v_operation_id := pg_catalog.substring(
-                NEW.event_key
-                FROM pg_catalog.length('extension-offer:') + 1
+            v_operation_id := pg_catalog.substr(
+                NEW.event_key,
+                pg_catalog.length('extension-offer:') + 1
             )::uuid;
 
             SELECT
