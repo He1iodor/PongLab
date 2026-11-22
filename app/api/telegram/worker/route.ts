@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 const DEFAULT_BATCH_SIZE = 20;
 const MAX_BATCH_SIZE = 20;
 const MAX_BODY_BYTES = 4 * 1024;
-const SUPABASE_TIMEOUT_MS = 1_000;
-const TELEGRAM_TIMEOUT_MS = 2_000;
+const SUPABASE_TIMEOUT_MS = 2_000;
+const TELEGRAM_TIMEOUT_MS = 2_500;
 
 type SupabaseConfig = { url: string; key: string };
 type ClaimedMessage = {
