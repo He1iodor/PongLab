@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BookingTransferAction from "@/components/BookingTransferAction";
+import BookingExtensionOffer from "@/components/BookingExtensionOffer";
 import {
   CalendarDays,
   Clock3,
@@ -838,6 +839,12 @@ export default function MyBookingsPanel({
             const status = getStatus(booking, now);
             const paymentInProgress = isPaymentInProgress(booking);
             const confirmed = booking.status === "confirmed" && booking.payment_status === "succeeded";
+          const endMs = Date.parse(booking.end_at);
+const canShowExtensionOffer =
+  confirmed &&
+  Number.isFinite(endMs) &&
+  endMs > now &&
+  endMs <= now + 16 * 60 * 1000;
             const startMs = Date.parse(booking.start_at);
             const hoursUntilStart = (startMs - now) / (60 * 60 * 1000);
             const deadlineMs = booking.transfer_deadline_at ? Date.parse(booking.transfer_deadline_at) : Number.NaN;
@@ -974,7 +981,12 @@ export default function MyBookingsPanel({
                     onComplete={() => void loadBookings(true)}
                   />
                 )}
-
+                {canShowExtensionOffer && (
+                  <BookingExtensionOffer
+                    bookingId={booking.id}
+                    onComplete={() => void loadBookings(true)}
+                  />
+                )}
                 {cancellable && !cancellationState && (
                   <div className="mt-4 border-t border-white/10 pt-4">
                     <button type="button" onClick={() => setCancellationUi((current) => ({ ...current, [booking.id]: { status: "confirm" } }))}
