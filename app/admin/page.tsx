@@ -464,9 +464,18 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs text-emerald-200">
-          Доступ подтверждён
-        </span>
+                <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:border-violet-300/40 hover:bg-white/5 hover:text-white"
+          >
+            ← Вернуться на сайт
+          </Link>
+
+          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-xs text-emerald-200">
+            Доступ подтверждён
+          </span>
+        </div>
       </header>
 
       <section className="mt-8">
