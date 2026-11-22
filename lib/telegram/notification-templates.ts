@@ -31,12 +31,12 @@ type NotificationTemplate = {
 const templates: Record<TelegramNotificationKey, NotificationTemplate> = {
   booking_pending: {
     title: "Временный резерв создан",
-    message: "Место зарезервировано на время оплаты.",
+    message: "Сессия зарезервирована на 5 минут. Пожалуйста, выполните оплату",
   },
 
   booking_confirmed: {
     title: "Бронирование подтверждено",
-    message: "Оплата прошла, бронирование подтверждено.",
+    message: "Оплата прошла и бронирование подтверждено. Ждем Вас!",
   },
 
   booking_confirmed_update: {
@@ -46,7 +46,7 @@ const templates: Record<TelegramNotificationKey, NotificationTemplate> = {
 
   payment_succeeded: {
     title: "Оплата прошла",
-    message: "Платёж подтверждён, бронирование оплачено.",
+    message: "Платёж подтверждён, сессия оплачена. Ждем Вас!",
   },
 
   payment_failed: {
@@ -66,7 +66,7 @@ const templates: Record<TelegramNotificationKey, NotificationTemplate> = {
 
   training_completed: {
     title: "Тренировка завершена",
-    message: "Завершённая тренировка добавлена в статистику.",
+    message: "Завершённая тренировка добавлена в статистику. Хорошего дня!",
   },
 
   booking_expired: {
@@ -80,7 +80,7 @@ const templates: Record<TelegramNotificationKey, NotificationTemplate> = {
   },
 
   extension_offer: {
-    title: "Продлите игру со скидкой",
+    title: "Поиграем еще?",
     message:
       "Следующий час на вашем столе свободен. Вы можете продлить текущую сессию ещё на {duration_minutes} минут по специальной цене {offer_price} ₽. Предложение действует до окончания текущей сессии.",
   },
