@@ -6,6 +6,7 @@ import FloatingParticles from "@/components/FloatingParticles";
 import HowItWorksModal from "@/components/HowItWorksModal";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function Hero() {
   const mouse = useRef({ x: 0, y: 0 });
@@ -75,19 +76,9 @@ export default function Hero() {
 
               <div className="mt-8 flex flex-wrap gap-4">
 
-                <button
-                  className="
-                    rounded-2xl
-                    px-8
-                    py-4
-                    font-semibold
-                    bg-[#6B30CE]
-                    hover:scale-105
-                    transition
-                  "
-                >
-                  Записаться
-                </button>
+              ont-semibold
+    bg-[#6B30CE]
+    hover:scale-105
 
                 <button
                   onClick={() => setHowItWorksOpen(true)}
