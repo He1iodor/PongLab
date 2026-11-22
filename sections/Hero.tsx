@@ -1,12 +1,13 @@
+
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import Counter from "@/components/Counter";
 import FloatingParticles from "@/components/FloatingParticles";
 import HowItWorksModal from "@/components/HowItWorksModal";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 
 export default function Hero() {
   const mouse = useRef({ x: 0, y: 0 });
@@ -76,9 +77,23 @@ export default function Hero() {
 
               <div className="mt-8 flex flex-wrap gap-4">
 
-              ont-semibold
-    bg-[#6B30CE]
-    hover:scale-105
+                <Link
+                  href="/booking"
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    rounded-2xl
+                    px-8
+                    py-4
+                    font-semibold
+                    bg-[#6B30CE]
+                    hover:scale-105
+                    transition
+                  "
+                >
+                  Записаться
+                </Link>
 
                 <button
                   onClick={() => setHowItWorksOpen(true)}
