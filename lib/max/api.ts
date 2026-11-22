@@ -1,6 +1,4 @@
 
-import "server-only";
-
 const MAX_API_BASE_URL = "https://platform-api2.max.ru";
 const MAX_API_TIMEOUT_MS = 8_000;
 
@@ -35,10 +33,7 @@ function getMaxBotToken(): string {
 
 /**
  * Server-side MAX Bot API client.
- *
  * The access token is sent only in the Authorization header.
- * Do not call this module from client components or expose API errors
- * containing request headers or credentials to users.
  */
 export async function maxApiRequest<T>(
   path: `/${string}`,
