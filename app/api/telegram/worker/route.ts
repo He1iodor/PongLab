@@ -1,5 +1,11 @@
+
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  renderTelegramNotification,
+  type TelegramNotificationKey,
+  type TelegramNotificationVariables,
+} from "@/lib/telegram/notification-templates";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +25,23 @@ type ClaimedMessage = {
 };
 type CompletionStatus = "sent" | "pending" | "dead";
 
+const TELEGRAM_NOTIFICATION_KEYS: readonly string[] = [
+  "booking_pending",
+  "booking_confirmed",
+  "booking_confirmed_update",
+  "payment_succeeded",
+  "payment_failed",
+  "payment_refunded",
+  "schedule_changed",
+  "training_completed",
+  "booking_expired",
+  "booking_cancelled",
+  "extension_offer",
+  "door_completed",
+  "door_failed",
+  "door_expired",
+];
+
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, {
     status,
@@ -28,6 +51,93 @@ function json(body: unknown, status = 200) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isTelegramNotificationKey(
+  value: unknown,
+): value is TelegramNotificationKey {
+  return typeof value === "string" &&
+    TELEGRAM_NOTIFICATION_KEYS.includes(value);
+}
+
+function getTemplateVariables(
+  value: unknown,
+): TelegramNotificationVariables {
+  if (!isRecord(value)) return {};
+
+  const variables: TelegramNotificationVariables = {};
+
+  if (typeof value.studio_name === "string") {
+    variables.studio_name = value.studio_name;
+  }
+
+  if (typeof value.table_name === "string") {
+    variables.table_name = value.table_name;
+  }
+
+  if (typeof value.booking_start === "string") {
+    variables.booking_start = value.booking_start;
+  }
+
+  if (
+    typeof value.offer_price === "number" &&
+    Number.isFinite(value.offer_price)
+  ) {
+    variables.offer_price = value.offer_price;
+  } else if (typeof value.offer_price === "string") {
+    variables.offer_price = value.offer_price;
+  }
+
+  if (
+    typeof value.duration_minutes === "number" &&
+    Number.isInteger(value.duration_minutes) &&
+    value.duration_minutes > 0
+  ) {
+    variables.duration_minutes = value.duration_minutes;
+  }
+
+  return variables;
+}
+
+/**
+ * Supports both new template-based payloads and existing legacy payloads.
+ * Unknown templates fall back to payload.text when it is available.
+ */
+function normalizeTelegramPayload(payload: unknown): unknown {
+  if (!isRecord(payload)) {
+    throw new Error("Message payload must be a JSON object.");
+  }
+
+  if (isTelegramNotificationKey(payload.template_key)) {
+    const variables = getTemplateVariables(payload.variables);
+    const text = renderTelegramNotification(
+      payload.template_key,
+      variables,
+    );
+
+    const normalized: Record<string, unknown> = {
+      ...payload,
+      text,
+    };
+
+    delete normalized.template_key;
+    delete normalized.variables;
+
+    return normalized;
+  }
+
+  // Legacy messages remain compatible.
+  if (typeof payload.text === "string") {
+    return payload;
+  }
+
+  if (payload.template_key !== undefined) {
+    throw new Error(
+      "Unknown Telegram notification template and no legacy text fallback.",
+    );
+  }
+
+  throw new Error("Message payload has neither a template nor text.");
 }
 
 function getSupabaseConfig(): SupabaseConfig | null {
@@ -69,12 +179,23 @@ function buildTelegramMessage(
   chatId: string | number,
   payload: unknown,
 ): Record<string, unknown> {
-  if (!isRecord(payload)) throw new Error("Message payload must be a JSON object.");
-  if (typeof payload.text !== "string" || !payload.text.trim() || payload.text.length > 4096) {
+  if (!isRecord(payload)) {
+    throw new Error("Message payload must be a JSON object.");
+  }
+
+  if (
+    typeof payload.text !== "string" ||
+    !payload.text.trim() ||
+    payload.text.length > 4096
+  ) {
     throw new Error("Message text is missing or exceeds 4096 characters.");
   }
 
-  const message: Record<string, unknown> = { chat_id: chatId, text: payload.text };
+  const message: Record<string, unknown> = {
+    chat_id: chatId,
+    text: payload.text,
+  };
+
   const booleanOptions = [
     "disable_web_page_preview",
     "disable_notification",
@@ -82,7 +203,9 @@ function buildTelegramMessage(
   ] as const;
 
   for (const key of booleanOptions) {
-    if (typeof payload[key] === "boolean") message[key] = payload[key];
+    if (typeof payload[key] === "boolean") {
+      message[key] = payload[key];
+    }
   }
 
   if (
@@ -92,10 +215,14 @@ function buildTelegramMessage(
     message.parse_mode = payload.parse_mode;
   }
 
-  if (isRecord(payload.reply_markup)) message.reply_markup = payload.reply_markup;
+  if (isRecord(payload.reply_markup)) {
+    message.reply_markup = payload.reply_markup;
+  }
+
   if (isRecord(payload.link_preview_options)) {
     message.link_preview_options = payload.link_preview_options;
   }
+
   if (
     typeof payload.message_thread_id === "number" &&
     Number.isSafeInteger(payload.message_thread_id) &&
@@ -127,6 +254,7 @@ async function callSupabaseRpc<T>(
   if (!response.ok) {
     throw new Error(`${functionName} RPC failed with HTTP ${response.status}.`);
   }
+
   return (await response.json()) as T;
 }
 
@@ -135,18 +263,23 @@ async function sendTelegramMessage(
   chatId: string | number,
   payload: unknown,
 ): Promise<void> {
+  const normalizedPayload = normalizeTelegramPayload(payload);
+
   const response = await fetch(
     `https://api.telegram.org/bot${botToken}/sendMessage`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildTelegramMessage(chatId, payload)),
+      body: JSON.stringify(
+        buildTelegramMessage(chatId, normalizedPayload),
+      ),
       cache: "no-store",
       signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
     },
   );
 
   let result: unknown;
+
   try {
     result = await response.json();
   } catch {
@@ -154,12 +287,16 @@ async function sendTelegramMessage(
   }
 
   if (!response.ok || !isRecord(result) || result.ok !== true) {
-    const description = isRecord(result) && typeof result.description === "string"
-      ? result.description.slice(0, 350)
-      : `HTTP ${response.status}`;
-    const code = isRecord(result) && typeof result.error_code === "number"
-      ? result.error_code
-      : response.status;
+    const description =
+      isRecord(result) && typeof result.description === "string"
+        ? result.description.slice(0, 350)
+        : `HTTP ${response.status}`;
+
+    const code =
+      isRecord(result) && typeof result.error_code === "number"
+        ? result.error_code
+        : response.status;
+
     throw new Error(`Telegram API error ${code}: ${description}`);
   }
 }
@@ -171,16 +308,25 @@ async function completeMessage(
   success: boolean,
   error: string | null,
 ): Promise<CompletionStatus> {
-  const result = await callSupabaseRpc<unknown>(config, "complete_messaging_outbox", {
-    p_id: id,
-    p_lock_token: lockToken,
-    p_success: success,
-    p_error: error,
-  });
+  const result = await callSupabaseRpc<unknown>(
+    config,
+    "complete_messaging_outbox",
+    {
+      p_id: id,
+      p_lock_token: lockToken,
+      p_success: success,
+      p_error: error,
+    },
+  );
+
   const status = Array.isArray(result) ? result[0] : result;
+
   if (status !== "sent" && status !== "pending" && status !== "dead") {
-    throw new Error("Outbox completion returned an unexpected status; the lock may be stale.");
+    throw new Error(
+      "Outbox completion returned an unexpected status; the lock may be stale.",
+    );
   }
+
   return status;
 }
 
@@ -190,10 +336,16 @@ async function processMessage(
   message: ClaimedMessage,
 ) {
   if (!isUuid(message.id) || !isUuid(message.lock_token)) {
-    return { sent: false, retried: false, dead: false, error: "Invalid message ID or lock token." };
+    return {
+      sent: false,
+      retried: false,
+      dead: false,
+      error: "Invalid message ID or lock token.",
+    };
   }
 
   let deliveryError: string | null = null;
+
   try {
     await sendTelegramMessage(
       botToken,
@@ -215,43 +367,72 @@ async function processMessage(
   );
 
   if (deliveryError === null && status === "sent") {
-    return { sent: true, retried: false, dead: false, error: null };
+    return {
+      sent: true,
+      retried: false,
+      dead: false,
+      error: null,
+    };
   }
+
   if (deliveryError !== null && status === "pending") {
-    return { sent: false, retried: true, dead: false, error: deliveryError };
+    return {
+      sent: false,
+      retried: true,
+      dead: false,
+      error: deliveryError,
+    };
   }
+
   if (deliveryError !== null && status === "dead") {
-    return { sent: false, retried: false, dead: true, error: deliveryError };
+    return {
+      sent: false,
+      retried: false,
+      dead: true,
+      error: deliveryError,
+    };
   }
-  throw new Error("Telegram delivery and outbox completion returned inconsistent results.");
+
+  throw new Error(
+    "Telegram delivery and outbox completion returned inconsistent results.",
+  );
 }
 
 export async function POST(request: NextRequest) {
-  if (!verifyWorkerSecret(request)) return json({ error: "Unauthorized" }, 401);
+  if (!verifyWorkerSecret(request)) {
+    return json({ error: "Unauthorized" }, 401);
+  }
 
   const config = getSupabaseConfig();
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+
   if (!config || !botToken) {
     console.error("Telegram messaging worker environment is incomplete.");
     return json({ error: "Service temporarily unavailable" }, 503);
   }
 
-  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  const contentLength = Number(
+    request.headers.get("content-length") ?? "0",
+  );
+
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
     return json({ error: "Payload too large" }, 413);
   }
 
   let rawBody: string;
+
   try {
     rawBody = await request.text();
   } catch {
     return json({ error: "Invalid request body" }, 400);
   }
+
   if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
     return json({ error: "Payload too large" }, 413);
   }
 
   let body: unknown = {};
+
   if (rawBody.trim()) {
     try {
       body = JSON.parse(rawBody);
@@ -259,20 +440,37 @@ export async function POST(request: NextRequest) {
       return json({ error: "Invalid JSON" }, 400);
     }
   }
-  if (!isRecord(body)) return json({ error: "Invalid request payload" }, 400);
 
-  const requestedLimit = body.limit === undefined ? DEFAULT_BATCH_SIZE : body.limit;
-  if (typeof requestedLimit !== "number" || !Number.isInteger(requestedLimit) || requestedLimit < 1) {
+  if (!isRecord(body)) {
+    return json({ error: "Invalid request payload" }, 400);
+  }
+
+  const requestedLimit =
+    body.limit === undefined ? DEFAULT_BATCH_SIZE : body.limit;
+
+  if (
+    typeof requestedLimit !== "number" ||
+    !Number.isInteger(requestedLimit) ||
+    requestedLimit < 1
+  ) {
     return json({ error: "Invalid batch limit" }, 400);
   }
+
   const limit = Math.min(requestedLimit, MAX_BATCH_SIZE);
 
   try {
-    const claimed = await callSupabaseRpc<unknown>(config, "claim_messaging_outbox", {
-      p_limit: limit,
-    });
+    const claimed = await callSupabaseRpc<unknown>(
+      config,
+      "claim_messaging_outbox",
+      {
+        p_limit: limit,
+      },
+    );
+
     if (!Array.isArray(claimed)) {
-      console.error("claim_messaging_outbox returned a non-array response.");
+      console.error(
+        "claim_messaging_outbox returned a non-array response.",
+      );
       return json({ error: "Invalid outbox response" }, 502);
     }
 
@@ -283,20 +481,32 @@ export async function POST(request: NextRequest) {
         } catch (error) {
           console.error(
             "Telegram outbox item processing failed:",
-            error instanceof Error ? error.message : "Unknown error",
+            error instanceof Error
+              ? error.message
+              : "Unknown error",
           );
-          return { sent: false, retried: false, dead: false, error: "Processing or completion failed." };
+
+          return {
+            sent: false,
+            retried: false,
+            dead: false,
+            error: "Processing or completion failed.",
+          };
         }
       }),
     );
 
     const summary = {
-      ok: results.every((item) => item.error === null || item.retried || item.dead),
+      ok: results.every(
+        (item) => item.error === null || item.retried || item.dead,
+      ),
       claimed: results.length,
       sent: results.filter((item) => item.sent).length,
       retried: results.filter((item) => item.retried).length,
       dead: results.filter((item) => item.dead).length,
-      errors: results.filter((item) => !item.sent && !item.retried && !item.dead).length,
+      errors: results.filter(
+        (item) => !item.sent && !item.retried && !item.dead,
+      ).length,
     };
 
     return json(summary, summary.errors > 0 ? 503 : 200);
@@ -305,6 +515,7 @@ export async function POST(request: NextRequest) {
       "Telegram messaging worker failed:",
       error instanceof Error ? error.message : "Unknown error",
     );
+
     return json({ error: "Messaging worker failed" }, 503);
   }
 }
