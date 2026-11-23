@@ -67,6 +67,10 @@ function getDisplayWebhookUrl(value: unknown): string | null {
   }
 }
 
+function isOurWebhookUrl(value: unknown): value is string {
+  return getDisplayWebhookUrl(value) === WEBHOOK_BASE_URL;
+}
+
 function buildWebhookDeliveryUrl(bypassSecret: string): string {
   const url = new URL(WEBHOOK_BASE_URL);
   url.searchParams.set("x-vercel-protection-bypass", bypassSecret);
@@ -172,6 +176,57 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Получаем существующие подписки.
+    const current: unknown = await maxApiRequest("/subscriptions");
+    const currentFailure = maxApiFailure(current);
+
+    if (currentFailure) {
+      return json({ ok: false, error: currentFailure }, 502);
+    }
+
+    if (!isRecord(current) || !Array.isArray(current.subscriptions)) {
+      return json(
+        { ok: false, error: "MAX вернул неожиданный формат списка подписок." },
+        502,
+      );
+    }
+
+    // Находим все подписки нашего webhook.
+    const existingUrls = new Set<string>();
+
+    for (const item of current.subscriptions as MaxSubscription[]) {
+      if (isOurWebhookUrl(item.url)) {
+        existingUrls.add(item.url);
+      }
+    }
+
+    // Удаляем старые подписки по полному URL.
+    for (const existingUrl of existingUrls) {
+      const query = new URLSearchParams({ url: existingUrl }).toString();
+
+      const deleted: unknown = await maxApiRequest(
+        `/subscriptions?${query}`,
+        { method: "DELETE" },
+      );
+
+      const deleteFailure = maxApiFailure(deleted);
+
+      if (
+        deleteFailure ||
+        !isRecord(deleted) ||
+        deleted.success !== true
+      ) {
+        return json(
+          {
+            ok: false,
+            error: "MAX не подтвердил удаление предыдущей подписки.",
+          },
+          502,
+        );
+      }
+    }
+
+    // Регистрируем одну новую подписку.
     const deliveryUrl = buildWebhookDeliveryUrl(bypassSecret);
 
     const result: unknown = await maxApiRequest("/subscriptions", {
