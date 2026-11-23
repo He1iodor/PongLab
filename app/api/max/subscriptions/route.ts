@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwner } from "@/app/lib/owner-auth";
 import { maxApiRequest, MaxApiError } from "@/lib/max/api";
@@ -5,7 +6,7 @@ import { maxApiRequest, MaxApiError } from "@/lib/max/api";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const WEBHOOK_URL =
+const WEBHOOK_BASE_URL =
   "https://ponglab-git-feature-heliodor-s-projects.vercel.app/api/max/webhook";
 
 const UPDATE_TYPES = ["bot_started", "bot_stopped"] as const;
@@ -40,6 +41,36 @@ function getWebhookSecret(): string | null {
   }
 
   return secret;
+}
+
+function getAutomationBypassSecret(): string | null {
+  const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+
+  if (!secret || secret.length < 16 || secret.length > 512) {
+    return null;
+  }
+
+  return secret;
+}
+
+function getDisplayWebhookUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  try {
+    const url = new URL(value);
+
+    if (url.protocol !== "https:") return null;
+
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+function buildWebhookDeliveryUrl(bypassSecret: string): string {
+  const url = new URL(WEBHOOK_BASE_URL);
+  url.searchParams.set("x-vercel-protection-bypass", bypassSecret);
+  return url.toString();
 }
 
 function maxApiFailure(result: unknown) {
@@ -90,7 +121,7 @@ export async function GET(request: NextRequest) {
 
     const subscriptions = (result.subscriptions as MaxSubscription[]).map(
       (item) => ({
-        url: typeof item.url === "string" ? item.url : null,
+        url: getDisplayWebhookUrl(item.url),
         time: typeof item.time === "number" ? item.time : null,
         update_types: Array.isArray(item.update_types)
           ? item.update_types.filter(
@@ -127,11 +158,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const bypassSecret = getAutomationBypassSecret();
+
+  if (!bypassSecret) {
+    return json(
+      {
+        ok: false,
+        error:
+          "VERCEL_AUTOMATION_BYPASS_SECRET отсутствует или недопустим для Preview.",
+      },
+      503,
+    );
+  }
+
   try {
+    const deliveryUrl = buildWebhookDeliveryUrl(bypassSecret);
+
     const result: unknown = await maxApiRequest("/subscriptions", {
       method: "POST",
       body: JSON.stringify({
-        url: WEBHOOK_URL,
+        url: deliveryUrl,
         update_types: [...UPDATE_TYPES],
         secret,
       }),
@@ -153,7 +199,7 @@ export async function POST(request: NextRequest) {
     return json({
       ok: true,
       message: "Подписка MAX зарегистрирована.",
-      url: WEBHOOK_URL,
+      url: WEBHOOK_BASE_URL,
       update_types: [...UPDATE_TYPES],
     });
   } catch (error) {
