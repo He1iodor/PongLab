@@ -10,7 +10,9 @@ export type ApiRateLimitRoute =
   | "availability"
   | "booking_hold"
   | "telegram_link"
-  | "telegram_webhook";
+  | "telegram_webhook"
+  | "max_link"
+  | "max_webhook";
 
 type ApiRateLimitResult = {
   allowed: boolean;
