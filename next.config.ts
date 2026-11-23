@@ -41,10 +41,13 @@ const noIndexNoFollow = [
     value: "noindex, nofollow",
   },
 ];
-// Rebuild Preview with the additional MAX CA certificate.
+
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/max/check": [
+      "./certs/russian_trusted_root_ca.pem",
+    ],
+    "/api/account/max/link": [
       "./certs/russian_trusted_root_ca.pem",
     ],
   },
