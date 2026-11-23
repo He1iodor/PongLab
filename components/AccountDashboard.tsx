@@ -11,6 +11,7 @@ import {
   RefreshCw,
   UserRound,
   Send,
+  MessageCircle,
 } from "lucide-react";
 
 import AccountBookingsPanel from "@/components/AccountBookingsPanel";
@@ -19,6 +20,7 @@ import AccountNotificationsPanel from "@/components/AccountNotificationsPanel";
 import AccountProfilePanel from "@/components/AccountProfilePanel";
 import AccountStatsPanel from "@/components/AccountStatsPanel";
 import AccountTelegramPanel from "@/components/AccountTelegramPanel";
+import AccountMaxPanel from "@/components/AccountMaxPanel";
 import BookingCalendar from "@/components/BookingCalendar";
 
 type Tab =
@@ -27,6 +29,7 @@ type Tab =
   | "stats"
   | "notifications"
   | "telegram"
+  | "max"
   | "new";
 
 const tabs: Array<{
@@ -39,6 +42,7 @@ const tabs: Array<{
   { id: "stats", label: "Статистика", icon: BarChart3 },
   { id: "notifications", label: "Уведомления", icon: Bell },
   { id: "telegram", label: "Telegram", icon: Send },
+  { id: "max", label: "MAX", icon: MessageCircle },
 ];
 
 export default function AccountDashboard() {
@@ -46,7 +50,11 @@ export default function AccountDashboard() {
   const requestedTab = searchParams.get("tab");
 
   const initialTab: Tab =
-    requestedTab === "telegram" ? "telegram" : "bookings";
+    requestedTab === "telegram"
+      ? "telegram"
+      : requestedTab === "max"
+        ? "max"
+        : "bookings";
 
   const [tab, setTab] = useState<Tab>(initialTab);
   const [loading, setLoading] = useState(true);
@@ -222,6 +230,7 @@ export default function AccountDashboard() {
           {tab === "stats" && <AccountStatsPanel />}
           {tab === "notifications" && <AccountNotificationsPanel />}
           {tab === "telegram" && <AccountTelegramPanel />}
+          {tab === "max" && <AccountMaxPanel />}
 
           {tab === "new" && (
             <div>
