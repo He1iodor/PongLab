@@ -124,8 +124,8 @@ export default function AccountTelegramPanel() {
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-white">Telegram</h2>
           <p className="mt-1 text-sm leading-6 text-white/50">
-            Для удобства вы можете получать уведомления о занятиях и работе
-            PongLab прямо в приложении Telegram.
+            Для вашего удобства мы разработали мини-приложение в Telegram. 
+            В нем можно использовать функционал сайта PongLab, а также получать важные уведомления.
           </p>
         </div>
       </div>
