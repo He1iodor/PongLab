@@ -62,6 +62,7 @@ export default function MaxAppClient() {
   const [fullName, setFullName] = useState("");
   const [tab, setTab] = useState<Tab>("bookings");
   const [loggingOut, setLoggingOut] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const authStarted = useRef(false);
 
@@ -105,8 +106,6 @@ export default function MaxAppClient() {
           throw new Error("Сервер не подтвердил авторизацию.");
         }
       } else {
-        // Обычный браузер может открыть приложение
-        // при наличии действующей сессии PongLab.
         const response = await fetch("/api/auth/session", {
           credentials: "same-origin",
           cache: "no-store",
@@ -147,6 +146,41 @@ export default function MaxAppClient() {
       );
     }
   }, []);
+
+  const loadUnreadCount = useCallback(async () => {
+    try {
+      const response = await fetch("/api/account/notifications", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      if (!response.ok) return;
+
+      const result = await response.json().catch(() => ({}));
+      setUnreadCount(Math.max(0, Number(result.unread_count) || 0));
+    } catch {
+      // Сохраняем последнее известное значение при временной ошибке сети.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status !== "ready") return;
+
+    void loadUnreadCount();
+
+    const timer = window.setInterval(
+      () => void loadUnreadCount(),
+      30000,
+    );
+
+    const refreshOnFocus = () => void loadUnreadCount();
+    window.addEventListener("focus", refreshOnFocus);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshOnFocus);
+    };
+  }, [status, loadUnreadCount]);
 
   const initializeMax = useCallback(() => {
     const webApp = window.WebApp;
@@ -371,14 +405,30 @@ export default function MaxAppClient() {
                   return (
                     <button
                       key={id}
-                      onClick={() => setTab(id)}
+                      onClick={() => {
+                        setTab(id);
+                        if (id === "notifications") {
+                          void loadUnreadCount();
+                        }
+                      }}
                       className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 transition ${
                         active
                           ? "text-[#C5ACFF]"
                           : "text-white/40"
                       }`}
                     >
-                      <Icon size={20} />
+                      <span className="relative inline-flex">
+                        <Icon size={20} />
+
+                        {id === "notifications" && unreadCount > 0 && (
+                          <span
+                            aria-label={"Непрочитанных уведомлений: " + unreadCount}
+                            className="absolute -right-3 -top-2 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white shadow-lg"
+                          >
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </span>
+                        )}
+                      </span>
 
                       <span className="truncate text-[10px] font-medium">
                         {label}
