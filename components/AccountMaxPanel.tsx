@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -9,6 +8,7 @@ import {
   MessageCircle,
   RefreshCw,
 } from "lucide-react";
+import AccountChannelNotificationSettings from "@/components/AccountChannelNotificationSettings";
 
 type MaxStatus = {
   authenticated?: boolean;
@@ -143,9 +143,9 @@ export default function AccountMaxPanel() {
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-white">MAX</h2>
           <p className="mt-1 text-sm leading-6 text-white/50">
-            Подключите MAX, чтобы получать уведомления о бронированиях
-            и пользоваться функциями PongLab через бота.
-            MAX и Telegram можно использовать одновременно.
+            Для удобства вы можете получать уведомления о бронированиях и
+            работе PongLab прямо в приложении MAX. MAX и Telegram можно
+            использовать одновременно.
           </p>
         </div>
       </div>
@@ -250,6 +250,8 @@ export default function AccountMaxPanel() {
           </p>
         )}
       </div>
+
+      <AccountChannelNotificationSettings channel="max" />
     </section>
   );
 }
