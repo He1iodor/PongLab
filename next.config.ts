@@ -50,6 +50,9 @@ const nextConfig: NextConfig = {
     "/api/account/max/link": [
       "./certs/russian_trusted_root_ca.pem",
     ],
+    "/api/max/worker": [
+      "./certs/russian_trusted_root_ca.pem",
+    ],
   },
 
   async headers() {
