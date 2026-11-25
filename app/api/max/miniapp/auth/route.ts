@@ -1,4 +1,4 @@
-```typescript
+
 import {
   createHash,
   createHmac,
@@ -47,10 +47,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   );
 }
 
-/**
- * Проверяет подписанные launch-параметры MAX.
- * ID пользователя извлекается только после проверки HMAC.
- */
 function verifyMaxInitData(
   rawInitData: string,
   botToken: string,
@@ -99,11 +95,9 @@ function verifyMaxInitData(
   const dataCheckString = Array.from(values.entries())
     .filter(([key]) => key !== "hash")
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([key, value]) => `${key}=${value}`)
+    .map(([key, value]) => key + "=" + value)
     .join("\n");
 
-  // MAX:
-  // secret_key = HMAC_SHA256(key="WebAppData", message=bot_token)
   const secretKey = createHmac("sha256", "WebAppData")
     .update(botToken)
     .digest();
@@ -121,7 +115,6 @@ function verifyMaxInitData(
     return { ok: false, reason: "invalid" };
   }
 
-  // Данные пользователя читаются только после проверки подписи.
   let user: unknown;
 
   try {
@@ -183,7 +176,6 @@ function getRpcError(error: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  // Разрешаем запросы только с того же домена.
   const origin = request.headers.get("origin");
 
   if (!origin || origin !== request.nextUrl.origin) {
@@ -229,7 +221,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Ограничение запросов по IP.
     const ipLimit = await consumeApiRateLimit({
       supabaseUrl: config.url,
       serviceKey: config.key,
@@ -296,7 +287,6 @@ export async function POST(request: NextRequest) {
 
     const maxUserId = verified.maxUserId;
 
-    // Ограничение запросов по подтверждённому MAX ID.
     const userLimit = await consumeApiRateLimit({
       supabaseUrl: config.url,
       serviceKey: config.key,
@@ -308,8 +298,6 @@ export async function POST(request: NextRequest) {
       return rateLimitResponse(userLimit.retryAfterSeconds);
     }
 
-    // Создаём стандартную сессию PongLab.
-    // В Supabase передаём только SHA-256 токена.
     const sessionToken = randomBytes(32).toString("hex");
 
     const sessionTokenHash = createHash("sha256")
@@ -416,7 +404,6 @@ export async function POST(request: NextRequest) {
       linked: true,
     });
 
-    // Используем ту же cookie, что и обычный сайт PongLab.
     response.cookies.set(
       "ponglab_session",
       sessionToken,
@@ -442,4 +429,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-```
