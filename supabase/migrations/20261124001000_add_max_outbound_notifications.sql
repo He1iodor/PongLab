@@ -95,7 +95,7 @@ $function$;
 
 
 -- ============================================================
--- 3. PRESERVE THE EXISTING TELEGRAM RPC
+-- 3. PRESERVE TELEGRAM RPC, CLAIM TELEGRAM ONLY
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.claim_messaging_outbox(
@@ -183,6 +183,7 @@ $function$;
 
 -- ============================================================
 -- 5. ENQUEUE ACCOUNT NOTIFICATIONS FOR MAX
+-- recipient_chat_id stores MAX user_id for direct messages.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.enqueue_max_account_notification()
@@ -192,15 +193,15 @@ SECURITY DEFINER
 SET search_path = ''
 AS $function$
 DECLARE
-    v_chat_id bigint;
+    v_user_id bigint;
     v_enabled boolean;
     v_inserted integer;
 BEGIN
     SELECT
-        ma.chat_id,
+        ma.max_user_id,
         ma.notifications_enabled
     INTO
-        v_chat_id,
+        v_user_id,
         v_enabled
     FROM public.max_accounts AS ma
     WHERE ma.user_id = NEW.user_id
@@ -210,7 +211,7 @@ BEGIN
 
     IF NOT FOUND
        OR v_enabled IS NOT TRUE
-       OR v_chat_id IS NULL THEN
+       OR v_user_id IS NULL THEN
         RETURN NEW;
     END IF;
 
@@ -222,7 +223,7 @@ BEGIN
     )
     VALUES (
         'max',
-        v_chat_id,
+        v_user_id,
         pg_catalog.jsonb_build_object(
             'text',
             pg_catalog.left(
@@ -302,7 +303,6 @@ DO $block$
 DECLARE
     v_job_id bigint;
 BEGIN
-    -- Make the migration safe against duplicate MAX cron jobs.
     FOR v_job_id IN
         SELECT jobid
         FROM cron.job
