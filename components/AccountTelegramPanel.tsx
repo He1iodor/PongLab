@@ -1,8 +1,8 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, Loader2, RefreshCw, Send } from "lucide-react";
+import AccountChannelNotificationSettings from "@/components/AccountChannelNotificationSettings";
 
 type TelegramStatus = {
   authenticated?: boolean;
@@ -122,12 +122,10 @@ export default function AccountTelegramPanel() {
         </div>
 
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-white">
-            Telegram
-          </h2>
+          <h2 className="text-lg font-semibold text-white">Telegram</h2>
           <p className="mt-1 text-sm leading-6 text-white/50">
-            Подключите Telegram, чтобы получать уведомления о занятиях
-            и пользоваться функциями PongLab через бота.
+            Для удобства вы можете получать уведомления о занятиях и работе
+            PongLab прямо в приложении Telegram.
           </p>
         </div>
       </div>
@@ -226,6 +224,8 @@ export default function AccountTelegramPanel() {
           </p>
         )}
       </div>
+
+      <AccountChannelNotificationSettings channel="telegram" />
     </section>
   );
 }
