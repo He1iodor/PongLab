@@ -6,7 +6,7 @@ BEGIN;
 -- ============================================================
 
 ALTER TABLE public.messaging_outbox
-    DROP CONSTRAINT messaging_outbox_channel_check;
+    DROP CONSTRAINT IF EXISTS messaging_outbox_channel_check;
 
 ALTER TABLE public.messaging_outbox
     ADD CONSTRAINT messaging_outbox_channel_check
@@ -15,6 +15,8 @@ ALTER TABLE public.messaging_outbox
 
 -- ============================================================
 -- 2. CHANNEL-SCOPED MESSAGE CLAIMING
+-- MAX: no more than one message per recipient per worker run.
+-- TELEGRAM: preserve the existing batch behavior.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.claim_messaging_outbox_for_channel(
@@ -56,15 +58,40 @@ BEGIN
       AND locked_at < clock_timestamp() - interval '5 minutes';
 
     RETURN QUERY
-    WITH candidates AS (
-        SELECT o.id
+    WITH ranked_candidates AS (
+        SELECT
+            o.id,
+            o.recipient_chat_id,
+            o.next_attempt_at,
+            o.created_at,
+            CASE
+                WHEN p_channel = 'max' THEN
+                    row_number() OVER (
+                        PARTITION BY o.recipient_chat_id
+                        ORDER BY
+                            o.next_attempt_at,
+                            o.created_at,
+                            o.id
+                    )
+                ELSE 1
+            END AS recipient_rank
         FROM public.messaging_outbox AS o
         WHERE o.channel = p_channel
           AND o.status = 'pending'
           AND o.next_attempt_at <= clock_timestamp()
-        ORDER BY o.next_attempt_at, o.created_at
+    ),
+    candidates AS (
+        SELECT o.id
+        FROM public.messaging_outbox AS o
+        JOIN ranked_candidates AS rc
+          ON rc.id = o.id
+        WHERE rc.recipient_rank = 1
+        ORDER BY
+            o.next_attempt_at,
+            o.created_at,
+            o.id
         LIMIT v_limit
-        FOR UPDATE SKIP LOCKED
+        FOR UPDATE OF o SKIP LOCKED
     ),
     claimed AS (
         UPDATE public.messaging_outbox AS o
