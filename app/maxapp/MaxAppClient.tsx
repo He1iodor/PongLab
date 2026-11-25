@@ -22,8 +22,6 @@ import BookingCalendar from "@/components/BookingCalendar";
 
 type MaxWebApp = {
   initData: string;
-  ready: () => void;
-  expand: () => void;
 };
 
 declare global {
@@ -154,9 +152,8 @@ export default function MaxAppClient() {
     const webApp = window.WebApp;
 
     if (webApp) {
-      webApp.ready();
-      webApp.expand();
-
+      // MAX передаёт исходную строку initData.
+      // Проверка подлинности выполняется на сервере.
       void authenticate(webApp.initData || "");
       return;
     }
