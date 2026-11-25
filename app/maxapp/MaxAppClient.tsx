@@ -170,7 +170,7 @@ export default function MaxAppClient() {
 
     const timer = window.setInterval(
       () => void loadUnreadCount(),
-      30000,
+      3000,
     );
 
     const refreshOnFocus = () => void loadUnreadCount();
