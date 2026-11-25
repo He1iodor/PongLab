@@ -133,10 +133,20 @@ function verifyMaxInitData(
     return { ok: false, reason: "invalid" };
   }
 
-  const maxUserId = user.user_id;
+  // MAX Bridge использует user.id.
+  // user.user_id оставлен только для совместимости
+  // с ранее встречавшимся форматом данных.
+  const rawMaxUserId = user.id ?? user.user_id;
+
+  const maxUserId =
+    typeof rawMaxUserId === "number"
+      ? rawMaxUserId
+      : typeof rawMaxUserId === "string" &&
+          /^\d+$/.test(rawMaxUserId)
+        ? Number(rawMaxUserId)
+        : NaN;
 
   if (
-    typeof maxUserId !== "number" ||
     !Number.isSafeInteger(maxUserId) ||
     maxUserId <= 0
   ) {
