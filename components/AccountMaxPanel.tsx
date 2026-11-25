@@ -143,9 +143,8 @@ export default function AccountMaxPanel() {
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-white">MAX</h2>
           <p className="mt-1 text-sm leading-6 text-white/50">
-            Для удобства вы можете получать уведомления о бронированиях и
-            работе PongLab прямо в приложении MAX. MAX и Telegram можно
-            использовать одновременно.
+            Для вашего удобства мы разработали мини-приложение в Max. 
+            В нем можно использовать функционал сайта PongLab, а также получать важные уведомления.
           </p>
         </div>
       </div>
