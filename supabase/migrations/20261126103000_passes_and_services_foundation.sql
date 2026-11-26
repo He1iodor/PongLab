@@ -224,8 +224,8 @@ CREATE TABLE public.booking_pass_allocations (
                 AND restored_at IS NULL
 
             WHEN 'restored' THEN
-                consumed_at IS NULL
-                AND released_at IS NOT NULL
+                consumed_at IS NOT NULL
+                AND released_at IS NULL
                 AND restored_at IS NOT NULL
 
             ELSE false
@@ -235,6 +235,109 @@ CREATE TABLE public.booking_pass_allocations (
 
 CREATE INDEX booking_pass_allocations_pass_status_idx
     ON public.booking_pass_allocations(user_pass_id, status);
+
+
+-- =========================================================
+-- 4A. BOOKING PASS ALLOCATION STATE MACHINE
+-- Allowed transitions:
+-- reserved -> consumed
+-- reserved -> released
+-- consumed -> restored
+-- released/restored are terminal states.
+-- Pass balance is changed by separate atomic RPCs.
+-- =========================================================
+
+CREATE FUNCTION public.enforce_booking_pass_allocation_transition()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.status <> 'reserved'
+           OR NEW.consumed_at IS NOT NULL
+           OR NEW.released_at IS NOT NULL
+           OR NEW.restored_at IS NOT NULL THEN
+            RAISE EXCEPTION
+                'A new booking pass allocation must start as reserved';
+        END IF;
+
+        RETURN NEW;
+    END IF;
+
+    IF ROW(
+        OLD.booking_id,
+        OLD.user_pass_id,
+        OLD.slot_price_snapshot_rub,
+        OLD.reserved_at
+    ) IS DISTINCT FROM ROW(
+        NEW.booking_id,
+        NEW.user_pass_id,
+        NEW.slot_price_snapshot_rub,
+        NEW.reserved_at
+    ) THEN
+        RAISE EXCEPTION
+            'Booking pass allocation identity and snapshot are immutable';
+    END IF;
+
+    IF OLD.status = NEW.status THEN
+        IF ROW(
+            OLD.consumed_at,
+            OLD.released_at,
+            OLD.restored_at
+        ) IS DISTINCT FROM ROW(
+            NEW.consumed_at,
+            NEW.released_at,
+            NEW.restored_at
+        ) THEN
+            RAISE EXCEPTION
+                'Booking pass allocation timestamps cannot be edited';
+        END IF;
+
+        RETURN NEW;
+    END IF;
+
+    IF OLD.status = 'reserved' AND NEW.status = 'consumed' THEN
+        IF NEW.consumed_at IS NULL
+           OR NEW.released_at IS NOT NULL
+           OR NEW.restored_at IS NOT NULL THEN
+            RAISE EXCEPTION
+                'Invalid reserved-to-consumed transition';
+        END IF;
+
+    ELSIF OLD.status = 'reserved' AND NEW.status = 'released' THEN
+        IF NEW.consumed_at IS NOT NULL
+           OR NEW.released_at IS NULL
+           OR NEW.restored_at IS NOT NULL THEN
+            RAISE EXCEPTION
+                'Invalid reserved-to-released transition';
+        END IF;
+
+    ELSIF OLD.status = 'consumed' AND NEW.status = 'restored' THEN
+        IF OLD.consumed_at IS NULL
+           OR NEW.consumed_at IS DISTINCT FROM OLD.consumed_at
+           OR NEW.released_at IS NOT NULL
+           OR NEW.restored_at IS NULL THEN
+            RAISE EXCEPTION
+                'Invalid consumed-to-restored transition';
+        END IF;
+
+    ELSE
+        RAISE EXCEPTION
+            'Unsupported booking pass allocation transition: % -> %',
+            OLD.status,
+            NEW.status;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER booking_pass_allocations_state_machine
+BEFORE INSERT OR UPDATE
+ON public.booking_pass_allocations
+FOR EACH ROW
+EXECUTE FUNCTION public.enforce_booking_pass_allocation_transition();
 
 
 -- =========================================================
@@ -840,6 +943,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     public.booking_service_payment_allocations,
     public.payment_refund_allocations
 TO service_role;
+
+REVOKE ALL ON FUNCTION public.enforce_booking_pass_allocation_transition()
+FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.prevent_pass_transaction_mutation()
 FROM PUBLIC, anon, authenticated;
