@@ -609,21 +609,22 @@ export default function AccountBookingsPanel({
     return () => window.clearInterval(timer);
   }, [activeConfirmed, load]);
 
-  const sorted = [...bookings].sort((a, b) => {
+    const sorted = [...bookings].sort((a, b) => {
     const aHold = isActiveUnpaidHold(a, now);
     const bHold = isActiveUnpaidHold(b, now);
 
+    // Только действующие временные резервы имеют отдельный приоритет.
     if (aHold !== bHold) return aHold ? -1 : 1;
 
-    const aStart = Date.parse(a.start_at);
-    const bStart = Date.parse(b.start_at);
-    const aFuture = aStart >= now;
-    const bFuture = bStart >= now;
+    // Остальные записи сортируются по времени оплаты,
+    // а при отсутствии оплаты — по времени создания.
+    const aPurchaseAt = Date.parse(a.transfer_purchase_at || "");
+    const bPurchaseAt = Date.parse(b.transfer_purchase_at || "");
 
-    if (aFuture && !bFuture) return -1;
-    if (!aFuture && bFuture) return 1;
+    const aTime = Number.isFinite(aPurchaseAt) ? aPurchaseAt : 0;
+    const bTime = Number.isFinite(bPurchaseAt) ? bPurchaseAt : 0;
 
-    return aFuture ? aStart - bStart : bStart - aStart;
+    return bTime - aTime;
   });
 
   const cancelBooking = async (bookingId: string) => {
