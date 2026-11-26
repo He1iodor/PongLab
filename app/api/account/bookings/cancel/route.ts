@@ -27,6 +27,10 @@ type RefundRow = {
   idempotency_key: string;
 };
 
+type HoldCancellationResult = {
+  state?: string;
+};
+
 function errorResponse(message: string, status: number) {
   return NextResponse.json(
     { error: message },
@@ -169,6 +173,41 @@ export async function POST(request: NextRequest) {
       return errorResponse("Сессия истекла. Войдите повторно.", 401);
     }
 
+    // Сначала проверяем, является ли бронь неоплаченным временным резервом.
+    // Эта операция не затрагивает возвраты по оплаченным бронированиям.
+    const holdResult = await supabaseRpc<HoldCancellationResult>(
+      "cancel_unpaid_booking_hold",
+      {
+        p_booking_id: bookingId,
+        p_user_id: userId,
+      },
+    );
+
+    if (
+      holdResult?.state === "cancelled" ||
+      holdResult?.state === "already_cancelled"
+    ) {
+      return NextResponse.json(
+        { success: true, state: "cancelled" },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    if (holdResult?.state === "expired") {
+      return errorResponse(
+        "Время временного резерва истекло. Слот уже освобождён.",
+        409,
+      );
+    }
+
+    if (holdResult?.state === "payment_in_progress") {
+      return errorResponse(
+        "Оплата уже начата. Отменить резерв этой операцией нельзя.",
+        409,
+      );
+    }
+
+    // Для оплаченных броней продолжается прежний процесс возврата.
     const prepared = await supabaseRpc<Record<string, unknown>>(
       "prepare_customer_booking_cancellation",
       {
@@ -273,7 +312,7 @@ export async function POST(request: NextRequest) {
         success: true,
         state: "processing",
         message: hasPending
-          ? "Часть возвратов ещё обрабатывается YooKassa. Бронирование остаётся активным."
+          ? "Часть возвратов ещё обрабатывается YooKassa. Бронирование остаётся активной."
           : needsRetry
             ? "Один из возвратов требует повторной проверки. Бронирование остаётся активным."
             : "Возвраты обрабатываются. Проверьте статус позднее.",
@@ -289,7 +328,7 @@ export async function POST(request: NextRequest) {
     });
 
     return errorResponse(
-      "Не удалось подтвердить возврат. Бронь не отменена. Повторите проверку позже.",
+      "Не удалось подтвердить отмену. Бронь не отменена. Повторите проверку позже.",
       503,
     );
   }
