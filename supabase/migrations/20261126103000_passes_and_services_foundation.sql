@@ -3,7 +3,6 @@ BEGIN;
 
 -- =========================================================
 -- 1. OWNER TARIFF TEMPLATES
--- One tariff belongs to one city.
 -- =========================================================
 
 CREATE TABLE public.pass_plans (
@@ -25,8 +24,6 @@ CREATE INDEX pass_plans_city_active_idx
 
 -- =========================================================
 -- 2. PURCHASED USER PASSES
--- Snapshot preserves tariff conditions at purchase time.
--- Validity starts only after confirmed payment.
 -- =========================================================
 
 CREATE TABLE public.user_passes (
@@ -89,7 +86,6 @@ CREATE INDEX user_passes_city_status_idx
 
 -- =========================================================
 -- 3. PASS TRANSACTION LEDGER
--- Append-only journal.
 -- =========================================================
 
 CREATE TABLE public.pass_transactions (
@@ -175,7 +171,6 @@ CREATE INDEX pass_transactions_booking_idx
 
 -- =========================================================
 -- 4. BOOKING TO PASS ALLOCATION
--- One booking consumes at most one pass hour.
 -- =========================================================
 
 CREATE TABLE public.booking_pass_allocations (
@@ -239,12 +234,6 @@ CREATE INDEX booking_pass_allocations_pass_status_idx
 
 -- =========================================================
 -- 4A. BOOKING PASS ALLOCATION STATE MACHINE
--- Allowed transitions:
--- reserved -> consumed
--- reserved -> released
--- consumed -> restored
--- released/restored are terminal states.
--- Pass balance is changed by separate atomic RPCs.
 -- =========================================================
 
 CREATE FUNCTION public.enforce_booking_pass_allocation_transition()
@@ -342,7 +331,6 @@ EXECUTE FUNCTION public.enforce_booking_pass_allocation_transition();
 
 -- =========================================================
 -- 5. STUDIO SERVICE SETTINGS
--- One configuration per service type per studio.
 -- =========================================================
 
 CREATE TABLE public.studio_services (
@@ -386,7 +374,6 @@ CREATE INDEX studio_services_studio_enabled_idx
 
 -- =========================================================
 -- 6. SERVICE GROUP SNAPSHOTS
--- One selection may cover one or multiple bookings.
 -- =========================================================
 
 CREATE TABLE public.booking_service_groups (
@@ -396,7 +383,7 @@ CREATE TABLE public.booking_service_groups (
         REFERENCES public.users(id) ON DELETE RESTRICT,
 
     studio_service_id uuid
-        REFERENCES public.studio_services(id) ON DELETE SET NULL,
+        REFERENCES public.studio_services(id) ON DELETE RESTRICT,
 
     service_key text NOT NULL
         CHECK (service_key IN ('joint_play', 'coach_session')),
@@ -448,7 +435,6 @@ CREATE INDEX booking_service_groups_user_created_idx
 
 -- =========================================================
 -- 7. SERVICE ALLOCATION PER BOOKING
--- Each slot receives its own allocated amount.
 -- =========================================================
 
 CREATE TABLE public.booking_services (
@@ -459,6 +445,10 @@ CREATE TABLE public.booking_services (
 
     booking_id uuid NOT NULL
         REFERENCES public.bookings(id) ON DELETE RESTRICT,
+
+    -- Stable order for distributing indivisible group prices.
+    -- Remainder RUB is assigned to the earliest slots.
+    slot_ordinal integer NOT NULL CHECK (slot_ordinal > 0),
 
     allocated_amount_rub integer NOT NULL
         CHECK (allocated_amount_rub >= 0),
@@ -482,7 +472,10 @@ CREATE TABLE public.booking_services (
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
 
     CONSTRAINT booking_services_group_booking_unique
-        UNIQUE (service_group_id, booking_id)
+        UNIQUE (service_group_id, booking_id),
+
+    CONSTRAINT booking_services_group_ordinal_unique
+        UNIQUE (service_group_id, slot_ordinal)
 );
 
 CREATE INDEX booking_services_booking_idx
@@ -494,7 +487,6 @@ CREATE INDEX booking_services_group_idx
 
 -- =========================================================
 -- 8. SERVICE PAYMENT ALLOCATIONS
--- Separates service payments from base booking price.
 -- =========================================================
 
 CREATE TABLE public.booking_service_payment_allocations (
@@ -520,7 +512,6 @@ CREATE INDEX booking_service_payment_group_idx
 
 -- =========================================================
 -- 9. SERVICE REFUND ALLOCATIONS
--- Links provider refunds to exact service-slot allocations.
 -- =========================================================
 
 CREATE TABLE public.payment_refund_allocations (
@@ -552,7 +543,6 @@ CREATE INDEX payment_refund_allocations_service_payment_idx
 
 -- =========================================================
 -- 10. PASS LEDGER IMMUTABILITY
--- Ledger rows cannot be edited or deleted.
 -- =========================================================
 
 CREATE FUNCTION public.prevent_pass_transaction_mutation()
@@ -574,8 +564,6 @@ EXECUTE FUNCTION public.prevent_pass_transaction_mutation();
 
 -- =========================================================
 -- 11. SERVICE SNAPSHOT IMMUTABILITY
--- Snapshot fields cannot be changed after creation.
--- Status and refund fields remain manageable by server logic.
 -- =========================================================
 
 CREATE FUNCTION public.prevent_service_snapshot_mutation()
@@ -616,10 +604,12 @@ BEGIN
         IF ROW(
             OLD.service_group_id,
             OLD.booking_id,
+            OLD.slot_ordinal,
             OLD.allocated_amount_rub
         ) IS DISTINCT FROM ROW(
             NEW.service_group_id,
             NEW.booking_id,
+            NEW.slot_ordinal,
             NEW.allocated_amount_rub
         ) THEN
             RAISE EXCEPTION
@@ -644,7 +634,6 @@ EXECUTE FUNCTION public.prevent_service_snapshot_mutation();
 
 -- =========================================================
 -- 12. PAYMENT ALLOCATION IMMUTABILITY
--- Payment and refund allocation rows are append-only.
 -- =========================================================
 
 CREATE FUNCTION public.prevent_service_payment_allocation_mutation()
@@ -673,10 +662,45 @@ EXECUTE FUNCTION public.prevent_service_payment_allocation_mutation();
 
 -- =========================================================
 -- 13. DEFERRED SERVICE GROUP TOTAL VALIDATION
--- At transaction commit:
--- - allocation count must equal slot_count;
--- - allocated amounts must equal total_price_rub.
 -- =========================================================
+
+CREATE FUNCTION public.lock_booking_service_group_for_allocation()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+    v_group_id uuid;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        v_group_id := OLD.service_group_id;
+    ELSE
+        v_group_id := NEW.service_group_id;
+    END IF;
+
+    PERFORM 1
+    FROM public.booking_service_groups
+    WHERE id = v_group_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Booking service group does not exist';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER booking_services_lock_group
+BEFORE INSERT OR UPDATE OR DELETE
+ON public.booking_services
+FOR EACH ROW
+EXECUTE FUNCTION public.lock_booking_service_group_for_allocation();
+
 
 CREATE FUNCTION public.check_booking_service_group_totals()
 RETURNS trigger
@@ -687,8 +711,11 @@ DECLARE
     v_group_id uuid;
     v_expected_count integer;
     v_expected_total integer;
+    v_unit_price integer;
+    v_charge_mode text;
     v_actual_count bigint;
     v_actual_total bigint;
+    v_invalid_allocation_count bigint;
 BEGIN
     IF TG_TABLE_NAME = 'booking_service_groups' THEN
         IF TG_OP = 'DELETE' THEN
@@ -704,10 +731,19 @@ BEGIN
         END IF;
     END IF;
 
-    SELECT slot_count, total_price_rub
-    INTO v_expected_count, v_expected_total
+    SELECT
+        slot_count,
+        total_price_rub,
+        unit_price_rub_snapshot,
+        charge_mode_snapshot
+    INTO
+        v_expected_count,
+        v_expected_total,
+        v_unit_price,
+        v_charge_mode
     FROM public.booking_service_groups
-    WHERE id = v_group_id;
+    WHERE id = v_group_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RETURN NULL;
@@ -715,8 +751,26 @@ BEGIN
 
     SELECT
         count(*),
-        COALESCE(sum(allocated_amount_rub), 0)
-    INTO v_actual_count, v_actual_total
+        COALESCE(sum(allocated_amount_rub), 0),
+        count(*) FILTER (
+            WHERE slot_ordinal < 1
+               OR slot_ordinal > v_expected_count
+               OR allocated_amount_rub <> CASE v_charge_mode
+                    WHEN 'per_slot' THEN v_unit_price
+                    WHEN 'per_group' THEN
+                        (v_expected_total / v_expected_count)
+                        + CASE
+                            WHEN slot_ordinal <=
+                                 mod(v_expected_total, v_expected_count)
+                            THEN 1
+                            ELSE 0
+                          END
+                  END
+        )
+    INTO
+        v_actual_count,
+        v_actual_total,
+        v_invalid_allocation_count
     FROM public.booking_services
     WHERE service_group_id = v_group_id;
 
@@ -735,6 +789,13 @@ BEGIN
             v_group_id,
             v_expected_total,
             v_actual_total
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF v_invalid_allocation_count > 0 THEN
+        RAISE EXCEPTION
+            'Service group % has invalid slot ordinals or allocated amounts',
+            v_group_id
             USING ERRCODE = '23514';
     END IF;
 
@@ -759,11 +820,6 @@ EXECUTE FUNCTION public.check_booking_service_group_totals();
 
 -- =========================================================
 -- 14. REFUND ALLOCATION VALIDATION
--- - only pending provider refunds can receive allocations;
--- - payment group must match;
--- - refund allocation cannot exceed refund amount;
--- - active/succeeded allocations cannot exceed paid service amount.
--- Rows are locked to serialize concurrent refund attempts.
 -- =========================================================
 
 CREATE FUNCTION public.validate_payment_refund_allocation()
@@ -774,6 +830,7 @@ AS $$
 DECLARE
     v_refund public.payment_refunds%ROWTYPE;
     v_service_payment public.booking_service_payment_allocations%ROWTYPE;
+    v_booking_service public.booking_services%ROWTYPE;
     v_refund_allocated bigint;
     v_service_allocated bigint;
 BEGIN
@@ -795,12 +852,22 @@ BEGIN
     SELECT *
     INTO v_service_payment
     FROM public.booking_service_payment_allocations
-    WHERE id = NEW.booking_service_payment_allocation_id
-    FOR UPDATE;
+    WHERE id = NEW.booking_service_payment_allocation_id;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION
             'Service payment allocation does not exist';
+    END IF;
+
+    SELECT *
+    INTO v_booking_service
+    FROM public.booking_services
+    WHERE id = v_service_payment.booking_service_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION
+            'Booking service allocation does not exist';
     END IF;
 
     IF v_refund.payment_group_id <> v_service_payment.payment_group_id THEN
@@ -821,15 +888,17 @@ BEGIN
     SELECT COALESCE(sum(a.amount_rub), 0)
     INTO v_service_allocated
     FROM public.payment_refund_allocations a
+    JOIN public.booking_service_payment_allocations spa
+      ON spa.id = a.booking_service_payment_allocation_id
     JOIN public.payment_refunds r
       ON r.id = a.payment_refund_id
-    WHERE a.booking_service_payment_allocation_id =
-              NEW.booking_service_payment_allocation_id
+    WHERE spa.booking_service_id = v_booking_service.id
       AND r.status IN ('pending', 'succeeded');
 
-    IF v_service_allocated + NEW.amount_rub > v_service_payment.amount_rub THEN
+    IF v_service_allocated + NEW.amount_rub >
+       v_booking_service.allocated_amount_rub THEN
         RAISE EXCEPTION
-            'Service refunds exceed the amount paid for this service';
+            'Service refunds exceed the amount allocated to this service slot';
     END IF;
 
     RETURN NEW;
@@ -845,8 +914,6 @@ EXECUTE FUNCTION public.validate_payment_refund_allocation();
 
 -- =========================================================
 -- 15. UPDATE SERVICE REFUND TOTALS
--- Refunded amount changes only after provider refund succeeds.
--- Failed/cancelled refunds do not count toward refunded amount.
 -- =========================================================
 
 CREATE FUNCTION public.sync_booking_service_refund_totals()
@@ -864,6 +931,8 @@ BEGIN
                     THEN 'refunded'
                 WHEN totals.refunded_amount > 0
                     THEN 'partially_refunded'
+                WHEN bs.status IN ('refunded', 'partially_refunded')
+                    THEN 'active'
                 ELSE bs.status
             END,
             updated_at = clock_timestamp()
@@ -906,8 +975,6 @@ EXECUTE FUNCTION public.sync_booking_service_refund_totals();
 
 -- =========================================================
 -- 16. SECURITY
--- No direct client access.
--- Server APIs use service_role.
 -- =========================================================
 
 ALTER TABLE public.pass_plans ENABLE ROW LEVEL SECURITY;
@@ -954,6 +1021,9 @@ REVOKE ALL ON FUNCTION public.prevent_service_snapshot_mutation()
 FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.prevent_service_payment_allocation_mutation()
+FROM PUBLIC, anon, authenticated;
+
+REVOKE ALL ON FUNCTION public.lock_booking_service_group_for_allocation()
 FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.check_booking_service_group_totals()
