@@ -11,6 +11,7 @@ import {
   LogOut,
   RefreshCw,
   UserRound,
+  Settings2,
 } from "lucide-react";
 
 import AccountBookingsPanel from "@/components/AccountBookingsPanel";
@@ -18,6 +19,8 @@ import BookingExtensionOffers from "@/components/BookingExtensionOffers";
 import AccountProfilePanel from "@/components/AccountProfilePanel";
 import AccountStatsPanel from "@/components/AccountStatsPanel";
 import AccountNotificationsPanel from "@/components/AccountNotificationsPanel";
+import AccountTelegramPanel from "@/components/AccountTelegramPanel";
+import AccountMaxPanel from "@/components/AccountMaxPanel";
 import BookingCalendar from "@/components/BookingCalendar";
 
 type MaxWebApp = {
@@ -35,7 +38,8 @@ type Tab =
   | "new"
   | "profile"
   | "stats"
-  | "notifications";
+  | "notifications"
+  | "settings";
 
 type AuthStatus =
   | "checking"
@@ -54,6 +58,7 @@ const tabs: Array<{
   { id: "profile", label: "Профиль", icon: UserRound },
   { id: "stats", label: "Статистика", icon: Activity },
   { id: "notifications", label: "События", icon: Bell },
+  { id: "settings", label: "Настройки", icon: Settings2 },
 ];
 
 export default function MaxAppClient() {
@@ -401,6 +406,27 @@ export default function MaxAppClient() {
                   <AccountNotificationsPanel />
                 </section>
               )}
+
+              {tab === "settings" && (
+                <section className="space-y-4">
+                  <div className="px-1 pb-1">
+                    <h2 className="text-lg font-semibold">
+                      Настройки каналов связи
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-white/45">
+                      Управляйте подключением мессенджеров и получением уведомлений.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-[#101326] p-4">
+                    <AccountTelegramPanel />
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-[#101326] p-4">
+                    <AccountMaxPanel />
+                  </div>
+                </section>
+              )}
             </main>
 
             <nav
@@ -409,7 +435,7 @@ export default function MaxAppClient() {
                 paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
               }}
             >
-              <div className="mx-auto grid max-w-xl grid-cols-5">
+              <div className="mx-auto grid max-w-xl grid-cols-6">
                 {tabs.map(({ id, label, icon: Icon }) => {
                   const active = tab === id;
 
