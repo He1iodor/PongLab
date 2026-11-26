@@ -18,7 +18,19 @@ function BackButton({
   return (
     <button
       type="button"
-      onClick={() => router.push("/booking")}
+      onClick={() => {
+        const params = new URLSearchParams(window.location.search);
+        const requestedReturnTo = params.get("returnTo");
+
+        const returnTo =
+          requestedReturnTo === "/maxapp?tab=new" ||
+          requestedReturnTo === "/maxapp" ||
+          requestedReturnTo === "/booking"
+            ? requestedReturnTo
+            : "/booking";
+
+        router.replace(returnTo);
+      }}
       className="inline-flex text-sm text-[#C8B2FF] transition hover:text-white"
     >
       {children}
