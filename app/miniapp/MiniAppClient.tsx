@@ -11,6 +11,7 @@ import {
   LogOut,
   RefreshCw,
   UserRound,
+  Settings2,
 } from "lucide-react";
 
 import AccountBookingsPanel from "@/components/AccountBookingsPanel";
@@ -18,6 +19,8 @@ import BookingExtensionOffers from "@/components/BookingExtensionOffers";
 import AccountProfilePanel from "@/components/AccountProfilePanel";
 import AccountStatsPanel from "@/components/AccountStatsPanel";
 import AccountNotificationsPanel from "@/components/AccountNotificationsPanel";
+import AccountTelegramPanel from "@/components/AccountTelegramPanel";
+import AccountMaxPanel from "@/components/AccountMaxPanel";
 import BookingCalendar from "@/components/BookingCalendar";
 
 type TelegramWebApp = {
@@ -41,7 +44,8 @@ type Tab =
   | "new"
   | "profile"
   | "stats"
-  | "notifications";
+  | "notifications"
+  | "settings";
 
 type AuthStatus =
   | "checking"
@@ -60,6 +64,7 @@ const tabs: Array<{
   { id: "profile", label: "Профиль", icon: UserRound },
   { id: "stats", label: "Статистика", icon: Activity },
   { id: "notifications", label: "События", icon: Bell },
+  { id: "settings", label: "Настройки", icon: Settings2 },
 ];
 
 export default function MiniAppClient() {
@@ -68,8 +73,20 @@ export default function MiniAppClient() {
   const [fullName, setFullName] = useState("");
   const [tab, setTab] = useState<Tab>("bookings");
   const [loggingOut, setLoggingOut] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const authStarted = useRef(false);
+
+  // Восстанавливаем выбранную вкладку после возврата в Mini App.
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(
+      window.location.search,
+    ).get("tab");
+
+    if (requestedTab && tabs.some((item) => item.id === requestedTab)) {
+      setTab(requestedTab as Tab);
+    }
+  }, []);
 
   const authenticate = useCallback(async (initData: string) => {
     if (authStarted.current) return;
@@ -123,7 +140,7 @@ export default function MiniAppClient() {
         if (!response.ok || result.authenticated !== true) {
           setStatus("unauthenticated");
           setError(
-           "Для входа подтвердите номер телефона. После авторизации вы автоматически вернётесь в приложение.",
+            "Для входа подтвердите номер телефона. После авторизации вы автоматически вернётесь в приложение.",
           );
           return;
         }
@@ -153,6 +170,43 @@ export default function MiniAppClient() {
       );
     }
   }, []);
+
+  // Загружаем количество непрочитанных уведомлений.
+  const loadUnreadCount = useCallback(async () => {
+    try {
+      const response = await fetch("/api/account/notifications", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      if (!response.ok) return;
+
+      const result = await response.json().catch(() => ({}));
+      setUnreadCount(Math.max(0, Number(result.unread_count) || 0));
+    } catch {
+      // При временной ошибке сети сохраняем последнее известное значение.
+    }
+  }, []);
+
+  // Обновляем счётчик после авторизации и при возвращении в приложение.
+  useEffect(() => {
+    if (status !== "ready") return;
+
+    void loadUnreadCount();
+
+    const timer = window.setInterval(
+      () => void loadUnreadCount(),
+      3000,
+    );
+
+    const refreshOnFocus = () => void loadUnreadCount();
+    window.addEventListener("focus", refreshOnFocus);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshOnFocus);
+    };
+  }, [status, loadUnreadCount]);
 
   const initializeTelegram = useCallback(() => {
     const webApp = window.Telegram?.WebApp;
@@ -255,28 +309,28 @@ export default function MiniAppClient() {
               </button>
             )}
 
-          {status === "unlinked" ? (
-  <a
-    href="/login?returnTo=%2Faccount%3Ftab%3Dtelegram"
-    className="mt-6 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] px-6 text-sm font-semibold text-white"
-  >
-    Войти и подключить Telegram
-  </a>
-) : status === "unauthenticated" ? (
-  <a
-    href="/login?returnTo=%2Fminiapp"
-    className="mt-6 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] px-6 text-sm font-semibold text-white"
-  >
-    Войти по номеру телефона
-  </a>
-) : (
-  <a
-    href="/"
-    className="mt-4 rounded-xl border border-white/10 px-5 py-3 text-sm text-white/75"
-  >
-    Перейти на сайт PongLab
-  </a>
-)}
+            {status === "unlinked" ? (
+              <a
+                href="/login?returnTo=%2Faccount%3Ftab%3Dtelegram"
+                className="mt-6 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] px-6 text-sm font-semibold text-white"
+              >
+                Войти и подключить Telegram
+              </a>
+            ) : status === "unauthenticated" ? (
+              <a
+                href="/login?returnTo=%2Fminiapp"
+                className="mt-6 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#6B30CE] to-[#8F5BFF] px-6 text-sm font-semibold text-white"
+              >
+                Войти по номеру телефона
+              </a>
+            ) : (
+              <a
+                href="/"
+                className="mt-4 rounded-xl border border-white/10 px-5 py-3 text-sm text-white/75"
+              >
+                Перейти на сайт PongLab
+              </a>
+            )}
           </div>
         )}
 
@@ -319,7 +373,7 @@ export default function MiniAppClient() {
                   <div className="rounded-2xl border border-white/10 bg-[#101326] p-3">
                     <AccountBookingsPanel
                       onCreateBooking={() => setTab("new")}
-                      showTransferActions={false}
+                      showTransferActions={true}
                       doorRequestChannel="telegram"
                     />
                   </div>
@@ -336,7 +390,7 @@ export default function MiniAppClient() {
                       Выберите клуб, дату и свободное время.
                     </p>
                   </div>
-                  <BookingCalendar />
+                  <BookingCalendar returnTo="/miniapp?tab=new" />
                 </section>
               )}
 
@@ -357,6 +411,27 @@ export default function MiniAppClient() {
                   <AccountNotificationsPanel />
                 </section>
               )}
+
+              {tab === "settings" && (
+                <section className="space-y-4">
+                  <div className="px-1 pb-1">
+                    <h2 className="text-lg font-semibold">
+                      Настройки каналов связи
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-white/45">
+                      Управляйте подключением мессенджеров и получением уведомлений.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-[#101326] p-4">
+                    <AccountTelegramPanel />
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-[#101326] p-4">
+                    <AccountMaxPanel />
+                  </div>
+                </section>
+              )}
             </main>
 
             <nav
@@ -365,21 +440,36 @@ export default function MiniAppClient() {
                 paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
               }}
             >
-              <div className="mx-auto grid max-w-xl grid-cols-5">
+              <div className="mx-auto grid max-w-xl grid-cols-6">
                 {tabs.map(({ id, label, icon: Icon }) => {
                   const active = tab === id;
 
                   return (
                     <button
                       key={id}
-                      onClick={() => setTab(id)}
+                      onClick={() => {
+                        setTab(id);
+                        if (id === "notifications") {
+                          void loadUnreadCount();
+                        }
+                      }}
                       className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 transition ${
                         active
                           ? "text-[#C5ACFF]"
                           : "text-white/40"
                       }`}
                     >
-                      <Icon size={20} />
+                      <span className="relative inline-flex">
+                        <Icon size={20} />
+                        {id === "notifications" && unreadCount > 0 && (
+                          <span
+                            aria-label={"Непрочитанных уведомлений: " + unreadCount}
+                            className="absolute -right-3 -top-2 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white shadow-lg"
+                          >
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </span>
+                        )}
+                      </span>
                       <span className="truncate text-[10px] font-medium">
                         {label}
                       </span>
