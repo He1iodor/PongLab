@@ -66,6 +66,17 @@ export default function MaxAppClient() {
 
   const authStarted = useRef(false);
 
+  // Восстанавливаем вкладку из адреса после возврата из оферты.
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(
+      window.location.search,
+    ).get("tab");
+
+    if (requestedTab && tabs.some((item) => item.id === requestedTab)) {
+      setTab(requestedTab as Tab);
+    }
+  }, []);
+
   const authenticate = useCallback(async (initData: string) => {
     if (authStarted.current) return;
 
@@ -369,7 +380,7 @@ export default function MaxAppClient() {
                     </p>
                   </div>
 
-                  <BookingCalendar />
+                  <BookingCalendar returnTo="/maxapp?tab=new" />
                 </section>
               )}
 
