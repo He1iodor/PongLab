@@ -173,6 +173,11 @@ export default function AccountNotificationsPanel() {
     void load();
   }, [load]);
 
+  // Стабильный обработчик для UnpaidHoldActions.
+  const refreshNotifications = useCallback(() => {
+    void load();
+  }, [load]);
+
   const markRead = async (ids?: string[]) => {
     if (updating) return;
 
@@ -307,7 +312,7 @@ export default function AccountNotificationsPanel() {
                         bookingId={item.hold_booking_id}
                         paymentGroupId={item.hold_payment_group_id}
                         expiresAt={item.hold_expires_at}
-                        onComplete={() => void load()}
+                        onComplete={refreshNotifications}
                       />
                     )}
                 </div>
