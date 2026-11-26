@@ -1,1046 +1,643 @@
+-- PongLab: payment core support for pass purchases and service-backed bookings
+-- Requires 20261126103000_passes_and_services_foundation.sql and
+-- 20261126120000_passes_services_integration.sql.
+-- Existing cash booking, transfer and extension logic is retained as legacy
+-- functions and called unchanged for their existing order types.
 
 BEGIN;
 
--- =========================================================
--- 1. OWNER TARIFF TEMPLATES
--- =========================================================
+-- Preserve the proven implementations. The wrappers below add only the new
+-- order types and delegate ordinary cash/transfer/extension orders unchanged.
+ALTER FUNCTION public.begin_payment_initialization(uuid, uuid)
+  RENAME TO begin_payment_initialization_cash_legacy;
+ALTER FUNCTION public.apply_payment_group_success(uuid, text, integer)
+  RENAME TO apply_payment_group_success_cash_legacy;
+ALTER FUNCTION public.apply_payment_group_failure(uuid, text, text, text)
+  RENAME TO apply_payment_group_failure_cash_legacy;
+ALTER FUNCTION public.expire_stale_yookassa_payment_groups()
+  RENAME TO expire_stale_yookassa_payment_groups_cash_legacy;
+ALTER FUNCTION public.expire_unpaid_payment_holds()
+  RENAME TO expire_unpaid_payment_holds_cash_legacy;
 
-CREATE TABLE public.pass_plans (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    city_id uuid NOT NULL REFERENCES public.cities(id) ON DELETE RESTRICT,
-    name text NOT NULL CHECK (length(btrim(name)) BETWEEN 1 AND 120),
-    description text,
-    price_rub integer NOT NULL CHECK (price_rub > 0),
-    hours_count integer NOT NULL CHECK (hours_count > 0),
-    is_active boolean NOT NULL DEFAULT true,
-    created_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
-);
-
-CREATE INDEX pass_plans_city_active_idx
-    ON public.pass_plans(city_id, is_active);
-
-
--- =========================================================
--- 2. PURCHASED USER PASSES
--- =========================================================
-
-CREATE TABLE public.user_passes (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
-    plan_id uuid REFERENCES public.pass_plans(id) ON DELETE SET NULL,
-    city_id uuid NOT NULL REFERENCES public.cities(id) ON DELETE RESTRICT,
-
-    purchase_payment_group_id uuid UNIQUE
-        REFERENCES public.payment_groups(id) ON DELETE RESTRICT,
-
-    plan_name_snapshot text NOT NULL,
-    plan_price_rub_snapshot integer NOT NULL
-        CHECK (plan_price_rub_snapshot > 0),
-
-    total_hours integer NOT NULL CHECK (total_hours > 0),
-
-    remaining_hours integer NOT NULL DEFAULT 0
-        CHECK (remaining_hours >= 0),
-
-    reserved_hours integer NOT NULL DEFAULT 0
-        CHECK (reserved_hours >= 0),
-
-    purchased_at timestamptz,
-    starts_at timestamptz,
-    expires_at timestamptz,
-
-    status text NOT NULL DEFAULT 'pending_payment'
-        CHECK (status IN (
-            'pending_payment',
-            'active',
-            'exhausted',
-            'expired',
-            'cancelled'
-        )),
-
-    plan_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb
-        CHECK (jsonb_typeof(plan_snapshot) = 'object'),
-
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-
-    CONSTRAINT user_passes_balance_limit
-        CHECK (remaining_hours + reserved_hours <= total_hours),
-
-    CONSTRAINT user_passes_validity_check
-        CHECK (
-            (starts_at IS NULL AND expires_at IS NULL)
-            OR
-            (starts_at IS NOT NULL AND expires_at > starts_at)
-        )
-);
-
-CREATE INDEX user_passes_user_status_idx
-    ON public.user_passes(user_id, status, expires_at);
-
-CREATE INDEX user_passes_city_status_idx
-    ON public.user_passes(city_id, status);
-
-
--- =========================================================
--- 3. PASS TRANSACTION LEDGER
--- =========================================================
-
-CREATE TABLE public.pass_transactions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    user_pass_id uuid NOT NULL
-        REFERENCES public.user_passes(id) ON DELETE RESTRICT,
-
-    booking_id uuid
-        REFERENCES public.bookings(id) ON DELETE RESTRICT,
-
-    transaction_type text NOT NULL
-        CHECK (transaction_type IN (
-            'purchase_credit',
-            'reserve',
-            'release',
-            'consume',
-            'restore',
-            'adjustment',
-            'expiration'
-        )),
-
-    remaining_delta integer NOT NULL DEFAULT 0,
-    reserved_delta integer NOT NULL DEFAULT 0,
-
-    idempotency_key text NOT NULL UNIQUE
-        CHECK (length(btrim(idempotency_key)) BETWEEN 1 AND 200),
-
-    description text,
-
-    metadata jsonb NOT NULL DEFAULT '{}'::jsonb
-        CHECK (jsonb_typeof(metadata) = 'object'),
-
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-
-    CONSTRAINT pass_transactions_delta_rules CHECK (
-        CASE transaction_type
-            WHEN 'purchase_credit' THEN
-                remaining_delta > 0
-                AND reserved_delta = 0
-                AND booking_id IS NULL
-
-            WHEN 'reserve' THEN
-                remaining_delta = -1
-                AND reserved_delta = 1
-                AND booking_id IS NOT NULL
-
-            WHEN 'release' THEN
-                remaining_delta = 1
-                AND reserved_delta = -1
-                AND booking_id IS NOT NULL
-
-            WHEN 'consume' THEN
-                remaining_delta = 0
-                AND reserved_delta = -1
-                AND booking_id IS NOT NULL
-
-            WHEN 'restore' THEN
-                remaining_delta = 1
-                AND reserved_delta = 0
-                AND booking_id IS NOT NULL
-
-            WHEN 'expiration' THEN
-                remaining_delta < 0
-                AND reserved_delta = 0
-                AND booking_id IS NULL
-
-            WHEN 'adjustment' THEN
-                (remaining_delta <> 0 OR reserved_delta <> 0)
-
-            ELSE false
-        END
-    )
-);
-
-CREATE INDEX pass_transactions_pass_created_idx
-    ON public.pass_transactions(user_pass_id, created_at DESC);
-
-CREATE INDEX pass_transactions_booking_idx
-    ON public.pass_transactions(booking_id)
-    WHERE booking_id IS NOT NULL;
-
-
--- =========================================================
--- 4. BOOKING TO PASS ALLOCATION
--- =========================================================
-
-CREATE TABLE public.booking_pass_allocations (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    booking_id uuid NOT NULL UNIQUE
-        REFERENCES public.bookings(id) ON DELETE RESTRICT,
-
-    user_pass_id uuid NOT NULL
-        REFERENCES public.user_passes(id) ON DELETE RESTRICT,
-
-    status text NOT NULL DEFAULT 'reserved'
-        CHECK (status IN (
-            'reserved',
-            'consumed',
-            'released',
-            'restored'
-        )),
-
-    slot_price_snapshot_rub integer NOT NULL
-        CHECK (slot_price_snapshot_rub > 0),
-
-    reserved_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    consumed_at timestamptz,
-    released_at timestamptz,
-    restored_at timestamptz,
-
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-
-    CONSTRAINT booking_pass_allocation_timestamps CHECK (
-        CASE status
-            WHEN 'reserved' THEN
-                consumed_at IS NULL
-                AND released_at IS NULL
-                AND restored_at IS NULL
-
-            WHEN 'consumed' THEN
-                consumed_at IS NOT NULL
-                AND released_at IS NULL
-                AND restored_at IS NULL
-
-            WHEN 'released' THEN
-                consumed_at IS NULL
-                AND released_at IS NOT NULL
-                AND restored_at IS NULL
-
-            WHEN 'restored' THEN
-                consumed_at IS NOT NULL
-                AND released_at IS NULL
-                AND restored_at IS NOT NULL
-
-            ELSE false
-        END
-    )
-);
-
-CREATE INDEX booking_pass_allocations_pass_status_idx
-    ON public.booking_pass_allocations(user_pass_id, status);
-
-
--- =========================================================
--- 4A. BOOKING PASS ALLOCATION STATE MACHINE
--- =========================================================
-
-CREATE FUNCTION public.enforce_booking_pass_allocation_transition()
-RETURNS trigger
+CREATE FUNCTION public.begin_payment_initialization(
+  p_payment_group_id uuid,
+  p_user_id uuid
+)
+RETURNS jsonb
 LANGUAGE plpgsql
-SET search_path = ''
-AS $$
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_group public.payment_groups%ROWTYPE;
+  v_pass public.user_passes%ROWTYPE;
+  v_booking_count integer;
+  v_cash_total integer;
+  v_service_total integer;
+  v_service_count integer;
+  v_already_started boolean;
+  v_started_at timestamptz;
 BEGIN
-    IF TG_OP = 'DELETE' THEN
-        RAISE EXCEPTION
-            'Booking pass allocations cannot be deleted';
+  IF p_payment_group_id IS NULL OR p_user_id IS NULL THEN
+    RAISE EXCEPTION 'Payment group and user are required';
+  END IF;
+
+  SELECT * INTO v_group
+  FROM public.payment_groups
+  WHERE id = p_payment_group_id AND user_id = p_user_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN RAISE EXCEPTION 'Payment group not found'; END IF;
+
+  IF v_group.order_type NOT IN ('pass_purchase', 'booking_services') THEN
+    RETURN public.begin_payment_initialization_cash_legacy(p_payment_group_id, p_user_id);
+  END IF;
+
+  IF v_group.provider <> 'yookassa' THEN
+    RAISE EXCEPTION 'Unsupported payment provider';
+  END IF;
+
+  IF v_group.status = 'succeeded' THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'state', 'succeeded', 'payment_group_id', v_group.id,
+      'provider_payment_id', v_group.provider_payment_id
+    );
+  END IF;
+  IF v_group.status <> 'pending' THEN RAISE EXCEPTION 'Payment group is not pending'; END IF;
+
+  v_already_started := v_group.payment_init_started_at IS NOT NULL;
+
+  IF v_group.provider_payment_id IS NOT NULL THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'state', 'payment_created', 'payment_group_id', v_group.id,
+      'provider_payment_id', v_group.provider_payment_id,
+      'payment_url', v_group.payment_url,
+      'amount_rub', v_group.amount_rub, 'currency', v_group.currency
+    );
+  END IF;
+
+  IF v_group.order_type = 'pass_purchase' THEN
+    SELECT * INTO v_pass
+    FROM public.user_passes
+    WHERE purchase_payment_group_id = p_payment_group_id
+      AND user_id = p_user_id
+    FOR UPDATE;
+
+    IF NOT FOUND
+       OR v_pass.status <> 'pending_payment'
+       OR v_pass.plan_price_rub_snapshot <> v_group.amount_rub
+       OR v_pass.total_hours < 1
+       OR v_pass.timezone_snapshot IS NULL
+       OR EXISTS (SELECT 1 FROM public.bookings WHERE payment_group_id = p_payment_group_id)
+    THEN
+      RAISE EXCEPTION 'Pass purchase order is inconsistent';
     END IF;
+  ELSE
+    PERFORM b.id
+    FROM public.bookings b
+    WHERE b.payment_group_id = p_payment_group_id
+    ORDER BY b.id
+    FOR UPDATE;
 
-    IF TG_OP = 'INSERT' THEN
-        IF NEW.status <> 'reserved'
-           OR NEW.consumed_at IS NOT NULL
-           OR NEW.released_at IS NOT NULL
-           OR NEW.restored_at IS NOT NULL THEN
-            RAISE EXCEPTION
-                'A new booking pass allocation must start as reserved';
-        END IF;
+    SELECT count(*)::integer,
+           coalesce(sum(b.price_rub) FILTER (WHERE b.funding_method = 'cash'), 0)::integer
+    INTO v_booking_count, v_cash_total
+    FROM public.bookings b
+    WHERE b.payment_group_id = p_payment_group_id;
 
-        RETURN NEW;
-    END IF;
+    IF v_booking_count < 1 THEN RAISE EXCEPTION 'Service order has no bookings'; END IF;
 
-    IF ROW(
-        OLD.booking_id,
-        OLD.user_pass_id,
-        OLD.slot_price_snapshot_rub,
-        OLD.reserved_at
-    ) IS DISTINCT FROM ROW(
-        NEW.booking_id,
-        NEW.user_pass_id,
-        NEW.slot_price_snapshot_rub,
-        NEW.reserved_at
+    IF EXISTS (
+      SELECT 1 FROM public.bookings b
+      WHERE b.payment_group_id = p_payment_group_id
+        AND (b.user_id <> p_user_id OR b.status <> 'pending_payment'
+          OR b.payment_status <> 'pending'
+          OR (v_already_started AND b.payment_init_started_at IS NULL)
+          OR (NOT v_already_started AND b.payment_init_started_at IS NOT NULL))
     ) THEN
-        RAISE EXCEPTION
-            'Booking pass allocation identity and snapshot are immutable';
+      RAISE EXCEPTION 'Service order contains invalid bookings';
     END IF;
 
-    IF OLD.status = NEW.status THEN
-        IF ROW(
-            OLD.consumed_at,
-            OLD.released_at,
-            OLD.restored_at
-        ) IS DISTINCT FROM ROW(
-            NEW.consumed_at,
-            NEW.released_at,
-            NEW.restored_at
-        ) THEN
-            RAISE EXCEPTION
-                'Booking pass allocation timestamps cannot be edited';
-        END IF;
-
-        RETURN NEW;
+    IF EXISTS (
+      SELECT 1 FROM public.bookings b
+      LEFT JOIN public.booking_pass_allocations a ON a.booking_id = b.id
+      WHERE b.payment_group_id = p_payment_group_id
+        AND b.funding_method = 'pass'
+        AND (a.id IS NULL OR a.status <> 'reserved')
+    ) THEN
+      RAISE EXCEPTION 'Pass-funded booking has no reserved pass hour';
     END IF;
 
-    IF OLD.status = 'reserved' AND NEW.status = 'consumed' THEN
-        IF NEW.consumed_at IS NULL
-           OR NEW.released_at IS NOT NULL
-           OR NEW.restored_at IS NOT NULL THEN
-            RAISE EXCEPTION
-                'Invalid reserved-to-consumed transition';
-        END IF;
-
-    ELSIF OLD.status = 'reserved' AND NEW.status = 'released' THEN
-        IF NEW.consumed_at IS NOT NULL
-           OR NEW.released_at IS NULL
-           OR NEW.restored_at IS NOT NULL THEN
-            RAISE EXCEPTION
-                'Invalid reserved-to-released transition';
-        END IF;
-
-    ELSIF OLD.status = 'consumed' AND NEW.status = 'restored' THEN
-        IF OLD.consumed_at IS NULL
-           OR NEW.consumed_at IS DISTINCT FROM OLD.consumed_at
-           OR NEW.released_at IS NOT NULL
-           OR NEW.restored_at IS NULL THEN
-            RAISE EXCEPTION
-                'Invalid consumed-to-restored transition';
-        END IF;
-
-    ELSE
-        RAISE EXCEPTION
-            'Unsupported booking pass allocation transition: % -> %',
-            OLD.status,
-            NEW.status;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER booking_pass_allocations_state_machine
-BEFORE INSERT OR UPDATE OR DELETE
-ON public.booking_pass_allocations
-FOR EACH ROW
-EXECUTE FUNCTION public.enforce_booking_pass_allocation_transition();
-
-
--- =========================================================
--- 5. STUDIO SERVICE SETTINGS
--- =========================================================
-
-CREATE TABLE public.studio_services (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    studio_id uuid NOT NULL
-        REFERENCES public.studios(id) ON DELETE RESTRICT,
-
-    service_key text NOT NULL
-        CHECK (service_key IN ('joint_play', 'coach_session')),
-
-    title text NOT NULL
-        CHECK (length(btrim(title)) BETWEEN 1 AND 120),
-
-    description text,
-
-    is_enabled boolean NOT NULL DEFAULT false,
-
-    price_rub integer NOT NULL DEFAULT 0
-        CHECK (price_rub >= 0),
-
-    charge_mode text NOT NULL DEFAULT 'per_slot'
-        CHECK (charge_mode IN ('per_slot', 'per_group')),
-
-    availability_rules jsonb NOT NULL DEFAULT '{}'::jsonb
-        CHECK (jsonb_typeof(availability_rules) = 'object'),
-
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-
-    CONSTRAINT studio_services_unique_type
-        UNIQUE (studio_id, service_key),
-
-    CONSTRAINT studio_services_enabled_price
-        CHECK (NOT is_enabled OR price_rub > 0)
-);
-
-CREATE INDEX studio_services_studio_enabled_idx
-    ON public.studio_services(studio_id, is_enabled);
-
-
--- =========================================================
--- 6. SERVICE GROUP SNAPSHOTS
--- =========================================================
-
-CREATE TABLE public.booking_service_groups (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    user_id uuid NOT NULL
-        REFERENCES public.users(id) ON DELETE RESTRICT,
-
-    studio_service_id uuid
-        REFERENCES public.studio_services(id) ON DELETE RESTRICT,
-
-    service_key text NOT NULL
-        CHECK (service_key IN ('joint_play', 'coach_session')),
-
-    title_snapshot text NOT NULL,
-    description_snapshot text,
-
-    charge_mode_snapshot text NOT NULL
-        CHECK (charge_mode_snapshot IN ('per_slot', 'per_group')),
-
-    unit_price_rub_snapshot integer NOT NULL
-        CHECK (unit_price_rub_snapshot > 0),
-
-    slot_count integer NOT NULL
-        CHECK (slot_count > 0),
-
-    total_price_rub integer NOT NULL
-        CHECK (total_price_rub > 0),
-
-    status text NOT NULL DEFAULT 'pending_payment'
-        CHECK (status IN (
-            'pending_payment',
-            'active',
-            'partially_refunded',
-            'refunded',
-            'cancelled'
-        )),
-
-    service_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb
-        CHECK (jsonb_typeof(service_snapshot) = 'object'),
-
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-
-    CONSTRAINT booking_service_groups_price_formula CHECK (
-        total_price_rub =
-            CASE charge_mode_snapshot
-                WHEN 'per_slot'
-                    THEN unit_price_rub_snapshot * slot_count
-                WHEN 'per_group'
-                    THEN unit_price_rub_snapshot
-            END
+    PERFORM g.id
+    FROM public.booking_service_groups g
+    WHERE g.id IN (
+      SELECT DISTINCT bs.service_group_id
+      FROM public.booking_services bs
+      JOIN public.bookings b ON b.id = bs.booking_id
+      WHERE b.payment_group_id = p_payment_group_id
     )
-);
+    ORDER BY g.id
+    FOR UPDATE;
 
-CREATE INDEX booking_service_groups_user_created_idx
-    ON public.booking_service_groups(user_id, created_at DESC);
+    SELECT coalesce(sum(g.total_price_rub), 0)::integer,
+           count(DISTINCT g.id)::integer
+    INTO v_service_total, v_service_count
+    FROM public.booking_service_groups g
+    WHERE g.id IN (
+      SELECT DISTINCT bs.service_group_id
+      FROM public.booking_services bs
+      JOIN public.bookings b ON b.id = bs.booking_id
+      WHERE b.payment_group_id = p_payment_group_id
+    )
+      AND g.status = 'pending_payment';
 
+    IF v_service_count < 1 OR v_service_total < 1 THEN
+      RAISE EXCEPTION 'Service payment group has no pending services';
+    END IF;
 
--- =========================================================
--- 7. SERVICE ALLOCATION PER BOOKING
--- =========================================================
+    IF EXISTS (
+      SELECT 1
+      FROM public.booking_service_groups g
+      WHERE g.id IN (
+        SELECT DISTINCT bs.service_group_id
+        FROM public.booking_services bs
+        JOIN public.bookings b ON b.id = bs.booking_id
+        WHERE b.payment_group_id = p_payment_group_id
+      )
+      AND (
+        g.status <> 'pending_payment'
+        OR g.slot_count <> (
+          SELECT count(*) FROM public.booking_services bs WHERE bs.service_group_id = g.id
+        )
+        OR EXISTS (
+          SELECT 1 FROM public.booking_services bs
+          WHERE bs.service_group_id = g.id AND bs.status <> 'pending_payment'
+        )
+      )
+    ) THEN
+      RAISE EXCEPTION 'Service snapshots are incomplete or not pending';
+    END IF;
 
-CREATE TABLE public.booking_services (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    IF v_cash_total + v_service_total <> v_group.amount_rub THEN
+      RAISE EXCEPTION 'Service payment amount mismatch';
+    END IF;
+  END IF;
 
-    service_group_id uuid NOT NULL
-        REFERENCES public.booking_service_groups(id) ON DELETE RESTRICT,
+  IF v_already_started THEN
+    RETURN pg_catalog.jsonb_build_object(
+      'state', 'retry_same_request', 'payment_group_id', v_group.id,
+      'amount_rub', v_group.amount_rub, 'currency', v_group.currency,
+      'provider', v_group.provider, 'idempotency_key', v_group.id::text,
+      'payment_init_started_at', v_group.payment_init_started_at
+    );
+  END IF;
 
-    booking_id uuid NOT NULL
-        REFERENCES public.bookings(id) ON DELETE RESTRICT,
+  IF v_group.hold_expires_at IS NULL OR v_group.hold_expires_at <= pg_catalog.clock_timestamp() THEN
+    RAISE EXCEPTION 'Payment hold has expired';
+  END IF;
 
-    -- Stable order for distributing indivisible group prices.
-    -- Remainder RUB is assigned to the earliest slots.
-    slot_ordinal integer NOT NULL CHECK (slot_ordinal > 0),
+  IF v_group.order_type = 'booking_services' AND EXISTS (
+    SELECT 1 FROM public.bookings b
+    WHERE b.payment_group_id = p_payment_group_id
+      AND (b.hold_expires_at IS NULL OR b.hold_expires_at <= pg_catalog.clock_timestamp())
+  ) THEN
+    RAISE EXCEPTION 'Booking hold has expired';
+  END IF;
 
-    allocated_amount_rub integer NOT NULL
-        CHECK (allocated_amount_rub >= 0),
+  v_started_at := pg_catalog.clock_timestamp();
+  UPDATE public.payment_groups SET payment_init_started_at = v_started_at, updated_at = v_started_at
+  WHERE id = p_payment_group_id;
 
-    refunded_amount_rub integer NOT NULL DEFAULT 0
-        CHECK (
-            refunded_amount_rub >= 0
-            AND refunded_amount_rub <= allocated_amount_rub
-        ),
+  IF v_group.order_type = 'booking_services' THEN
+    UPDATE public.bookings SET payment_init_started_at = v_started_at
+    WHERE payment_group_id = p_payment_group_id;
+  END IF;
 
-    status text NOT NULL DEFAULT 'pending_payment'
-        CHECK (status IN (
-            'pending_payment',
-            'active',
-            'partially_refunded',
-            'refunded',
-            'cancelled'
-        )),
+  RETURN pg_catalog.jsonb_build_object(
+    'state', 'started', 'payment_group_id', v_group.id,
+    'amount_rub', v_group.amount_rub, 'currency', v_group.currency,
+    'provider', v_group.provider, 'idempotency_key', v_group.id::text,
+    'hold_expires_at', v_group.hold_expires_at
+  );
+END;
+$function$;
 
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+CREATE FUNCTION public.apply_payment_group_success(
+  p_payment_group_id uuid,
+  p_provider_payment_id text,
+  p_amount_rub integer
+)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_group public.payment_groups%ROWTYPE;
+  v_pass public.user_passes%ROWTYPE;
+  v_booking_count integer;
+  v_invalid_count integer;
+  v_cash_total integer;
+  v_service_total integer;
+  v_timeout_minutes integer;
+  v_now timestamptz := pg_catalog.clock_timestamp();
+  v_local_date date;
+  v_expires_at timestamptz;
+BEGIN
+  IF p_payment_group_id IS NULL OR p_provider_payment_id IS NULL
+     OR pg_catalog.length(pg_catalog.btrim(p_provider_payment_id)) < 1
+     OR p_amount_rub IS NULL OR p_amount_rub <= 0 THEN
+    RAISE EXCEPTION 'Invalid payment confirmation parameters';
+  END IF;
 
-    CONSTRAINT booking_services_group_booking_unique
-        UNIQUE (service_group_id, booking_id),
+  SELECT * INTO v_group FROM public.payment_groups
+  WHERE id = p_payment_group_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Payment group not found'; END IF;
 
-    CONSTRAINT booking_services_group_ordinal_unique
-        UNIQUE (service_group_id, slot_ordinal)
-);
+  IF v_group.order_type NOT IN ('pass_purchase', 'booking_services') THEN
+    RETURN public.apply_payment_group_success_cash_legacy(
+      p_payment_group_id, p_provider_payment_id, p_amount_rub
+    );
+  END IF;
 
-CREATE INDEX booking_services_booking_idx
-    ON public.booking_services(booking_id);
+  IF v_group.provider <> 'yookassa' THEN RAISE EXCEPTION 'Unsupported payment provider'; END IF;
+  IF v_group.amount_rub <> p_amount_rub OR v_group.currency <> 'RUB' THEN
+    RAISE EXCEPTION 'Payment amount or currency mismatch';
+  END IF;
+  IF v_group.provider_payment_id IS NOT NULL AND v_group.provider_payment_id <> p_provider_payment_id THEN
+    RAISE EXCEPTION 'Provider payment ID mismatch';
+  END IF;
+  IF v_group.status = 'refunded' THEN RETURN 'already_refunded'; END IF;
+  IF v_group.status = 'succeeded' THEN RETURN 'already_processed'; END IF;
 
-CREATE INDEX booking_services_group_idx
-    ON public.booking_services(service_group_id);
+  IF v_group.status = 'cancelled' AND v_group.failure_reason = 'payment_timeout_10m'
+  THEN
+    IF v_group.order_type = 'pass_purchase' THEN
+      UPDATE public.payment_groups
+      SET provider_payment_id = coalesce(provider_payment_id, p_provider_payment_id),
+          failure_reason = 'payment_timeout_10m|late_pass_purchase_review_required',
+          paid_at = coalesce(paid_at, v_now), last_checked_at = v_now, updated_at = v_now
+      WHERE id = p_payment_group_id;
+      RETURN 'late_pass_purchase_review_required';
+    ELSE
+      UPDATE public.payment_groups
+      SET provider_payment_id = coalesce(provider_payment_id, p_provider_payment_id),
+          failure_reason = 'payment_timeout_10m|late_success_refund_required',
+          paid_at = coalesce(paid_at, v_now), last_checked_at = v_now, updated_at = v_now
+      WHERE id = p_payment_group_id;
+      RETURN 'late_success_refund_required';
+    END IF;
+  END IF;
 
+  IF v_group.status <> 'pending' THEN RETURN 'terminal_state_conflict'; END IF;
+  IF v_group.payment_init_started_at IS NULL THEN RETURN 'payment_not_initialized'; END IF;
 
--- =========================================================
--- 8. SERVICE PAYMENT ALLOCATIONS
--- =========================================================
+  IF v_group.order_type = 'pass_purchase' THEN
+    IF v_group.payment_init_started_at + interval '5 minutes' <= v_now THEN
+      UPDATE public.payment_groups
+      SET status = 'cancelled', provider_payment_id = coalesce(provider_payment_id, p_provider_payment_id),
+          failure_reason = 'payment_timeout_10m|late_pass_purchase_review_required',
+          paid_at = coalesce(paid_at, v_now), last_checked_at = v_now, updated_at = v_now
+      WHERE id = p_payment_group_id AND status = 'pending';
+      UPDATE public.user_passes SET status = 'cancelled', updated_at = v_now
+      WHERE purchase_payment_group_id = p_payment_group_id AND status = 'pending_payment';
+      RETURN 'late_pass_purchase_review_required';
+    END IF;
 
-CREATE TABLE public.booking_service_payment_allocations (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    SELECT * INTO v_pass FROM public.user_passes
+    WHERE purchase_payment_group_id = p_payment_group_id AND user_id = v_group.user_id
+    FOR UPDATE;
+    IF NOT FOUND OR v_pass.status <> 'pending_payment'
+       OR v_pass.plan_price_rub_snapshot <> v_group.amount_rub
+       OR v_pass.total_hours < 1 OR v_pass.timezone_snapshot IS NULL
+       OR EXISTS (SELECT 1 FROM public.bookings WHERE payment_group_id = p_payment_group_id) THEN
+      RAISE EXCEPTION 'Pass purchase order is inconsistent';
+    END IF;
 
-    booking_service_id uuid NOT NULL
-        REFERENCES public.booking_services(id) ON DELETE RESTRICT,
+    v_local_date := (v_now AT TIME ZONE v_pass.timezone_snapshot)::date;
+    v_expires_at := ((v_local_date + interval '1 month')::date + 1)::timestamp
+                    AT TIME ZONE v_pass.timezone_snapshot;
 
-    payment_group_id uuid NOT NULL
-        REFERENCES public.payment_groups(id) ON DELETE RESTRICT,
+    UPDATE public.payment_groups
+    SET status = 'succeeded', provider_payment_id = p_provider_payment_id,
+        paid_at = v_now, last_checked_at = v_now, updated_at = v_now
+    WHERE id = p_payment_group_id;
 
-    amount_rub integer NOT NULL CHECK (amount_rub > 0),
+    UPDATE public.user_passes
+    SET status = 'active', remaining_hours = total_hours, reserved_hours = 0,
+        purchased_at = v_now, starts_at = v_now,
+        purchase_local_date = v_local_date, expires_at = v_expires_at, updated_at = v_now
+    WHERE id = v_pass.id AND status = 'pending_payment';
+    IF NOT FOUND THEN RAISE EXCEPTION 'Pass could not be activated'; END IF;
 
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    INSERT INTO public.pass_transactions(
+      user_pass_id, transaction_type, remaining_delta, reserved_delta,
+      idempotency_key, description
+    ) VALUES (
+      v_pass.id, 'purchase_credit', v_pass.total_hours, 0,
+      'pass-purchase:' || v_pass.id::text || ':credit', 'Credit purchased pass hours'
+    );
+    RETURN 'pass_activated';
+  END IF;
 
-    CONSTRAINT booking_service_payment_unique
-        UNIQUE (booking_service_id, payment_group_id)
-);
+  -- Service-backed booking payment. The legacy cash path remains untouched.
+  PERFORM b.id FROM public.bookings b
+  WHERE b.payment_group_id = p_payment_group_id ORDER BY b.id FOR UPDATE;
 
-CREATE INDEX booking_service_payment_group_idx
-    ON public.booking_service_payment_allocations(payment_group_id);
+  SELECT count(*)::integer,
+         count(*) FILTER (WHERE b.user_id <> v_group.user_id
+           OR b.status <> 'pending_payment' OR b.payment_status <> 'pending'
+           OR b.payment_init_started_at IS NULL)::integer,
+         coalesce(sum(b.price_rub) FILTER (WHERE b.funding_method = 'cash'), 0)::integer
+  INTO v_booking_count, v_invalid_count, v_cash_total
+  FROM public.bookings b WHERE b.payment_group_id = p_payment_group_id;
 
+  IF v_booking_count < 1 OR v_invalid_count > 0 THEN RETURN 'booking_state_conflict'; END IF;
 
--- =========================================================
--- 9. SERVICE REFUND ALLOCATIONS
--- =========================================================
+  SELECT LEAST(60, GREATEST(1, coalesce(pg_catalog.max(sbs.hold_minutes)::integer, 5)))
+  INTO v_timeout_minutes
+  FROM public.bookings b
+  JOIN public.studio_tables st ON st.id = b.table_id
+  JOIN public.studio_booking_settings sbs ON sbs.studio_id = st.studio_id
+  WHERE b.payment_group_id = p_payment_group_id;
+  v_timeout_minutes := coalesce(v_timeout_minutes, 5);
 
-CREATE TABLE public.payment_refund_allocations (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  IF v_group.payment_init_started_at + pg_catalog.make_interval(mins => v_timeout_minutes) <= v_now THEN
+    UPDATE public.payment_groups
+    SET status = 'cancelled', provider_payment_id = coalesce(provider_payment_id, p_provider_payment_id),
+        failure_reason = 'payment_timeout_10m|late_success_refund_required',
+        paid_at = coalesce(paid_at, v_now), last_checked_at = v_now, updated_at = v_now
+    WHERE id = p_payment_group_id AND status = 'pending';
+    UPDATE public.bookings SET status = 'expired', payment_status = 'cancelled', updated_at = v_now
+    WHERE payment_group_id = p_payment_group_id AND status = 'pending_payment' AND payment_status = 'pending';
+    UPDATE public.booking_services SET status = 'cancelled', updated_at = v_now
+    WHERE booking_id IN (SELECT id FROM public.bookings WHERE payment_group_id = p_payment_group_id)
+      AND status = 'pending_payment';
+    UPDATE public.booking_service_groups SET status = 'cancelled', updated_at = v_now
+    WHERE id IN (SELECT DISTINCT bs.service_group_id FROM public.booking_services bs
+      JOIN public.bookings b ON b.id = bs.booking_id WHERE b.payment_group_id = p_payment_group_id)
+      AND status = 'pending_payment';
+    RETURN 'late_success_refund_required';
+  END IF;
 
-    payment_refund_id uuid NOT NULL
-        REFERENCES public.payment_refunds(id) ON DELETE RESTRICT,
+  IF EXISTS (
+    SELECT 1 FROM public.bookings b
+    LEFT JOIN public.booking_pass_allocations a ON a.booking_id = b.id
+    WHERE b.payment_group_id = p_payment_group_id AND b.funding_method = 'pass'
+      AND (a.id IS NULL OR a.status <> 'reserved')
+  ) THEN RAISE EXCEPTION 'Pass-funded booking has no reserved pass hour'; END IF;
 
-    booking_service_payment_allocation_id uuid NOT NULL
-        REFERENCES public.booking_service_payment_allocations(id)
-        ON DELETE RESTRICT,
+  SELECT coalesce(sum(g.total_price_rub), 0)::integer INTO v_service_total
+  FROM public.booking_service_groups g
+  WHERE g.id IN (SELECT DISTINCT bs.service_group_id FROM public.booking_services bs
+    JOIN public.bookings b ON b.id = bs.booking_id WHERE b.payment_group_id = p_payment_group_id)
+    AND g.status = 'pending_payment';
 
-    amount_rub integer NOT NULL CHECK (amount_rub > 0),
+  IF v_service_total < 1 OR v_cash_total + v_service_total <> v_group.amount_rub THEN
+    RAISE EXCEPTION 'Service payment amount mismatch';
+  END IF;
 
-    idempotency_key text NOT NULL UNIQUE
-        CHECK (length(btrim(idempotency_key)) BETWEEN 1 AND 200),
+  IF EXISTS (
+    SELECT 1 FROM public.booking_services bs
+    JOIN public.bookings b ON b.id = bs.booking_id
+    JOIN public.booking_service_payment_allocations a ON a.booking_service_id = bs.id
+    WHERE b.payment_group_id = p_payment_group_id
+      AND (a.payment_group_id <> p_payment_group_id
+        OR a.amount_rub <> bs.allocated_amount_rub)
+  ) THEN
+    RAISE EXCEPTION 'Service payment allocation already exists or has a mismatched amount';
+  END IF;
 
-    created_at timestamptz NOT NULL DEFAULT clock_timestamp()
-);
+  IF EXISTS (
+    SELECT 1 FROM public.booking_service_groups g
+    WHERE g.id IN (SELECT DISTINCT bs.service_group_id FROM public.booking_services bs
+      JOIN public.bookings b ON b.id = bs.booking_id WHERE b.payment_group_id = p_payment_group_id)
+      AND (g.status <> 'pending_payment' OR g.slot_count <> (
+        SELECT count(*) FROM public.booking_services bs WHERE bs.service_group_id = g.id
+      ) OR EXISTS (SELECT 1 FROM public.booking_services bs
+        WHERE bs.service_group_id = g.id AND bs.status <> 'pending_payment'))
+  ) THEN RAISE EXCEPTION 'Service snapshots are incomplete or not pending'; END IF;
 
-CREATE INDEX payment_refund_allocations_refund_idx
-    ON public.payment_refund_allocations(payment_refund_id);
+  UPDATE public.payment_groups
+  SET status = 'succeeded', provider_payment_id = p_provider_payment_id,
+      paid_at = v_now, last_checked_at = v_now, updated_at = v_now
+  WHERE id = p_payment_group_id;
 
-CREATE INDEX payment_refund_allocations_service_payment_idx
-    ON public.payment_refund_allocations(
-        booking_service_payment_allocation_id
+  UPDATE public.bookings SET status = 'confirmed', payment_status = 'succeeded', updated_at = v_now
+  WHERE payment_group_id = p_payment_group_id;
+
+  INSERT INTO public.booking_payment_allocations(booking_id, payment_group_id, amount_rub, currency)
+  SELECT b.id, p_payment_group_id, b.price_rub, v_group.currency
+  FROM public.bookings b
+  WHERE b.payment_group_id = p_payment_group_id AND b.funding_method = 'cash'
+    AND b.status = 'confirmed' AND b.payment_status = 'succeeded'
+  ON CONFLICT (payment_group_id, booking_id) DO NOTHING;
+
+  INSERT INTO public.booking_service_payment_allocations(booking_service_id, payment_group_id, amount_rub)
+  SELECT bs.id, p_payment_group_id, bs.allocated_amount_rub
+  FROM public.booking_services bs
+  JOIN public.bookings b ON b.id = bs.booking_id
+  WHERE b.payment_group_id = p_payment_group_id AND bs.allocated_amount_rub > 0
+  ON CONFLICT (booking_service_id, payment_group_id) DO NOTHING;
+
+  UPDATE public.booking_services SET status = 'active', updated_at = v_now
+  WHERE booking_id IN (SELECT id FROM public.bookings WHERE payment_group_id = p_payment_group_id)
+    AND status = 'pending_payment';
+  UPDATE public.booking_service_groups SET status = 'active', updated_at = v_now
+  WHERE id IN (SELECT DISTINCT bs.service_group_id FROM public.booking_services bs
+    JOIN public.bookings b ON b.id = bs.booking_id WHERE b.payment_group_id = p_payment_group_id)
+    AND status = 'pending_payment';
+
+  RETURN 'confirmed_with_services';
+END;
+$function$;
+
+CREATE FUNCTION public.apply_payment_group_failure(
+  p_payment_group_id uuid,
+  p_final_status text,
+  p_provider_payment_id text DEFAULT NULL,
+  p_failure_reason text DEFAULT NULL
+)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_group public.payment_groups%ROWTYPE;
+  v_result text;
+BEGIN
+  IF p_payment_group_id IS NULL OR p_final_status IS NULL OR p_final_status NOT IN ('cancelled', 'failed') THEN
+    RAISE EXCEPTION 'Invalid payment failure parameters';
+  END IF;
+  SELECT * INTO v_group FROM public.payment_groups
+  WHERE id = p_payment_group_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Payment group not found'; END IF;
+
+  IF v_group.order_type = 'pass_purchase' THEN
+    IF v_group.provider <> 'yookassa' THEN RAISE EXCEPTION 'Unsupported payment provider'; END IF;
+    IF p_provider_payment_id IS NOT NULL AND v_group.provider_payment_id IS NOT NULL
+       AND v_group.provider_payment_id <> p_provider_payment_id THEN
+      RAISE EXCEPTION 'Provider payment ID mismatch';
+    END IF;
+    IF v_group.status = 'succeeded' THEN RETURN 'already_paid'; END IF;
+    IF v_group.status = p_final_status THEN RETURN 'already_processed'; END IF;
+    IF v_group.status <> 'pending' THEN RETURN 'terminal_state_conflict'; END IF;
+
+    UPDATE public.payment_groups SET status = p_final_status,
+      provider_payment_id = coalesce(provider_payment_id, p_provider_payment_id),
+      failure_reason = p_failure_reason, last_checked_at = pg_catalog.clock_timestamp(),
+      updated_at = pg_catalog.clock_timestamp()
+    WHERE id = p_payment_group_id;
+    UPDATE public.user_passes SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+    WHERE purchase_payment_group_id = p_payment_group_id AND status = 'pending_payment';
+    RETURN 'released';
+  END IF;
+
+  IF v_group.order_type = 'booking_services' THEN
+    v_result := public.apply_payment_group_failure_cash_legacy(
+      p_payment_group_id, p_final_status, p_provider_payment_id, p_failure_reason
+    );
+    IF v_result = 'released' THEN
+      UPDATE public.booking_services SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+      WHERE booking_id IN (SELECT id FROM public.bookings WHERE payment_group_id = p_payment_group_id)
+        AND status = 'pending_payment';
+      UPDATE public.booking_service_groups SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+      WHERE id IN (SELECT DISTINCT bs.service_group_id FROM public.booking_services bs
+        JOIN public.bookings b ON b.id = bs.booking_id WHERE b.payment_group_id = p_payment_group_id)
+        AND status = 'pending_payment';
+    END IF;
+    RETURN v_result;
+  END IF;
+
+  RETURN public.apply_payment_group_failure_cash_legacy(
+    p_payment_group_id, p_final_status, p_provider_payment_id, p_failure_reason
+  );
+END;
+$function$;
+
+CREATE FUNCTION public.expire_stale_yookassa_payment_groups()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_count integer := 0;
+  v_group_id uuid;
+BEGIN
+  v_count := public.expire_stale_yookassa_payment_groups_cash_legacy();
+
+  UPDATE public.booking_services bs
+  SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+  WHERE bs.status = 'pending_payment'
+    AND bs.booking_id IN (
+      SELECT b.id FROM public.bookings b
+      JOIN public.payment_groups pg ON pg.id = b.payment_group_id
+      WHERE pg.order_type = 'booking_services' AND pg.status = 'cancelled'
+        AND pg.failure_reason = 'payment_timeout_10m' AND b.status = 'expired'
+    );
+  UPDATE public.booking_service_groups g
+  SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+  WHERE g.status = 'pending_payment'
+    AND g.id IN (
+      SELECT DISTINCT bs.service_group_id FROM public.booking_services bs
+      JOIN public.bookings b ON b.id = bs.booking_id
+      JOIN public.payment_groups pg ON pg.id = b.payment_group_id
+      WHERE pg.order_type = 'booking_services' AND pg.status = 'cancelled'
+        AND pg.failure_reason = 'payment_timeout_10m' AND b.status = 'expired'
     );
 
-
--- =========================================================
--- 10. PASS LEDGER IMMUTABILITY
--- =========================================================
-
-CREATE FUNCTION public.prevent_pass_transaction_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
-BEGIN
-    RAISE EXCEPTION
-        'Pass transaction ledger is append-only';
-END;
-$$;
-
-CREATE TRIGGER pass_transactions_immutable
-BEFORE UPDATE OR DELETE ON public.pass_transactions
-FOR EACH ROW
-EXECUTE FUNCTION public.prevent_pass_transaction_mutation();
-
-
--- =========================================================
--- 11. SERVICE SNAPSHOT IMMUTABILITY
--- =========================================================
-
-CREATE FUNCTION public.prevent_service_snapshot_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
-BEGIN
-    IF TG_TABLE_NAME = 'booking_service_groups' THEN
-        IF ROW(
-            OLD.user_id,
-            OLD.studio_service_id,
-            OLD.service_key,
-            OLD.title_snapshot,
-            OLD.description_snapshot,
-            OLD.charge_mode_snapshot,
-            OLD.unit_price_rub_snapshot,
-            OLD.slot_count,
-            OLD.total_price_rub,
-            OLD.service_snapshot
-        ) IS DISTINCT FROM ROW(
-            NEW.user_id,
-            NEW.studio_service_id,
-            NEW.service_key,
-            NEW.title_snapshot,
-            NEW.description_snapshot,
-            NEW.charge_mode_snapshot,
-            NEW.unit_price_rub_snapshot,
-            NEW.slot_count,
-            NEW.total_price_rub,
-            NEW.service_snapshot
-        ) THEN
-            RAISE EXCEPTION
-                'Service group snapshot fields are immutable';
-        END IF;
-
-    ELSIF TG_TABLE_NAME = 'booking_services' THEN
-        IF ROW(
-            OLD.service_group_id,
-            OLD.booking_id,
-            OLD.slot_ordinal,
-            OLD.allocated_amount_rub
-        ) IS DISTINCT FROM ROW(
-            NEW.service_group_id,
-            NEW.booking_id,
-            NEW.slot_ordinal,
-            NEW.allocated_amount_rub
-        ) THEN
-            RAISE EXCEPTION
-                'Booking service allocation fields are immutable';
-        END IF;
+  FOR v_group_id IN
+    SELECT pg.id FROM public.payment_groups pg
+    WHERE pg.order_type = 'pass_purchase'
+      AND pg.provider = 'yookassa' AND pg.status = 'pending'
+      AND pg.payment_init_started_at IS NOT NULL
+      AND pg.payment_init_started_at + interval '5 minutes' <= pg_catalog.clock_timestamp()
+      AND NOT EXISTS (SELECT 1 FROM public.bookings b WHERE b.payment_group_id = pg.id)
+    ORDER BY pg.payment_init_started_at, pg.id
+    LIMIT 200
+    FOR UPDATE OF pg SKIP LOCKED
+  LOOP
+    UPDATE public.payment_groups SET status = 'cancelled', failure_reason = 'payment_timeout_10m',
+      last_checked_at = pg_catalog.clock_timestamp(), updated_at = pg_catalog.clock_timestamp()
+    WHERE id = v_group_id AND status = 'pending';
+    IF FOUND THEN
+      UPDATE public.user_passes SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+      WHERE purchase_payment_group_id = v_group_id AND status = 'pending_payment';
+      v_count := v_count + 1;
     END IF;
-
-    RETURN NEW;
+  END LOOP;
+  RETURN v_count;
 END;
-$$;
+$function$;
 
-CREATE TRIGGER booking_service_groups_snapshot_immutable
-BEFORE UPDATE ON public.booking_service_groups
-FOR EACH ROW
-EXECUTE FUNCTION public.prevent_service_snapshot_mutation();
-
-CREATE TRIGGER booking_services_snapshot_immutable
-BEFORE UPDATE ON public.booking_services
-FOR EACH ROW
-EXECUTE FUNCTION public.prevent_service_snapshot_mutation();
-
-
--- =========================================================
--- 12. PAYMENT ALLOCATION IMMUTABILITY
--- =========================================================
-
-CREATE FUNCTION public.prevent_service_payment_allocation_mutation()
-RETURNS trigger
+CREATE FUNCTION public.expire_unpaid_payment_holds()
+RETURNS integer
 LANGUAGE plpgsql
-SET search_path = ''
-AS $$
-BEGIN
-    RAISE EXCEPTION
-        'Service payment allocation records are immutable';
-END;
-$$;
-
-CREATE TRIGGER booking_service_payment_allocations_immutable
-BEFORE UPDATE OR DELETE
-ON public.booking_service_payment_allocations
-FOR EACH ROW
-EXECUTE FUNCTION public.prevent_service_payment_allocation_mutation();
-
-CREATE TRIGGER payment_refund_allocations_immutable
-BEFORE UPDATE OR DELETE
-ON public.payment_refund_allocations
-FOR EACH ROW
-EXECUTE FUNCTION public.prevent_service_payment_allocation_mutation();
-
-
--- =========================================================
--- 13. DEFERRED SERVICE GROUP TOTAL VALIDATION
--- =========================================================
-
-CREATE FUNCTION public.lock_booking_service_group_for_allocation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
 DECLARE
-    v_group_id uuid;
+  v_count integer;
 BEGIN
-    IF TG_OP = 'DELETE' THEN
-        v_group_id := OLD.service_group_id;
-    ELSE
-        v_group_id := NEW.service_group_id;
-    END IF;
-
-    PERFORM 1
-    FROM public.booking_service_groups
-    WHERE id = v_group_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Booking service group does not exist';
-    END IF;
-
-    IF TG_OP = 'DELETE' THEN
-        RETURN OLD;
-    END IF;
-
-    RETURN NEW;
+  v_count := public.expire_unpaid_payment_holds_cash_legacy();
+  UPDATE public.booking_services bs
+  SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+  WHERE bs.status = 'pending_payment'
+    AND bs.booking_id IN (
+      SELECT b.id FROM public.bookings b
+      JOIN public.payment_groups pg ON pg.id = b.payment_group_id
+      WHERE pg.order_type = 'booking_services' AND pg.status = 'cancelled'
+        AND pg.payment_init_started_at IS NULL AND b.status = 'expired'
+    );
+  UPDATE public.booking_service_groups g
+  SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+  WHERE g.status = 'pending_payment'
+    AND g.id IN (
+      SELECT DISTINCT bs.service_group_id FROM public.booking_services bs
+      JOIN public.bookings b ON b.id = bs.booking_id
+      JOIN public.payment_groups pg ON pg.id = b.payment_group_id
+      WHERE pg.order_type = 'booking_services' AND pg.status = 'cancelled'
+        AND pg.payment_init_started_at IS NULL AND b.status = 'expired'
+    );
+  UPDATE public.user_passes up
+  SET status = 'cancelled', updated_at = pg_catalog.clock_timestamp()
+  FROM public.payment_groups pg
+  WHERE pg.id = up.purchase_payment_group_id
+    AND pg.order_type = 'pass_purchase'
+    AND pg.status = 'cancelled'
+    AND up.status = 'pending_payment';
+  RETURN v_count;
 END;
-$$;
+$function$;
 
-CREATE TRIGGER booking_services_lock_group
-BEFORE INSERT OR UPDATE OR DELETE
-ON public.booking_services
-FOR EACH ROW
-EXECUTE FUNCTION public.lock_booking_service_group_for_allocation();
+-- The renamed implementations are internal delegates, not public RPC endpoints.
+REVOKE ALL ON FUNCTION public.begin_payment_initialization_cash_legacy(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.apply_payment_group_success_cash_legacy(uuid, text, integer)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.apply_payment_group_failure_cash_legacy(uuid, text, text, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.expire_stale_yookassa_payment_groups_cash_legacy()
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.expire_unpaid_payment_holds_cash_legacy()
+  FROM PUBLIC, anon, authenticated, service_role;
 
-
-CREATE FUNCTION public.check_booking_service_group_totals()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
-DECLARE
-    v_group_id uuid;
-    v_expected_count integer;
-    v_expected_total integer;
-    v_unit_price integer;
-    v_charge_mode text;
-    v_actual_count bigint;
-    v_actual_total bigint;
-    v_invalid_allocation_count bigint;
-BEGIN
-    IF TG_TABLE_NAME = 'booking_service_groups' THEN
-        IF TG_OP = 'DELETE' THEN
-            RETURN NULL;
-        END IF;
-
-        v_group_id := NEW.id;
-    ELSE
-        IF TG_OP = 'DELETE' THEN
-            v_group_id := OLD.service_group_id;
-        ELSE
-            v_group_id := NEW.service_group_id;
-        END IF;
-    END IF;
-
-    SELECT
-        slot_count,
-        total_price_rub,
-        unit_price_rub_snapshot,
-        charge_mode_snapshot
-    INTO
-        v_expected_count,
-        v_expected_total,
-        v_unit_price,
-        v_charge_mode
-    FROM public.booking_service_groups
-    WHERE id = v_group_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT
-        count(*),
-        COALESCE(sum(allocated_amount_rub), 0),
-        count(*) FILTER (
-            WHERE slot_ordinal < 1
-               OR slot_ordinal > v_expected_count
-               OR allocated_amount_rub <> CASE v_charge_mode
-                    WHEN 'per_slot' THEN v_unit_price
-                    WHEN 'per_group' THEN
-                        (v_expected_total / v_expected_count)
-                        + CASE
-                            WHEN slot_ordinal <=
-                                 mod(v_expected_total, v_expected_count)
-                            THEN 1
-                            ELSE 0
-                          END
-                  END
-        )
-    INTO
-        v_actual_count,
-        v_actual_total,
-        v_invalid_allocation_count
-    FROM public.booking_services
-    WHERE service_group_id = v_group_id;
-
-    IF v_actual_count <> v_expected_count THEN
-        RAISE EXCEPTION
-            'Service group % expects % slots, but has % allocations',
-            v_group_id,
-            v_expected_count,
-            v_actual_count
-            USING ERRCODE = '23514';
-    END IF;
-
-    IF v_actual_total <> v_expected_total THEN
-        RAISE EXCEPTION
-            'Service group % total is %, but allocated amount is %',
-            v_group_id,
-            v_expected_total,
-            v_actual_total
-            USING ERRCODE = '23514';
-    END IF;
-
-    IF v_invalid_allocation_count > 0 THEN
-        RAISE EXCEPTION
-            'Service group % has invalid slot ordinals or allocated amounts',
-            v_group_id
-            USING ERRCODE = '23514';
-    END IF;
-
-    RETURN NULL;
-END;
-$$;
-
-CREATE CONSTRAINT TRIGGER booking_service_groups_totals_check
-AFTER INSERT OR UPDATE OR DELETE
-ON public.booking_service_groups
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-EXECUTE FUNCTION public.check_booking_service_group_totals();
-
-CREATE CONSTRAINT TRIGGER booking_services_totals_check
-AFTER INSERT OR UPDATE OR DELETE
-ON public.booking_services
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-EXECUTE FUNCTION public.check_booking_service_group_totals();
-
-
--- =========================================================
--- 14. REFUND ALLOCATION VALIDATION
--- =========================================================
-
-CREATE FUNCTION public.validate_payment_refund_allocation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
-DECLARE
-    v_refund public.payment_refunds%ROWTYPE;
-    v_service_payment public.booking_service_payment_allocations%ROWTYPE;
-    v_booking_service public.booking_services%ROWTYPE;
-    v_refund_allocated bigint;
-    v_service_allocated bigint;
-BEGIN
-    SELECT *
-    INTO v_refund
-    FROM public.payment_refunds
-    WHERE id = NEW.payment_refund_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Payment refund does not exist';
-    END IF;
-
-    IF v_refund.status <> 'pending' THEN
-        RAISE EXCEPTION
-            'Service allocations can only be attached to pending refunds';
-    END IF;
-
-    SELECT *
-    INTO v_service_payment
-    FROM public.booking_service_payment_allocations
-    WHERE id = NEW.booking_service_payment_allocation_id;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION
-            'Service payment allocation does not exist';
-    END IF;
-
-    SELECT *
-    INTO v_booking_service
-    FROM public.booking_services
-    WHERE id = v_service_payment.booking_service_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION
-            'Booking service allocation does not exist';
-    END IF;
-
-    IF v_refund.payment_group_id <> v_service_payment.payment_group_id THEN
-        RAISE EXCEPTION
-            'Refund and service payment allocation belong to different payment groups';
-    END IF;
-
-    SELECT COALESCE(sum(amount_rub), 0)
-    INTO v_refund_allocated
-    FROM public.payment_refund_allocations
-    WHERE payment_refund_id = NEW.payment_refund_id;
-
-    IF v_refund_allocated + NEW.amount_rub > v_refund.amount_rub THEN
-        RAISE EXCEPTION
-            'Service refund allocations exceed provider refund amount';
-    END IF;
-
-    SELECT COALESCE(sum(a.amount_rub), 0)
-    INTO v_service_allocated
-    FROM public.payment_refund_allocations a
-    JOIN public.booking_service_payment_allocations spa
-      ON spa.id = a.booking_service_payment_allocation_id
-    JOIN public.payment_refunds r
-      ON r.id = a.payment_refund_id
-    WHERE spa.booking_service_id = v_booking_service.id
-      AND r.status IN ('pending', 'succeeded');
-
-    IF v_service_allocated + NEW.amount_rub >
-       v_booking_service.allocated_amount_rub THEN
-        RAISE EXCEPTION
-            'Service refunds exceed the amount allocated to this service slot';
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER payment_refund_allocations_validate
-BEFORE INSERT
-ON public.payment_refund_allocations
-FOR EACH ROW
-EXECUTE FUNCTION public.validate_payment_refund_allocation();
-
-
--- =========================================================
--- 15. UPDATE SERVICE REFUND TOTALS
--- =========================================================
-
-CREATE FUNCTION public.sync_booking_service_refund_totals()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
-BEGIN
-    IF OLD.status = 'succeeded' OR NEW.status = 'succeeded' THEN
-        UPDATE public.booking_services bs
-        SET
-            refunded_amount_rub = totals.refunded_amount,
-            status = CASE
-                WHEN bs.status = 'cancelled'
-                    THEN 'cancelled'
-                WHEN totals.refunded_amount >= bs.allocated_amount_rub
-                    THEN 'refunded'
-                WHEN totals.refunded_amount > 0
-                    THEN 'partially_refunded'
-                WHEN bs.status IN ('refunded', 'partially_refunded')
-                    THEN 'active'
-                ELSE bs.status
-            END,
-            updated_at = clock_timestamp()
-        FROM (
-            SELECT
-                bspa.booking_service_id,
-                COALESCE(
-                    sum(pra.amount_rub) FILTER (WHERE pr.status = 'succeeded'),
-                    0
-                )::integer AS refunded_amount
-            FROM public.payment_refund_allocations pra
-            JOIN public.booking_service_payment_allocations bspa
-              ON bspa.id =
-                 pra.booking_service_payment_allocation_id
-            JOIN public.payment_refunds pr
-              ON pr.id = pra.payment_refund_id
-            WHERE bspa.booking_service_id IN (
-                SELECT DISTINCT bspa2.booking_service_id
-                FROM public.payment_refund_allocations pra2
-                JOIN public.booking_service_payment_allocations bspa2
-                  ON bspa2.id =
-                     pra2.booking_service_payment_allocation_id
-                WHERE pra2.payment_refund_id = NEW.id
-            )
-            GROUP BY bspa.booking_service_id
-        ) totals
-        WHERE bs.id = totals.booking_service_id;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER payment_refunds_sync_service_totals
-AFTER UPDATE OF status
-ON public.payment_refunds
-FOR EACH ROW
-WHEN (OLD.status IS DISTINCT FROM NEW.status)
-EXECUTE FUNCTION public.sync_booking_service_refund_totals();
-
-
--- =========================================================
--- 16. SECURITY
--- =========================================================
-
-ALTER TABLE public.pass_plans ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_passes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pass_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.booking_pass_allocations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.studio_services ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.booking_service_groups ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.booking_services ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.booking_service_payment_allocations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payment_refund_allocations ENABLE ROW LEVEL SECURITY;
-
-REVOKE ALL ON TABLE
-    public.pass_plans,
-    public.user_passes,
-    public.pass_transactions,
-    public.booking_pass_allocations,
-    public.studio_services,
-    public.booking_service_groups,
-    public.booking_services,
-    public.booking_service_payment_allocations,
-    public.payment_refund_allocations
-FROM PUBLIC, anon, authenticated;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
-    public.pass_plans,
-    public.user_passes,
-    public.pass_transactions,
-    public.booking_pass_allocations,
-    public.studio_services,
-    public.booking_service_groups,
-    public.booking_services,
-    public.booking_service_payment_allocations,
-    public.payment_refund_allocations
-TO service_role;
-
-REVOKE ALL ON FUNCTION public.enforce_booking_pass_allocation_transition()
-FROM PUBLIC, anon, authenticated;
-
-REVOKE ALL ON FUNCTION public.prevent_pass_transaction_mutation()
-FROM PUBLIC, anon, authenticated;
-
-REVOKE ALL ON FUNCTION public.prevent_service_snapshot_mutation()
-FROM PUBLIC, anon, authenticated;
-
-REVOKE ALL ON FUNCTION public.prevent_service_payment_allocation_mutation()
-FROM PUBLIC, anon, authenticated;
-
-REVOKE ALL ON FUNCTION public.lock_booking_service_group_for_allocation()
-FROM PUBLIC, anon, authenticated;
-
-REVOKE ALL ON FUNCTION public.check_booking_service_group_totals()
-FROM PUBLIC, anon, authenticated;
-
-REVOKE ALL ON FUNCTION public.validate_payment_refund_allocation()
-FROM PUBLIC, anon, authenticated;
-
-REVOKE ALL ON FUNCTION public.sync_booking_service_refund_totals()
-FROM PUBLIC, anon, authenticated;
+-- Internal payment RPCs are callable only by the trusted server role.
+REVOKE ALL ON FUNCTION public.begin_payment_initialization(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.begin_payment_initialization(uuid, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.apply_payment_group_success(uuid, text, integer)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.apply_payment_group_success(uuid, text, integer) TO service_role;
+REVOKE ALL ON FUNCTION public.apply_payment_group_failure(uuid, text, text, text)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.apply_payment_group_failure(uuid, text, text, text) TO service_role;
+REVOKE ALL ON FUNCTION public.expire_stale_yookassa_payment_groups()
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.expire_unpaid_payment_holds()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.expire_unpaid_payment_holds() TO service_role;
 
 COMMIT;
