@@ -242,6 +242,11 @@ LANGUAGE plpgsql
 SET search_path = ''
 AS $$
 BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION
+            'Booking pass allocations cannot be deleted';
+    END IF;
+
     IF TG_OP = 'INSERT' THEN
         IF NEW.status <> 'reserved'
            OR NEW.consumed_at IS NOT NULL
@@ -323,7 +328,7 @@ END;
 $$;
 
 CREATE TRIGGER booking_pass_allocations_state_machine
-BEFORE INSERT OR UPDATE
+BEFORE INSERT OR UPDATE OR DELETE
 ON public.booking_pass_allocations
 FOR EACH ROW
 EXECUTE FUNCTION public.enforce_booking_pass_allocation_transition();
@@ -927,6 +932,8 @@ BEGIN
         SET
             refunded_amount_rub = totals.refunded_amount,
             status = CASE
+                WHEN bs.status = 'cancelled'
+                    THEN 'cancelled'
                 WHEN totals.refunded_amount >= bs.allocated_amount_rub
                     THEN 'refunded'
                 WHEN totals.refunded_amount > 0
@@ -939,8 +946,10 @@ BEGIN
         FROM (
             SELECT
                 bspa.booking_service_id,
-                COALESCE(sum(pra.amount_rub), 0)::integer
-                    AS refunded_amount
+                COALESCE(
+                    sum(pra.amount_rub) FILTER (WHERE pr.status = 'succeeded'),
+                    0
+                )::integer AS refunded_amount
             FROM public.payment_refund_allocations pra
             JOIN public.booking_service_payment_allocations bspa
               ON bspa.id =
@@ -955,7 +964,6 @@ BEGIN
                      pra2.booking_service_payment_allocation_id
                 WHERE pra2.payment_refund_id = NEW.id
             )
-              AND pr.status = 'succeeded'
             GROUP BY bspa.booking_service_id
         ) totals
         WHERE bs.id = totals.booking_service_id;
