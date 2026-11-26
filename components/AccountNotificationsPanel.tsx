@@ -37,6 +37,88 @@ function formatDate(value: string, timezone?: string | null) {
   }
 }
 
+// Преобразует дату PostgreSQL в локальное время клуба.
+function formatBookingStart(
+  value: string,
+  timezone?: string | null,
+): string | null {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}(?::?\d{2})?)$/i,
+  );
+
+  if (!match) return null;
+
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    seconds = "00",
+    rawOffset,
+  ] = match;
+
+  let offset = rawOffset.toUpperCase();
+
+  if (offset !== "Z") {
+    if (offset.length === 3) {
+      offset = `${offset}:00`;
+    } else if (offset.length === 5 && !offset.includes(":")) {
+      offset = `${offset.slice(0, 3)}:${offset.slice(3)}`;
+    }
+  }
+
+  const date = new Date(
+    `${year}-${month}-${day}T${hour}:${minute}:${seconds}${offset}`,
+  );
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: timezone || "Europe/Moscow",
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hourCycle: "h23",
+  };
+
+  let parts: Intl.DateTimeFormatPart[];
+
+  try {
+    parts = new Intl.DateTimeFormat("ru-RU", options).formatToParts(date);
+  } catch {
+    parts = new Intl.DateTimeFormat("ru-RU", {
+      ...options,
+      timeZone: "Europe/Moscow",
+    }).formatToParts(date);
+  }
+
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+
+  return `${values.hour}:${values.minute}, ${values.day}-${values.month}-${values.year}`;
+}
+
+// Заменяет только техническую дату после «Начало:».
+// Остальной текст уведомления остаётся без изменений.
+function formatNotificationMessage(
+  message: string,
+  timezone?: string | null,
+) {
+  return message.replace(
+    /(Начало:\s*)(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?))/gi,
+    (original, label: string, rawDate: string) => {
+      const formatted = formatBookingStart(rawDate, timezone);
+
+      return formatted ? `${label}${formatted}` : original;
+    },
+  );
+}
+
 export default function AccountNotificationsPanel() {
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
@@ -201,7 +283,10 @@ export default function AccountNotificationsPanel() {
                   </div>
 
                   <p className="mt-2 text-sm leading-6 text-white/65">
-                    {item.message}
+                    {formatNotificationMessage(
+                      item.message,
+                      item.studio_timezone,
+                    )}
                   </p>
 
                   <time className="mt-2 block text-xs text-white/35">
