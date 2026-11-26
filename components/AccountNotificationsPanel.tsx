@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
+import UnpaidHoldActions from "@/components/UnpaidHoldActions";
 
 type Notification = {
   id: string;
@@ -12,6 +13,9 @@ type Notification = {
   read_at: string | null;
   created_at: string;
   studio_timezone?: string | null;
+  hold_booking_id?: string | null;
+  hold_payment_group_id?: string | null;
+  hold_expires_at?: string | null;
 };
 
 function formatDate(value: string, timezone?: string | null) {
@@ -271,7 +275,7 @@ export default function AccountNotificationsPanel() {
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-white">
                       {item.title}
@@ -295,6 +299,17 @@ export default function AccountNotificationsPanel() {
                       item.studio_timezone,
                     )}
                   </time>
+
+                  {item.hold_booking_id &&
+                    item.hold_payment_group_id &&
+                    item.hold_expires_at && (
+                      <UnpaidHoldActions
+                        bookingId={item.hold_booking_id}
+                        paymentGroupId={item.hold_payment_group_id}
+                        expiresAt={item.hold_expires_at}
+                        onComplete={() => void load()}
+                      />
+                    )}
                 </div>
 
                 {!item.read_at && (
