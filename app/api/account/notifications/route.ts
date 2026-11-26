@@ -48,18 +48,17 @@ async function fetchOptionalRows<T>(
 
     if (!response.ok) {
       console.warn(
-        `Optional notification timezone lookup failed (${table}):`,
+        `Optional notification lookup failed (${table}):`,
         response.status,
       );
       return [];
     }
 
     const rows: unknown = await response.json();
-
     return Array.isArray(rows) ? (rows as T[]) : [];
   } catch (error) {
     console.warn(
-      `Optional notification timezone lookup error (${table}):`,
+      `Optional notification lookup error (${table}):`,
       error,
     );
     return [];
@@ -148,8 +147,6 @@ export async function GET(request: NextRequest) {
         }>)
       : [];
 
-    // Часовой пояс получаем через существующие связи.
-    // Ошибка дополнительных запросов не блокирует список уведомлений.
     const bookingIds = uniqueValidIds(
       notificationRows.map((item) => item.booking_id),
     );
@@ -165,8 +162,14 @@ export async function GET(request: NextRequest) {
               id: string;
               table_id: string | null;
               payment_group_id: string | null;
+              status: string;
+              payment_status: string;
+              payment_init_started_at: string | null;
+              payment_id: string | null;
+              hold_expires_at: string | null;
             }>(config, "bookings", {
-              select: "id,table_id,payment_group_id",
+              select:
+                "id,table_id,payment_group_id,status,payment_status,payment_init_started_at,payment_id,hold_expires_at",
               id: `in.(${bookingIds.join(",")})`,
               user_id: `eq.${userId}`,
               limit: "100",
@@ -178,8 +181,14 @@ export async function GET(request: NextRequest) {
               id: string;
               table_id: string | null;
               payment_group_id: string | null;
+              status: string;
+              payment_status: string;
+              payment_init_started_at: string | null;
+              payment_id: string | null;
+              hold_expires_at: string | null;
             }>(config, "bookings", {
-              select: "id,table_id,payment_group_id",
+              select:
+                "id,table_id,payment_group_id,status,payment_status,payment_init_started_at,payment_id,hold_expires_at",
               payment_group_id: `in.(${paymentGroupIds.join(",")})`,
               user_id: `eq.${userId}`,
               order: "start_at.asc",
@@ -195,6 +204,27 @@ export async function GET(request: NextRequest) {
         ),
       ).values(),
     ];
+
+    // Статус группы проверяем отдельно: действия доступны только
+    // для ещё не оплаченного и не инициализированного резерва.
+    const relevantPaymentGroupIds = uniqueValidIds(
+      bookingRows.map((booking) => booking.payment_group_id),
+    );
+
+    const paymentGroups = relevantPaymentGroupIds.length
+      ? await fetchOptionalRows<{
+          id: string;
+          status: string;
+        }>(config, "payment_groups", {
+          select: "id,status",
+          id: `in.(${relevantPaymentGroupIds.join(",")})`,
+          limit: "200",
+        })
+      : [];
+
+    const paymentGroupStatusById = new Map(
+      paymentGroups.map((group) => [group.id, group.status]),
+    );
 
     const bookingById = new Map(
       bookingRows.map((row) => [row.id, row]),
@@ -272,9 +302,35 @@ export async function GET(request: NextRequest) {
         ? timezoneByStudio.get(table.studio_id)
         : null;
 
+      const holdExpiresAt = booking?.hold_expires_at
+        ? Date.parse(booking.hold_expires_at)
+        : Number.NaN;
+
+      const paymentGroupStatus = booking?.payment_group_id
+        ? paymentGroupStatusById.get(booking.payment_group_id)
+        : undefined;
+
+      const activeHold =
+        Boolean(booking) &&
+        booking!.status === "pending_payment" &&
+        booking!.payment_status === "pending" &&
+        !booking!.payment_init_started_at &&
+        !booking!.payment_id &&
+        Boolean(booking!.payment_group_id) &&
+        paymentGroupStatus === "pending" &&
+        Number.isFinite(holdExpiresAt) &&
+        holdExpiresAt > Date.now();
+
       return {
         ...item,
         studio_timezone: timezone || "Europe/Moscow",
+        hold_booking_id: activeHold ? booking!.id : null,
+        hold_payment_group_id: activeHold
+          ? booking!.payment_group_id
+          : null,
+        hold_expires_at: activeHold
+          ? booking!.hold_expires_at
+          : null,
       };
     });
 
