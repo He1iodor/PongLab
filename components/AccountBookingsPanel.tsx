@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BookingTransferAction from "@/components/BookingTransferAction";
+import UnpaidHoldActions from "@/components/UnpaidHoldActions";
 import {
   CalendarDays,
   Clock3,
@@ -39,7 +40,6 @@ type Booking = {
   door_controller_available: boolean;
   door_controller_online: boolean;
   door_state: "open" | "closed" | "unknown" | null;
-
   transfer_used: boolean;
   transfer_blocked: boolean;
   transfer_operation_id: string | null;
@@ -53,7 +53,6 @@ type Booking = {
   transfer_refund_failure_reason: string | null;
   transfer_purchase_at: string;
   transfer_deadline_at: string | null;
-
   late_payment_refund_operation_id: string | null;
   late_payment_refund_payment_group_id: string | null;
   late_payment_refund_operation_status: string | null;
@@ -107,8 +106,10 @@ function statusLabel(booking: Booking, now: number) {
 
   if (
     booking.status === "completed" ||
-    (booking.status === "confirmed" && booking.payment_status === "succeeded" &&
-      Number.isFinite(Date.parse(booking.end_at)) && Date.parse(booking.end_at) <= now)
+    (booking.status === "confirmed" &&
+      booking.payment_status === "succeeded" &&
+      Number.isFinite(Date.parse(booking.end_at)) &&
+      Date.parse(booking.end_at) <= now)
   ) {
     return "Сессия состоялась";
   }
@@ -133,6 +134,20 @@ function isPaymentPending(booking: Booking) {
     booking.payment_status === "pending" &&
     Boolean(booking.payment_init_started_at || booking.payment_id) &&
     Boolean(booking.payment_group_id)
+  );
+}
+
+function isActiveUnpaidHold(booking: Booking, now: number) {
+  const expiresAt = Date.parse(booking.hold_expires_at || "");
+
+  return (
+    booking.status === "pending_payment" &&
+    booking.payment_status === "pending" &&
+    !booking.payment_init_started_at &&
+    !booking.payment_id &&
+    Boolean(booking.payment_group_id) &&
+    Number.isFinite(expiresAt) &&
+    expiresAt > now
   );
 }
 
@@ -227,11 +242,7 @@ function LatePaymentRefundStatus({ booking }: { booking: Booking }) {
   return (
     <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
       <div className="flex items-center gap-2 text-sm font-medium text-amber-100">
-        {needsReview ? (
-          <AlertTriangle size={16} />
-        ) : (
-          <Clock3 size={16} />
-        )}
+        {needsReview ? <AlertTriangle size={16} /> : <Clock3 size={16} />}
         {needsReview
           ? "Возврат требует проверки"
           : "Возвращаем поздний платёж"}
@@ -277,8 +288,7 @@ function DoorAccess({
 
   const paid =
     booking.payment_status === "succeeded" &&
-    (booking.status === "confirmed" ||
-      booking.status === "completed");
+    (booking.status === "confirmed" || booking.status === "completed");
 
   const active =
     booking.status === "confirmed" &&
@@ -288,10 +298,7 @@ function DoorAccess({
   useEffect(() => {
     if (!expiresAt) return;
 
-    if (
-      booking.door_controller_online &&
-      booking.door_state === "open"
-    ) {
+    if (booking.door_controller_online && booking.door_state === "open") {
       setMessage("Датчик подтвердил открытое состояние двери.");
       setMessageKind("success");
       setExpiresAt(null);
@@ -332,9 +339,9 @@ function DoorAccess({
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-  booking_id: booking.id,
-  request_channel: requestChannel,
-}),
+          booking_id: booking.id,
+          request_channel: requestChannel,
+        }),
       });
 
       const result = await response.json().catch(() => ({}));
@@ -344,8 +351,7 @@ function DoorAccess({
       }
 
       setExpiresAt(
-        result.expires_at ||
-          new Date(Date.now() + 15000).toISOString(),
+        result.expires_at || new Date(Date.now() + 15000).toISOString(),
       );
 
       setMessage(
@@ -365,12 +371,12 @@ function DoorAccess({
   };
 
   if (
-  !paid ||
-  booking.status === "completed" ||
-  (Number.isFinite(end) && end <= now)
-) {
-  return null;
-}
+    !paid ||
+    booking.status === "completed" ||
+    (Number.isFinite(end) && end <= now)
+  ) {
+    return null;
+  }
 
   if (!active) {
     return (
@@ -408,8 +414,7 @@ function DoorAccess({
         </p>
       )}
 
-      {booking.door_controller_online &&
-      booking.door_state === "open" ? (
+      {booking.door_controller_online && booking.door_state === "open" ? (
         <p className="mt-3 text-sm font-medium text-emerald-300">
           Датчик сообщает, что дверь открыта.
         </p>
@@ -496,9 +501,7 @@ export default function AccountBookingsPanel({
         );
       }
 
-      setBookings(
-        Array.isArray(result.bookings) ? result.bookings : [],
-      );
+      setBookings(Array.isArray(result.bookings) ? result.bookings : []);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -511,16 +514,16 @@ export default function AccountBookingsPanel({
     }
   }, []);
 
+  const refreshBookings = useCallback(() => {
+    void load(true);
+  }, [load]);
+
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    const timer = window.setInterval(
-      () => setNow(Date.now()),
-      5000,
-    );
-
+    const timer = window.setInterval(() => setNow(Date.now()), 5000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -583,10 +586,7 @@ export default function AccountBookingsPanel({
 
     void check();
 
-    const timer = window.setInterval(
-      () => void check(),
-      30000,
-    );
+    const timer = window.setInterval(() => void check(), 30000);
 
     return () => {
       stopped = true;
@@ -605,15 +605,16 @@ export default function AccountBookingsPanel({
   useEffect(() => {
     if (!activeConfirmed) return;
 
-    const timer = window.setInterval(
-      () => void load(true),
-      15000,
-    );
-
+    const timer = window.setInterval(() => void load(true), 15000);
     return () => window.clearInterval(timer);
   }, [activeConfirmed, load]);
 
   const sorted = [...bookings].sort((a, b) => {
+    const aHold = isActiveUnpaidHold(a, now);
+    const bHold = isActiveUnpaidHold(b, now);
+
+    if (aHold !== bHold) return aHold ? -1 : 1;
+
     const aStart = Date.parse(a.start_at);
     const bStart = Date.parse(b.start_at);
     const aFuture = aStart >= now;
@@ -639,23 +640,17 @@ export default function AccountBookingsPanel({
     }));
 
     try {
-      const response = await fetch(
-        "/api/account/bookings/cancel",
-        {
-          method: "POST",
-          credentials: "same-origin",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ booking_id: bookingId }),
-        },
-      );
+      const response = await fetch("/api/account/bookings/cancel", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
 
       const result = await response.json().catch(() => ({}));
 
-      if (
-        response.status === 202 ||
-        result.state === "processing"
-      ) {
+      if (response.status === 202 || result.state === "processing") {
         setCancellation((current) => ({
           ...current,
           [bookingId]: {
@@ -669,9 +664,7 @@ export default function AccountBookingsPanel({
       }
 
       if (!response.ok) {
-        throw new Error(
-          result.error || "Не удалось выполнить отмену.",
-        );
+        throw new Error(result.error || "Не удалось выполнить отмену.");
       }
 
       if (result.state === "completed") {
@@ -687,9 +680,7 @@ export default function AccountBookingsPanel({
         return;
       }
 
-      throw new Error(
-        "Сервер не подтвердил завершение возврата.",
-      );
+      throw new Error("Сервер не подтвердил завершение возврата.");
     } catch (caught) {
       setCancellation((current) => ({
         ...current,
@@ -746,10 +737,7 @@ export default function AccountBookingsPanel({
 
       {sorted.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center">
-          <CalendarDays
-            size={26}
-            className="mx-auto text-[#B99AFF]"
-          />
+          <CalendarDays size={26} className="mx-auto text-[#B99AFF]" />
           <h3 className="mt-3 font-semibold text-white">
             Бронирований пока нет
           </h3>
@@ -767,6 +755,7 @@ export default function AccountBookingsPanel({
         <div className="space-y-3">
           {sorted.map((booking) => {
             const pending = isPaymentPending(booking);
+            const activeHold = isActiveUnpaidHold(booking, now);
             const cancellationState = cancellation[booking.id];
             const cancellable = canCancelBooking(booking, now);
 
@@ -786,9 +775,7 @@ export default function AccountBookingsPanel({
               !booking.late_payment_refund_active &&
               Boolean(booking.transfer_operation_id) &&
               ((booking.transfer_status === "awaiting_payment" &&
-                Boolean(
-                  booking.transfer_adjustment_payment_group_id,
-                )) ||
+                Boolean(booking.transfer_adjustment_payment_group_id)) ||
                 booking.transfer_status === "processing");
 
             return (
@@ -799,37 +786,28 @@ export default function AccountBookingsPanel({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="flex items-center gap-2 font-semibold text-white">
-                      <CalendarDays
-                        size={16}
-                        className="text-[#B99AFF]"
-                      />
-                      {dateTime(
-                        booking.start_at,
-                        booking.timezone,
-                      )}
+                      <CalendarDays size={16} className="text-[#B99AFF]" />
+                      {dateTime(booking.start_at, booking.timezone)}
                     </h3>
                     <p className="mt-2 flex items-center gap-2 text-sm text-white/55">
                       <Clock3 size={14} />
-                      До {clockTime(
-                        booking.end_at,
-                        booking.timezone,
-                      )}
+                      До {clockTime(booking.end_at, booking.timezone)}
                     </p>
                   </div>
 
                   <span
-                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-  booking.status === "completed" ||
-  (booking.status === "confirmed" &&
-    booking.payment_status === "succeeded" &&
-    Number.isFinite(Date.parse(booking.end_at)) &&
-    Date.parse(booking.end_at) <= now)
-    ? "border-sky-300/30 bg-sky-400/15 text-sky-200"
-    : booking.status === "confirmed" &&
-        booking.payment_status === "succeeded"
-      ? "border-emerald-400/40 bg-emerald-500/20 text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.12)]"
-      : "border-white/10 bg-white/[0.04] text-white/70"
-}`}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                      booking.status === "completed" ||
+                      (booking.status === "confirmed" &&
+                        booking.payment_status === "succeeded" &&
+                        Number.isFinite(Date.parse(booking.end_at)) &&
+                        Date.parse(booking.end_at) <= now)
+                        ? "border-sky-300/30 bg-sky-400/15 text-sky-200"
+                        : booking.status === "confirmed" &&
+                            booking.payment_status === "succeeded"
+                          ? "border-emerald-400/40 bg-emerald-500/20 text-emerald-200 shadow-[0_0_16px_rgba(16,185,129,0.12)]"
+                          : "border-white/10 bg-white/[0.04] text-white/70"
+                    }`}
                   >
                     {statusLabel(booking, now)}
                   </span>
@@ -837,10 +815,7 @@ export default function AccountBookingsPanel({
 
                 <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-2">
                   <div className="flex gap-2">
-                    <MapPin
-                      size={15}
-                      className="mt-0.5 text-white/40"
-                    />
+                    <MapPin size={15} className="mt-0.5 text-white/40" />
                     <div>
                       <p className="text-xs text-white/40">Клуб</p>
                       <p className="mt-1 text-sm text-white/80">
@@ -855,10 +830,7 @@ export default function AccountBookingsPanel({
                   </div>
 
                   <div className="flex gap-2">
-                    <Table2
-                      size={15}
-                      className="mt-0.5 text-white/40"
-                    />
+                    <Table2 size={15} className="mt-0.5 text-white/40" />
                     <div>
                       <p className="text-xs text-white/40">Стол</p>
                       <p className="mt-1 text-sm text-white/80">
@@ -869,53 +841,62 @@ export default function AccountBookingsPanel({
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
-                  <span className="text-sm text-white/50">
-                    Стоимость
-                  </span>
+                  <span className="text-sm text-white/50">Стоимость</span>
                   <span className="font-semibold text-white">
                     {money(booking.price_rub)}
                   </span>
                 </div>
+
+                {activeHold &&
+                  booking.payment_group_id &&
+                  booking.hold_expires_at && (
+                    <UnpaidHoldActions
+                      bookingId={booking.id}
+                      paymentGroupId={booking.payment_group_id}
+                      expiresAt={booking.hold_expires_at}
+                      onComplete={refreshBookings}
+                    />
+                  )}
 
                 {confirmed && (
                   <>
                     <TransferStatus booking={booking} />
 
                     {showTransferActions &&
-  (canShowTransfer || canRecoverTransfer) && (
-                      <BookingTransferAction
-                        bookingId={booking.id}
-                        startAt={booking.start_at}
-                        studioId={booking.studio_id}
-                        timezone={booking.timezone}
-                        sourcePrice={booking.price_rub}
-                        transferDeadlineAt={booking.transfer_deadline_at}
-                        recoveryOperationId={
-                          canRecoverTransfer
-                            ? booking.transfer_operation_id
-                            : null
-                        }
-                        recoveryStatus={
-                          canRecoverTransfer
-                            ? booking.transfer_status
-                            : null
-                        }
-                        adjustmentPaymentGroupId={
-                          canRecoverTransfer
-                            ? booking.transfer_adjustment_payment_group_id
-                            : null
-                        }
-                        refundStatus={
-                          canRecoverTransfer
-                            ? booking.transfer_refund_status
-                            : null
-                        }
-                        manualResolutionRequired={
-                          booking.transfer_manual_resolution_required
-                        }
-                        onComplete={() => void load(true)}
-                      />
-                    )}
+                      (canShowTransfer || canRecoverTransfer) && (
+                        <BookingTransferAction
+                          bookingId={booking.id}
+                          startAt={booking.start_at}
+                          studioId={booking.studio_id}
+                          timezone={booking.timezone}
+                          sourcePrice={booking.price_rub}
+                          transferDeadlineAt={booking.transfer_deadline_at}
+                          recoveryOperationId={
+                            canRecoverTransfer
+                              ? booking.transfer_operation_id
+                              : null
+                          }
+                          recoveryStatus={
+                            canRecoverTransfer
+                              ? booking.transfer_status
+                              : null
+                          }
+                          adjustmentPaymentGroupId={
+                            canRecoverTransfer
+                              ? booking.transfer_adjustment_payment_group_id
+                              : null
+                          }
+                          refundStatus={
+                            canRecoverTransfer
+                              ? booking.transfer_refund_status
+                              : null
+                          }
+                          manualResolutionRequired={
+                            booking.transfer_manual_resolution_required
+                          }
+                          onComplete={() => void load(true)}
+                        />
+                      )}
                   </>
                 )}
 
@@ -1056,11 +1037,11 @@ export default function AccountBookingsPanel({
                   )}
 
                 {confirmed && (
-<DoorAccess
-  booking={booking}
-  now={now}
-  requestChannel={doorRequestChannel}
-/>
+                  <DoorAccess
+                    booking={booking}
+                    now={now}
+                    requestChannel={doorRequestChannel}
+                  />
                 )}
               </article>
             );
