@@ -66,6 +66,53 @@ type BookingGroup = {
   price_rub: number;
 };
 
+type BookingDraft = {
+  version: 1;
+  saved_at: number;
+  studio_id: string;
+  date: string;
+  selected_slot_keys: string[];
+  customer_comment: string;
+  offer_accepted: boolean;
+  hold_result?: HoldResult | null;
+};
+
+const BOOKING_DRAFT_KEY = "ponglab_booking_draft_v1";
+const BOOKING_DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
+
+function clearBookingDraft() {
+  try {
+    window.sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+  } catch {
+    // Хранилище необязательно и не должно блокировать оплату.
+  }
+}
+
+function isValidHoldResult(value: unknown): value is HoldResult {
+  if (!value || typeof value !== "object") return false;
+  const hold = value as Partial<HoldResult>;
+  const expiresAt = Date.parse(String(hold.hold_expires_at ?? ""));
+
+  return (
+    typeof hold.payment_group_id === "string" &&
+    hold.payment_group_id.length > 0 &&
+    Array.isArray(hold.bookings) &&
+    hold.bookings.length > 0 &&
+    hold.bookings.every(
+      (booking) =>
+        booking &&
+        typeof booking.id === "string" &&
+        typeof booking.start_at === "string" &&
+        typeof booking.end_at === "string" &&
+        Number.isFinite(booking.price_rub) &&
+        typeof booking.hold_expires_at === "string",
+    ) &&
+    Number.isFinite(hold.total_price_rub) &&
+    Number.isFinite(expiresAt) &&
+    expiresAt > Date.now()
+  );
+}
+
 function dateInTimezone(timezone: string, offsetDays = 0) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -118,11 +165,15 @@ function durationLabel(minutes: number) {
     : `${hours} ч`;
 }
 
-export default function BookingCalendar() {
+export default function BookingCalendar({
+  returnTo = "/booking",
+}: {
+  returnTo?: string;
+}) {
   const [studios, setStudios] = useState<Studio[]>([]);
   const [studioId, setStudioId] = useState("");
   const [date, setDate] = useState("");
-  const [duration, setDuration] = useState(60);
+  const duration = 60;
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
   const [selectionError, setSelectionError] = useState("");
@@ -137,13 +188,12 @@ export default function BookingCalendar() {
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [holdError, setHoldError] = useState("");
   const [holdResult, setHoldResult] = useState<HoldResult | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   const selectedStudio = useMemo(
     () => studios.find((studio) => studio.id === studioId) ?? null,
     [studios, studioId],
   );
-
-  const availableDurations = [60];
 
   const resolvedSelectedSlots = useMemo(
     () =>
@@ -184,6 +234,12 @@ export default function BookingCalendar() {
     0,
   );
 
+  const hasUnavailableSelectedSlots =
+    selectedSlots.length !== resolvedSelectedSlots.length ||
+    resolvedSelectedSlots.some(
+      ({ slot }) => slot.available_tables.length === 0,
+    );
+
   const maxDate = selectedStudio
     ? dateInTimezone(
         selectedStudio.timezone,
@@ -197,6 +253,118 @@ export default function BookingCalendar() {
       : selectedStudio
         ? dateInTimezone(selectedStudio.timezone)
         : "";
+
+  // Восстанавливаем черновик до загрузки доступности.
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(BOOKING_DRAFT_KEY);
+
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<BookingDraft>;
+        const savedAt = Number(parsed.saved_at);
+        const age = Date.now() - savedAt;
+
+        if (
+          parsed.version === 1 &&
+          Number.isFinite(savedAt) &&
+          age >= 0 &&
+          age <= BOOKING_DRAFT_TTL_MS
+        ) {
+          setStudioId(
+            typeof parsed.studio_id === "string" ? parsed.studio_id : "",
+          );
+
+          setDate(
+            typeof parsed.date === "string" ? parsed.date : "",
+          );
+
+          const restoredKeys = Array.isArray(parsed.selected_slot_keys)
+            ? parsed.selected_slot_keys
+                .filter(
+                  (key): key is string => typeof key === "string",
+                )
+                .slice(0, 10)
+            : [];
+
+          setSelectedSlots(
+            restoredKeys.map((key) => ({ key })),
+          );
+
+          setCustomerComment(
+            typeof parsed.customer_comment === "string"
+              ? parsed.customer_comment.slice(0, 500)
+              : "",
+          );
+
+          setOfferAccepted(parsed.offer_accepted === true);
+
+          if (isValidHoldResult(parsed.hold_result)) {
+            setHoldResult(parsed.hold_result);
+          }
+        } else {
+          window.sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+        }
+      }
+    } catch {
+      try {
+        window.sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+      } catch {
+        // Если хранилище недоступно, бронирование продолжает работать.
+      }
+    } finally {
+      setDraftRestored(true);
+    }
+  }, []);
+
+  // Сохраняем состояние выбора и активный резерв при переходах между страницами.
+  useEffect(() => {
+    if (!draftRestored) return;
+
+    try {
+      if (
+        !studioId &&
+        !date &&
+        selectedSlots.length === 0 &&
+        !customerComment &&
+        !offerAccepted &&
+        !holdResult
+      ) {
+        window.sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+        return;
+      }
+
+      const draft: BookingDraft = {
+        version: 1,
+        saved_at: Date.now(),
+        studio_id: studioId,
+        date,
+        selected_slot_keys: selectedSlots.map(
+          (selection) => selection.key,
+        ),
+        customer_comment: customerComment,
+        offer_accepted: offerAccepted,
+        hold_result:
+          holdResult && isValidHoldResult(holdResult)
+            ? holdResult
+            : null,
+      };
+
+      window.sessionStorage.setItem(
+        BOOKING_DRAFT_KEY,
+        JSON.stringify(draft),
+      );
+    } catch {
+      // Ошибка хранилища не должна блокировать бронирование.
+    }
+  }, [
+    draftRestored,
+    studioId,
+    date,
+    selectedSlots,
+    customerComment,
+    offerAccepted,
+    holdResult,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,12 +403,8 @@ export default function BookingCalendar() {
               : first.id,
           );
 
-          setDate((current) => current || dateInTimezone(first.timezone));
-
-          setDuration((current) =>
-            first.settings.allowed_durations_minutes.includes(current)
-              ? current
-              : first.settings.allowed_durations_minutes[0] ?? 60,
+          setDate(
+            (current) => current || dateInTimezone(first.timezone),
           );
         }
       } catch (caught) {
@@ -266,30 +430,23 @@ export default function BookingCalendar() {
   useEffect(() => {
     if (!selectedStudio) return;
 
-    if (duration !== 60) setDuration(60);
-
     if (!date || date < minDate || date > maxDate) {
       setDate(minDate);
+      setSelectedSlots([]);
+      setSelectionError("");
+      setHoldError("");
+      setHoldResult(null);
+      setOfferAccepted(false);
+      setCustomerComment("");
     }
-  }, [
-    selectedStudio,
-    availableDurations,
-    duration,
-    date,
-    minDate,
-    maxDate,
-  ]);
+  }, [selectedStudio, date, minDate, maxDate]);
 
   const loadSlots = useCallback(async () => {
-    if (!studioId || !date || !duration) return;
+    if (!studioId || !date) return;
 
     setLoadingSlots(true);
     setError("");
-    setSelectedSlots([]);
-    setSelectionError("");
-    setHoldError("");
-    setHoldResult(null);
-    setOfferAccepted(false);
+    setSlots([]);
 
     try {
       const params = new URLSearchParams({
@@ -311,9 +468,29 @@ export default function BookingCalendar() {
         );
       }
 
-      setSlots(Array.isArray(result.slots) ? (result.slots as Slot[]) : []);
+      const nextSlots = Array.isArray(result.slots)
+        ? (result.slots as Slot[])
+        : [];
+
+      setSlots(nextSlots);
+
+      // При активном резерве не сбрасываем его выбор.
+      // В остальных случаях сохраняем выбранные слоты, даже если
+      // они стали недоступны: пользователь увидит предупреждение.
+      if (!holdResult || !isValidHoldResult(holdResult)) {
+        setSelectedSlots((current) =>
+          current.filter((selection) =>
+            nextSlots.some(
+              (slot) =>
+                `${slot.start_at}|${slot.duration_minutes}` ===
+                selection.key,
+            ),
+          ),
+        );
+      }
     } catch (caught) {
       setSlots([]);
+
       setError(
         caught instanceof Error
           ? caught.message
@@ -322,7 +499,7 @@ export default function BookingCalendar() {
     } finally {
       setLoadingSlots(false);
     }
-  }, [studioId, date, duration]);
+  }, [studioId, date, holdResult]);
 
   useEffect(() => {
     void loadSlots();
@@ -330,6 +507,7 @@ export default function BookingCalendar() {
 
   const selectSlot = (slot: Slot) => {
     const key = `${slot.start_at}|${slot.duration_minutes}`;
+
     const alreadySelected = selectedSlots.some(
       (selection) => selection.key === key,
     );
@@ -348,7 +526,8 @@ export default function BookingCalendar() {
     const overlaps = selectedSlots.some((selection) => {
       const selected = slots.find(
         (item) =>
-          `${item.start_at}|${item.duration_minutes}` === selection.key,
+          `${item.start_at}|${item.duration_minutes}` ===
+          selection.key,
       );
 
       return Boolean(
@@ -374,6 +553,13 @@ export default function BookingCalendar() {
 
   const createHold = async () => {
     if (!selectedStudio || !date || bookingGroups.length === 0) return;
+
+    if (hasUnavailableSelectedSlots) {
+      setHoldError(
+        "Один из выбранных слотов больше недоступен. Обновите выбор перед резервированием.",
+      );
+      return;
+    }
 
     if (!offerAccepted) {
       setHoldError(
@@ -477,11 +663,14 @@ export default function BookingCalendar() {
       }
 
       if (result.state === "succeeded") {
+        clearBookingDraft();
+
         window.location.assign(
           `/payment/return?payment_group_id=${encodeURIComponent(
             holdResult.payment_group_id,
           )}`,
         );
+
         return;
       }
 
@@ -502,6 +691,7 @@ export default function BookingCalendar() {
         );
       }
 
+      clearBookingDraft();
       window.location.assign(paymentUrl.toString());
     } catch (caught) {
       setHoldError(
@@ -554,8 +744,8 @@ export default function BookingCalendar() {
         </h3>
 
         <p className="mt-2 text-sm leading-6 text-white/55">
-          Выберите клуб, дату и длительность. Ниже отобразятся свободные
-          слоты и актуальная стоимость.
+          Выберите клуб, дату и свободные часовые слоты. Каждый слот длится
+          60 минут. Ниже отобразятся доступность и актуальная стоимость.
         </p>
       </div>
 
@@ -578,7 +768,7 @@ export default function BookingCalendar() {
 
       {studios.length > 0 && (
         <>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="min-w-0 space-y-2 lg:col-span-1">
               <label
                 htmlFor="booking-studio"
@@ -637,6 +827,11 @@ export default function BookingCalendar() {
                   value={date}
                   onChange={(event) => {
                     setDate(event.target.value);
+                    setSelectedSlots([]);
+                    setSelectionError("");
+                    setHoldError("");
+                    setHoldResult(null);
+                    setOfferAccepted(false);
                     setCustomerComment("");
                   }}
                   className="h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#101326] px-3 pr-11 text-sm text-white outline-none focus:border-[#8F5BFF] [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-11 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
@@ -648,30 +843,6 @@ export default function BookingCalendar() {
                   className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white"
                 />
               </div>
-            </div>
-
-            <div className="min-w-0 space-y-2">
-              <label
-                htmlFor="booking-duration"
-                className="block text-sm font-medium text-white/85"
-              >
-                Длительность
-              </label>
-
-              <select
-                id="booking-duration"
-                value={duration}
-                onChange={(event) =>
-                  setDuration(Number(event.target.value))
-                }
-                className="h-12 w-full rounded-xl border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
-              >
-                {availableDurations.map((minutes) => (
-                  <option key={minutes} value={minutes}>
-                    {durationLabel(minutes)}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 
@@ -705,17 +876,21 @@ export default function BookingCalendar() {
               </div>
             ) : slots.length === 0 ? (
               <div className="rounded-xl border border-white/10 bg-black/10 p-5 text-sm leading-6 text-white/55">
-                На выбранную дату нет свободных слотов с этой
-                длительностью. Попробуйте другую дату или длительность.
+                На выбранную дату нет свободных часовых слотов.
+                Попробуйте выбрать другую дату.
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {slots.map((slot) => {
                   const key = `${slot.start_at}|${slot.duration_minutes}`;
-                  const disabled = slot.available_tables.length === 0;
+
                   const active = selectedSlots.some(
                     (selection) => selection.key === key,
                   );
+
+                  const disabled =
+                    Boolean(holdResult) ||
+                    (slot.available_tables.length === 0 && !active);
 
                   return (
                     <button
@@ -740,6 +915,7 @@ export default function BookingCalendar() {
                       </span>
 
                       <span className="mt-1 block text-xs leading-4 text-white/45">
+                        60 минут ·{" "}
                         {slot.available_tables.length
                           ? "Свободно"
                           : "Нет свободных мест"}
@@ -760,7 +936,17 @@ export default function BookingCalendar() {
             </div>
           )}
 
-          {resolvedSelectedSlots.length > 0 && (
+          {!loadingSlots && hasUnavailableSelectedSlots && !holdResult && (
+            <div
+              role="alert"
+              className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-5 text-amber-100"
+            >
+              Один из выбранных слотов больше недоступен. Вы можете снять его
+              выбор и выбрать другое время.
+            </div>
+          )}
+
+          {(resolvedSelectedSlots.length > 0 || holdResult !== null) && (
             <div className="space-y-5 rounded-xl border border-[#8F5BFF]/25 bg-[#6B30CE]/10 p-4 sm:p-5">
               <div className="flex items-start gap-3">
                 <CalendarDays
@@ -798,7 +984,8 @@ export default function BookingCalendar() {
                     <button
                       type="button"
                       onClick={() => selectSlot(slot)}
-                      className="h-10 rounded-lg border border-white/10 px-3 text-sm text-white/70 transition hover:border-red-300/40 hover:bg-red-400/10 hover:text-white"
+                      disabled={Boolean(holdResult)}
+                      className="h-10 rounded-lg border border-white/10 px-3 text-sm text-white/70 transition hover:border-red-300/40 hover:bg-red-400/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Убрать
                     </button>
@@ -812,7 +999,7 @@ export default function BookingCalendar() {
                     Итоговая разбивка бронирований
                   </h4>
                   <span className="text-xs text-white/50">
-                    Броней: {bookingGroups.length}
+                    Броней: {holdResult?.bookings.length ?? bookingGroups.length}
                   </span>
                 </div>
 
@@ -847,7 +1034,7 @@ export default function BookingCalendar() {
                   </p>
                 </div>
                 <span className="text-xl font-semibold text-white">
-                  {money(totalPrice)}
+                  {money(holdResult?.total_price_rub ?? totalPrice)}
                 </span>
               </div>
 
@@ -899,7 +1086,7 @@ export default function BookingCalendar() {
                   <span>
                     Я ознакомился(-ась) с{" "}
                     <Link
-                      href="/oferta"
+                      href={`/oferta?returnTo=${encodeURIComponent(returnTo)}`}
                       className="text-[#C8B2FF] underline underline-offset-4 hover:text-white"
                     >
                       договором-офертой
@@ -933,6 +1120,7 @@ export default function BookingCalendar() {
                       {new Intl.DateTimeFormat("ru-RU", {
                         dateStyle: "short",
                         timeStyle: "short",
+                        hourCycle: "h23",
                         timeZone:
                           selectedStudio?.timezone || "Europe/Moscow",
                       }).format(new Date(holdResult.hold_expires_at))}.
@@ -973,7 +1161,8 @@ export default function BookingCalendar() {
                     disabled={
                       !offerAccepted ||
                       creatingHold ||
-                      bookingGroups.length === 0
+                      bookingGroups.length === 0 ||
+                      hasUnavailableSelectedSlots
                     }
                     className="flex min-h-12 w-full items-center justify-center rounded-xl bg-[#8F5BFF] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#A77BFF] disabled:cursor-not-allowed disabled:opacity-40"
                   >
