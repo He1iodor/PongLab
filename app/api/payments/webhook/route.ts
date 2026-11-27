@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import {
   getYooKassaPayment,
@@ -13,6 +12,7 @@ import {
   type YooKassaRefund,
 } from "@/lib/yookassa-refunds";
 import { processLatePaymentRefund } from "@/lib/yookassa-late-refunds";
+import { prepareAndStartBookingServiceRefund } from "@/lib/booking-service-refunds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +32,7 @@ type PaymentRefundRow = {
 type BookingOperationRow = {
   id: string;
   operation_type: string;
+  booking_id: string;
 };
 
 type SupabaseConfig = {
@@ -179,9 +180,9 @@ async function findRefundRow(
   return candidate;
 }
 
-async function getRefundOperationType(
+async function getRefundOperation(
   operationId: string,
-): Promise<string> {
+): Promise<BookingOperationRow> {
   if (!isUuid(operationId)) {
     throw new Error("Invalid booking operation ID.");
   }
@@ -189,7 +190,7 @@ async function getRefundOperationType(
   const rows = await supabaseSelect<BookingOperationRow>(
     "booking_operations",
     {
-      select: "id,operation_type",
+      select: "id,operation_type,booking_id",
       id: `eq.${operationId}`,
       limit: "2",
     },
@@ -198,12 +199,13 @@ async function getRefundOperationType(
   if (
     rows.length !== 1 ||
     rows[0].id !== operationId ||
-    typeof rows[0].operation_type !== "string"
+    typeof rows[0].operation_type !== "string" ||
+    !isUuid(rows[0].booking_id)
   ) {
     throw new Error("Booking operation could not be identified.");
   }
 
-  return rows[0].operation_type;
+  return rows[0];
 }
 
 function validateRefund(
@@ -320,9 +322,8 @@ async function processRefundNotification(
       throw new Error("Local refund record contains invalid identifiers.");
     }
 
-    const operationType = await getRefundOperationType(
-      row.booking_operation_id,
-    );
+    const operation = await getRefundOperation(row.booking_operation_id);
+    const operationType = operation.operation_type;
 
     const rpcPayload = {
       p_refund_id: row.id,
@@ -365,19 +366,59 @@ async function processRefundNotification(
         rpcPayload,
       );
 
-const acceptedResults = new Set([
-  "completed",
-  "refund_recorded",
-  "pending",
-  "retry_required",
-  "manual_resolution_required",
-  "terminal_refund_state",
-  "terminal_operation_state",
-  "already_completed",
-]);
+      const acceptedResults = new Set([
+        "completed",
+        "refund_recorded",
+        "pending",
+        "retry_required",
+        "manual_resolution_required",
+        "terminal_refund_state",
+        "terminal_operation_state",
+        "already_completed",
+      ]);
 
       if (!acceptedResults.has(databaseResult)) {
         throw new Error("Unexpected transfer refund finalization result.");
+      }
+    } else if (operationType === "cancellation") {
+      databaseResult = await supabaseRpc<string>(
+        "finalize_customer_booking_cancellation",
+        rpcPayload,
+      );
+
+      const acceptedResults = new Set([
+        "completed",
+        "refund_recorded",
+        "pending",
+        "retry_required",
+        "terminal_refund_state",
+        "already_completed",
+      ]);
+
+      if (!acceptedResults.has(databaseResult)) {
+        throw new Error("Unexpected cancellation refund finalization result.");
+      }
+
+      if (databaseResult === "completed" || databaseResult === "already_completed") {
+        await prepareAndStartBookingServiceRefund(operation.booking_id);
+      }
+    } else if (operationType === "service_refund") {
+      databaseResult = await supabaseRpc<string>(
+        "finalize_customer_booking_service_refund",
+        rpcPayload,
+      );
+
+      const acceptedResults = new Set([
+        "completed",
+        "refund_recorded",
+        "pending",
+        "retry_required",
+        "terminal_refund_state",
+        "already_completed",
+      ]);
+
+      if (!acceptedResults.has(databaseResult)) {
+        throw new Error("Unexpected service refund finalization result.");
       }
     } else {
       console.error("[yookassa-webhook] unsupported refund operation type", {
