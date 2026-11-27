@@ -1,19 +1,23 @@
-
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
   Clock3,
   MapPin,
   RefreshCw,
+  CheckCircle2,
+  WalletCards,
+  Info,
+  X,
 } from "lucide-react";
 
 type Studio = {
   id: string;
   name: string;
   address: string | null;
+  city_id: string;
   timezone: string;
   settings: {
     slot_interval_minutes: number;
@@ -24,10 +28,7 @@ type Studio = {
   };
 };
 
-type AvailableTable = {
-  id: string;
-  name: string;
-};
+type AvailableTable = { id: string; name: string };
 
 type Slot = {
   start_at: string;
@@ -39,21 +40,51 @@ type Slot = {
   available_tables: AvailableTable[];
 };
 
-type SelectedSlot = {
-  key: string;
+type SelectedSlot = { key: string };
+
+type PassOption = {
+  id: string;
+  city_id: string;
+  city_name: string;
+  plan_name_snapshot: string;
+  total_hours: number;
+  remaining_hours: number;
+  reserved_hours: number;
+  status: string;
+  expires_at: string | null;
+  timezone_snapshot: string | null;
+};
+
+type StudioService = {
+  id: string;
+  studio_id: string;
+  service_key: "joint_play" | "coach_session";
+  title: string;
+  description: string | null;
+  price_rub: number;
+  charge_mode: "per_slot" | "per_group";
+  availability_rules: {
+    weekdays?: number[];
+    date_ranges?: Array<{ from: string; to: string }>;
+    time_intervals?: Array<{ starts_at: string; ends_at: string }>;
+  };
 };
 
 type HoldResult = {
-  payment_group_id: string;
+  payment_group_id: string | null;
+  next_step?: "payment" | "confirmed";
+  funding_method?: "cash" | "pass";
   bookings: Array<{
     id: string;
     start_at: string;
     end_at: string;
     price_rub: number;
-    hold_expires_at: string;
+    hold_expires_at: string | null;
   }>;
   total_price_rub: number;
-  hold_expires_at: string;
+  hold_expires_at: string | null;
+  pass_hours_consumed?: number;
+  pass_hours_reserved?: number;
 };
 
 type BookingGroup = {
@@ -75,6 +106,10 @@ type BookingDraft = {
   customer_comment: string;
   offer_accepted: boolean;
   hold_result?: HoldResult | null;
+  funding_method?: "cash" | "pass";
+  selected_pass_id?: string;
+  selected_service_ids?: string[];
+  request_key?: string;
 };
 
 const BOOKING_DRAFT_KEY = "ponglab_booking_draft_v1";
@@ -91,23 +126,34 @@ function clearBookingDraft() {
 function isValidHoldResult(value: unknown): value is HoldResult {
   if (!value || typeof value !== "object") return false;
   const hold = value as Partial<HoldResult>;
-  const expiresAt = Date.parse(String(hold.hold_expires_at ?? ""));
-
-  return (
-    typeof hold.payment_group_id === "string" &&
-    hold.payment_group_id.length > 0 &&
-    Array.isArray(hold.bookings) &&
-    hold.bookings.length > 0 &&
-    hold.bookings.every(
+  if (
+    !Array.isArray(hold.bookings) ||
+    hold.bookings.length === 0 ||
+    !hold.bookings.every(
       (booking) =>
         booking &&
         typeof booking.id === "string" &&
         typeof booking.start_at === "string" &&
         typeof booking.end_at === "string" &&
-        Number.isFinite(booking.price_rub) &&
-        typeof booking.hold_expires_at === "string",
-    ) &&
-    Number.isFinite(hold.total_price_rub) &&
+        Number.isFinite(booking.price_rub),
+    ) ||
+    !Number.isFinite(hold.total_price_rub)
+  ) return false;
+
+  const nextStep = hold.next_step ?? "payment";
+  if (nextStep === "confirmed") {
+    return (
+      hold.payment_group_id === null &&
+      hold.funding_method === "pass" &&
+      hold.total_price_rub === 0
+    );
+  }
+
+  const expiresAt = Date.parse(String(hold.hold_expires_at ?? ""));
+  return (
+    nextStep === "payment" &&
+    typeof hold.payment_group_id === "string" &&
+    hold.payment_group_id.length > 0 &&
     Number.isFinite(expiresAt) &&
     expiresAt > Date.now()
   );
@@ -154,15 +200,59 @@ function money(value: number) {
   }).format(value);
 }
 
-function durationLabel(minutes: number) {
-  if (minutes < 60) return `${minutes} мин.`;
 
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
+function localParts(value: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    time: `${get("hour")}:${get("minute")}`,
+  };
+}
 
-  return remainingMinutes
-    ? `${hours} ч ${remainingMinutes} мин.`
-    : `${hours} ч`;
+function isServiceAvailableForSlot(service: StudioService, startAt: string, timezone: string) {
+  const start = new Date(startAt);
+  if (!Number.isFinite(start.getTime())) return false;
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const localStart = localParts(start, timezone);
+  const localEnd = localParts(end, timezone);
+  if (localStart.date !== localEnd.date) return false;
+
+  const rules = service.availability_rules || {};
+  const weekdayText = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: timezone }).format(start);
+  const weekday = ({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 } as Record<string, number>)[weekdayText];
+  const days = Array.isArray(rules.weekdays) ? rules.weekdays : [];
+  if (days.length > 0 && !days.includes(weekday)) return false;
+
+  const dateRanges = Array.isArray(rules.date_ranges) ? rules.date_ranges : [];
+  if (dateRanges.length > 0 && !dateRanges.some((range) => localStart.date >= range.from && localStart.date <= range.to)) return false;
+
+  const intervals = Array.isArray(rules.time_intervals) ? rules.time_intervals : [];
+  if (intervals.length > 0 && !intervals.some((interval) => interval.starts_at <= localStart.time && interval.ends_at >= localEnd.time)) return false;
+
+  return true;
+}
+
+function formatPassExpiry(value: string | null, timezone: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  // expires_at хранит начало следующего дня: показываем последний действующий день.
+  date.setTime(date.getTime() - 1);
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: timezone || "Europe/Moscow",
+  }).format(date);
 }
 
 export default function BookingCalendar({
@@ -189,6 +279,19 @@ export default function BookingCalendar({
   const [holdError, setHoldError] = useState("");
   const [holdResult, setHoldResult] = useState<HoldResult | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
+  const [fundingMethod, setFundingMethod] = useState<"cash" | "pass">("cash");
+  const [passes, setPasses] = useState<PassOption[]>([]);
+  const [services, setServices] = useState<StudioService[]>([]);
+  const [selectedPassId, setSelectedPassId] = useState("");
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [bookingRequestKey, setBookingRequestKey] = useState("");
+  const [loadingPasses, setLoadingPasses] = useState(false);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [serviceInfo, setServiceInfo] = useState<StudioService | null>(null);
+  const [confirmedMessage, setConfirmedMessage] = useState("");
+  const selectionInitialized = useRef(false);
+
+  void returnTo;
 
   const selectedStudio = useMemo(
     () => studios.find((studio) => studio.id === studioId) ?? null,
@@ -233,6 +336,39 @@ export default function BookingCalendar({
     (total, group) => total + group.price_rub,
     0,
   );
+
+  const cityPasses = useMemo(() => {
+    const now = Date.now();
+    return passes.filter((pass) =>
+      pass.city_id === selectedStudio?.city_id &&
+      pass.status === "active" &&
+      pass.remaining_hours > 0 &&
+      (!pass.expires_at || Date.parse(pass.expires_at) > now),
+    );
+  }, [passes, selectedStudio]);
+
+  const selectedPass = cityPasses.find((pass) => pass.id === selectedPassId) ?? null;
+
+  useEffect(() => {
+    if (fundingMethod !== "pass" || cityPasses.length === 0) return;
+    if (!cityPasses.some((pass) => pass.id === selectedPassId)) {
+      setSelectedPassId(cityPasses[0].id);
+    }
+  }, [fundingMethod, cityPasses, selectedPassId]);
+  const selectedServices = services.filter((service) => selectedServiceIds.includes(service.id));
+  const unavailableService = selectedServices.find((service) =>
+    bookingGroups.some((group) => !isServiceAvailableForSlot(service, group.start_at, selectedStudio?.timezone || "Europe/Moscow")),
+  );
+  const serviceTotal = selectedServices.reduce((sum, service) =>
+    sum + (service.charge_mode === "per_slot" ? service.price_rub * bookingGroups.length : service.price_rub), 0,
+  );
+  const slotAmountDue = fundingMethod === "pass" ? 0 : totalPrice;
+  const totalAmountDue = slotAmountDue + serviceTotal;
+  const passHoursNeeded = bookingGroups.length;
+  const passAvailableHours = selectedPass
+    ? Math.max(0, selectedPass.remaining_hours)
+    : 0;
+  const passInsufficient = fundingMethod === "pass" && (!selectedPass || passAvailableHours < passHoursNeeded);
 
   const hasUnavailableSelectedSlots =
     selectedSlots.length !== resolvedSelectedSlots.length ||
@@ -298,6 +434,11 @@ export default function BookingCalendar({
 
           setOfferAccepted(parsed.offer_accepted === true);
 
+          setFundingMethod(parsed.funding_method === "pass" ? "pass" : "cash");
+          setSelectedPassId(typeof parsed.selected_pass_id === "string" ? parsed.selected_pass_id : "");
+          setSelectedServiceIds(Array.isArray(parsed.selected_service_ids) ? parsed.selected_service_ids.filter((id): id is string => typeof id === "string").slice(0, 2) : []);
+          setBookingRequestKey(typeof parsed.request_key === "string" ? parsed.request_key : "");
+
           if (isValidHoldResult(parsed.hold_result)) {
             setHoldResult(parsed.hold_result);
           }
@@ -347,6 +488,10 @@ export default function BookingCalendar({
           holdResult && isValidHoldResult(holdResult)
             ? holdResult
             : null,
+        funding_method: fundingMethod,
+        selected_pass_id: selectedPassId,
+        selected_service_ids: selectedServiceIds,
+        request_key: bookingRequestKey || undefined,
       };
 
       window.sessionStorage.setItem(
@@ -364,6 +509,10 @@ export default function BookingCalendar({
     customerComment,
     offerAccepted,
     holdResult,
+    fundingMethod,
+    selectedPassId,
+    selectedServiceIds,
+    bookingRequestKey,
   ]);
 
   useEffect(() => {
@@ -428,127 +577,193 @@ export default function BookingCalendar({
   }, [refreshKey]);
 
   useEffect(() => {
-    if (!selectedStudio) return;
+    let cancelled = false;
+    setLoadingPasses(true);
+    fetch("/api/account/passes", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) return [];
+        return Array.isArray(result.passes) ? (result.passes as PassOption[]) : [];
+      })
+      .then((items) => {
+        if (!cancelled) setPasses(items);
+      })
+      .catch(() => {
+        if (!cancelled) setPasses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPasses(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
-    if (!date || date < minDate || date > maxDate) {
-      setDate(minDate);
-      setSelectedSlots([]);
-      setSelectionError("");
-      setHoldError("");
-      setHoldResult(null);
-      setOfferAccepted(false);
-      setCustomerComment("");
+  useEffect(() => {
+    if (!studioId) {
+      setServices([]);
+      setSelectedServiceIds([]);
+      return;
     }
-  }, [selectedStudio, date, minDate, maxDate]);
+    let cancelled = false;
+    setLoadingServices(true);
+    const params = new URLSearchParams({ studio_id: studioId });
+    fetch(`/api/studios/services?${params.toString()}`, { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "Не удалось загрузить услуги.");
+        return Array.isArray(result.services) ? (result.services as StudioService[]) : [];
+      })
+      .then((items) => {
+        if (cancelled) return;
+        setServices(items);
+        setSelectedServiceIds((current) => {
+          const filtered = current.filter((id) => items.some((item) => item.id === id));
+          return filtered.length === current.length ? current : filtered;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setServices([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingServices(false);
+      });
+    return () => { cancelled = true; };
+  }, [studioId]);
 
-  const loadSlots = useCallback(async () => {
+  useEffect(() => {
+    if (!draftRestored) return;
+    if (!selectionInitialized.current) {
+      selectionInitialized.current = true;
+      return;
+    }
+    setBookingRequestKey("");
+    setConfirmedMessage("");
+  }, [draftRestored, studioId, date, selectedSlots, fundingMethod, selectedPassId, selectedServiceIds]);
+
+  useEffect(() => {
     if (!studioId || !date) return;
 
-    setLoadingSlots(true);
-    setError("");
-    setSlots([]);
+    let cancelled = false;
 
-    try {
-      const params = new URLSearchParams({
-        studio_id: studioId,
-        date,
-        duration_minutes: String(duration),
-      });
+    async function loadSlots() {
+      setLoadingSlots(true);
+      setError("");
+      setSelectionError("");
 
-      const response = await fetch(
-        `/api/availability?${params.toString()}`,
-        { cache: "no-store" },
-      );
+      try {
+        const params = new URLSearchParams({
+          studio_id: studioId,
+          date,
+          duration_minutes: String(duration),
+        });
 
-      const result = await response.json().catch(() => ({}));
+        const response = await fetch(`/api/availability?${params.toString()}`, {
+          cache: "no-store",
+        });
 
-      if (!response.ok) {
-        throw new Error(
-          result.error || "Не удалось загрузить доступное время.",
-        );
-      }
+        const result = await response.json().catch(() => ({}));
 
-      const nextSlots = Array.isArray(result.slots)
-        ? (result.slots as Slot[])
-        : [];
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Не удалось загрузить свободное время.",
+          );
+        }
 
-      setSlots(nextSlots);
+        const items = Array.isArray(result.slots)
+          ? (result.slots as Slot[])
+          : [];
 
-      // При активном резерве не сбрасываем его выбор.
-      // В остальных случаях сохраняем выбранные слоты, даже если
-      // они стали недоступны: пользователь увидит предупреждение.
-      if (!holdResult || !isValidHoldResult(holdResult)) {
+        if (cancelled) return;
+
+        setSlots(items);
+
         setSelectedSlots((current) =>
           current.filter((selection) =>
-            nextSlots.some(
+            items.some(
               (slot) =>
                 `${slot.start_at}|${slot.duration_minutes}` ===
-                selection.key,
+                  selection.key &&
+                slot.available_tables.length > 0,
             ),
           ),
         );
+      } catch (caught) {
+        if (!cancelled) {
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "Не удалось загрузить свободное время.",
+          );
+          setSlots([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingSlots(false);
       }
-    } catch (caught) {
-      setSlots([]);
-
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Не удалось загрузить доступное время.",
-      );
-    } finally {
-      setLoadingSlots(false);
     }
-  }, [studioId, date, holdResult]);
+
+    void loadSlots();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [studioId, date, duration, refreshKey]);
 
   useEffect(() => {
-    void loadSlots();
-  }, [loadSlots]);
+    if (!selectedStudio) return;
 
-  const selectSlot = (slot: Slot) => {
-    const key = `${slot.start_at}|${slot.duration_minutes}`;
-
-    const alreadySelected = selectedSlots.some(
-      (selection) => selection.key === key,
+    const selectedDate = dateInTimezone(selectedStudio.timezone);
+    const maxAllowedDate = dateInTimezone(
+      selectedStudio.timezone,
+      selectedStudio.settings.booking_horizon_days,
     );
 
-    setSelectionError("");
-    setHoldError("");
+    if (date && (date < selectedDate || date > maxAllowedDate)) {
+      setDate(selectedDate);
+      setSelectedSlots([]);
+      setHoldResult(null);
+    }
+  }, [selectedStudio, date]);
+
+  const toggleSlot = (slot: Slot) => {
+    const key = `${slot.start_at}|${slot.duration_minutes}`;
+
     setHoldResult(null);
-
-    if (alreadySelected) {
-      setSelectedSlots((current) =>
-        current.filter((selection) => selection.key !== key),
-      );
-      return;
-    }
-
-    const overlaps = selectedSlots.some((selection) => {
-      const selected = slots.find(
-        (item) =>
-          `${item.start_at}|${item.duration_minutes}` ===
-          selection.key,
-      );
-
-      return Boolean(
-        selected &&
-          new Date(selected.start_at).getTime() <
-            new Date(slot.end_at).getTime() &&
-          new Date(selected.end_at).getTime() >
-            new Date(slot.start_at).getTime(),
-      );
-    });
-
-    if (overlaps) {
-      setSelectionError(
-        "Этот слот пересекается с уже выбранным временем. Снимите пересекающийся выбор или выберите другое время.",
-      );
-      return;
-    }
+    setSelectionError("");
 
     if (slot.available_tables.length === 0) return;
 
-    setSelectedSlots((current) => [...current, { key }]);
+    setSelectedSlots((current) => {
+      const exists = current.some((selection) => selection.key === key);
+
+      if (exists) {
+        return current.filter((selection) => selection.key !== key);
+      }
+
+      if (current.length >= 10) {
+        setSelectionError("За один заказ можно выбрать не более 10 часовых слотов.");
+        return current;
+      }
+
+      const candidateStart = Date.parse(slot.start_at);
+      const candidateEnd = Date.parse(slot.end_at);
+      const overlaps = current.some((selection) => {
+        const selected = slots.find(
+          (item) => item.start_at === selection.key.split("|")[0],
+        );
+        if (!selected) return false;
+        const selectedStart = Date.parse(selected.start_at);
+        const selectedEnd = Date.parse(selected.end_at);
+        return candidateStart < selectedEnd && candidateEnd > selectedStart;
+      });
+
+      if (overlaps) {
+        setSelectionError(
+          "Этот слот пересекается с уже выбранным временем. Снимите пересекающийся выбор или выберите другое время.",
+        );
+        return current;
+      }
+
+      return [...current, { key }];
+    });
   };
 
   const createHold = async () => {
@@ -575,9 +790,24 @@ export default function BookingCalendar({
       return;
     }
 
+    if (fundingMethod === "pass" && passInsufficient) {
+      setHoldError("В выбранном абонементе недостаточно свободных часов или он не действует в этом городе.");
+      return;
+    }
+    if (unavailableService) {
+      setHoldError(`Услуга «${unavailableService.title}» недоступна для одного из выбранных слотов.`);
+      return;
+    }
+
     setCreatingHold(true);
     setHoldError("");
     setHoldResult(null);
+    setConfirmedMessage("");
+
+    const advancedOrder = fundingMethod === "pass" || selectedServiceIds.length > 0;
+    const storedKeyIsValid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingRequestKey);
+    const requestKey = advancedOrder ? (storedKeyIsValid ? bookingRequestKey : crypto.randomUUID()) : null;
+    if (requestKey) setBookingRequestKey(requestKey);
 
     try {
       const response = await fetch("/api/bookings/hold", {
@@ -588,6 +818,10 @@ export default function BookingCalendar({
           studio_id: studioId,
           date,
           customer_comment: normalizedComment || null,
+          funding_method: fundingMethod,
+          user_pass_id: fundingMethod === "pass" ? selectedPassId : null,
+          service_ids: selectedServiceIds,
+          request_key: requestKey,
           groups: bookingGroups.map((group) => ({
             start_at: group.start_at,
             duration_minutes: 60,
@@ -598,6 +832,7 @@ export default function BookingCalendar({
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (response.status === 409 && advancedOrder) setBookingRequestKey("");
         throw new Error(
           result.error ||
             (response.status === 401
@@ -609,16 +844,52 @@ export default function BookingCalendar({
       if (
         !Array.isArray(result.bookings) ||
         result.bookings.length !== bookingGroups.length ||
-        !result.hold_expires_at ||
-        typeof result.payment_group_id !== "string"
+        !result.bookings.every((booking: Record<string, unknown>) =>
+          typeof booking.id === "string" &&
+          typeof booking.start_at === "string" &&
+          typeof booking.end_at === "string" &&
+          Number.isFinite(Number(booking.price_rub)),
+        )
       ) {
         throw new Error(
-          "Сервер не подтвердил создание всех временных броней. Обновите страницу перед повторной попыткой.",
+          "Сервер не подтвердил создание всех броней. Обновите страницу перед повторной попыткой.",
         );
       }
 
-      setHoldResult(result as HoldResult);
-      setOfferAccepted(false);
+      const nextStep = result.next_step === "confirmed" ? "confirmed" : "payment";
+      const normalized: HoldResult = {
+        payment_group_id: typeof result.payment_group_id === "string" ? result.payment_group_id : null,
+        next_step: nextStep,
+        funding_method: result.funding_method === "pass" ? "pass" : fundingMethod,
+        bookings: result.bookings.map((booking: Record<string, unknown>) => ({
+          id: String(booking.id),
+          start_at: String(booking.start_at),
+          end_at: String(booking.end_at),
+          price_rub: Number(booking.price_rub),
+          hold_expires_at: typeof booking.hold_expires_at === "string" ? booking.hold_expires_at : null,
+        })),
+        total_price_rub: Number(result.total_price_rub ?? 0),
+        hold_expires_at: typeof result.hold_expires_at === "string" ? result.hold_expires_at : null,
+        pass_hours_consumed: Number(result.pass_hours_consumed ?? 0),
+        pass_hours_reserved: Number(result.pass_hours_reserved ?? 0),
+      };
+
+      if (!isValidHoldResult(normalized)) {
+        throw new Error("Сервер вернул некорректные данные бронирования. Обновите страницу.");
+      }
+
+      setHoldResult(normalized);
+      setSelectionError("");
+      if (normalized.next_step === "confirmed") {
+        setConfirmedMessage(`Бронирование подтверждено. Списано часов с абонемента: ${normalized.pass_hours_consumed || normalized.bookings.length}.`);
+        clearBookingDraft();
+        void fetch("/api/account/passes", { credentials: "same-origin", cache: "no-store" })
+          .then((passResponse) => passResponse.json())
+          .then((passResult) => {
+            if (Array.isArray(passResult.passes)) setPasses(passResult.passes as PassOption[]);
+          })
+          .catch(() => undefined);
+      }
     } catch (caught) {
       setHoldError(
         caught instanceof Error
@@ -633,6 +904,7 @@ export default function BookingCalendar({
   // Запускаем оплату уже созданной группы броней.
   // Создавать новую группу при повторном нажатии нельзя.
   const startPayment = async () => {
+    if (holdResult?.next_step === "confirmed") return;
     if (!holdResult?.payment_group_id) {
       setHoldError(
         "Не найден идентификатор группы бронирования. Обновите страницу и проверьте бронирование в личном кабинете.",
@@ -714,474 +986,433 @@ export default function BookingCalendar({
           size={18}
           className="animate-spin text-[#A77BFF]"
         />
-        Загружаем клубы...
+        Загружаем список клубов...
       </div>
     );
   }
 
-  if (studios.length === 0 && !error) {
+  if (studios.length === 0) {
     return (
-      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-5 text-sm leading-6 text-white/65">
-        Пока нет доступных клубов для бронирования. Когда клуб будет
-        активирован в панели владельца и для него настроено расписание,
-        он появится здесь.
+      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+        Сейчас нет активных клубов для бронирования.
       </div>
     );
   }
 
   return (
-    <section
-      className="w-full min-w-0 space-y-6 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:p-5 lg:p-6"
-      aria-label="Выбор бронирования"
-    >
-      <div>
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-white sm:text-xl">
-          <CalendarDays
-            size={21}
-            className="shrink-0 text-[#A77BFF]"
-          />
-          Выберите подходящий слот:
-        </h3>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="mb-2 block text-xs font-medium uppercase tracking-wider text-white/45">
+            Клуб
+          </span>
+          <span className="relative block">
+            <MapPin
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35"
+            />
+            <select
+              value={studioId}
+              onChange={(event) => {
+                setStudioId(event.target.value);
+                setSelectedSlots([]);
+                setHoldResult(null);
+                setSelectionError("");
+              }}
+              className="h-12 w-full appearance-none rounded-xl border border-white/10 bg-[#11152A] pl-10 pr-4 text-sm text-white outline-none transition focus:border-[#A77BFF]/60"
+            >
+              {studios.map((studio) => (
+                <option key={studio.id} value={studio.id}>
+                  {studio.name}
+                </option>
+              ))}
+            </select>
+          </span>
+          {selectedStudio?.address && (
+            <span className="mt-2 block text-xs text-white/35">
+              {selectedStudio.address}
+            </span>
+          )}
+        </label>
 
-        <p className="mt-2 text-sm leading-6 text-white/55">
-          Выберите клуб, дату и свободные часовые слоты. Каждый слот длится
-          60 минут. Ниже отобразятся доступность и актуальная стоимость.
-        </p>
+        <label className="block">
+          <span className="mb-2 block text-xs font-medium uppercase tracking-wider text-white/45">
+            Дата
+          </span>
+          <span className="relative block">
+            <CalendarDays
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35"
+            />
+            <input
+              type="date"
+              value={date}
+              min={minDate}
+              max={maxDate}
+              onChange={(event) => {
+                setDate(event.target.value);
+                setSelectedSlots([]);
+                setHoldResult(null);
+                setSelectionError("");
+              }}
+              className="h-12 w-full rounded-xl border border-white/10 bg-[#11152A] pl-10 pr-4 text-sm text-white outline-none transition focus:border-[#A77BFF]/60"
+            />
+          </span>
+          {date && (
+            <span className="mt-2 block text-xs capitalize text-white/35">
+              {formatDate(date)}
+            </span>
+          )}
+        </label>
       </div>
 
-      {error && (
-        <div
-          role="alert"
-          className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm leading-5 text-red-200"
-        >
-          {error}
-
+      <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-white">Свободное время</h3>
+            <p className="mt-1 text-xs text-white/40">
+              Продолжительность каждого слота — 60 минут. Можно выбрать несколько часов.
+            </p>
+          </div>
           <button
             type="button"
-            onClick={() => setRefreshKey((value) => value + 1)}
-            className="ml-2 underline underline-offset-2"
+            onClick={() => setRefreshKey((current) => current + 1)}
+            disabled={loadingSlots}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs text-white/60 transition hover:bg-white/[0.05] disabled:opacity-50"
           >
-            Повторить
+            <RefreshCw size={14} className={loadingSlots ? "animate-spin" : ""} />
+            Обновить
           </button>
         </div>
-      )}
 
-      {studios.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="min-w-0 space-y-2 lg:col-span-1">
-              <label
-                htmlFor="booking-studio"
-                className="block text-sm font-medium text-white/85"
-              >
-                Клуб
-              </label>
+        {loadingSlots ? (
+          <div className="flex items-center gap-2 py-8 text-sm text-white/45">
+            <RefreshCw size={16} className="animate-spin" />
+            Проверяем доступность...
+          </div>
+        ) : error ? (
+          <div className="rounded-xl border border-red-400/20 bg-red-400/[0.06] p-4 text-sm text-red-100">
+            {error}
+          </div>
+        ) : slots.length === 0 ? (
+          <div className="rounded-xl border border-white/10 bg-white/[0.025] p-5 text-center text-sm text-white/45">
+            На выбранную дату свободных слотов нет. Выберите другой день.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {slots.map((slot) => {
+              const key = `${slot.start_at}|${slot.duration_minutes}`;
+              const selected = selectedSlots.some((item) => item.key === key);
+              const available = slot.available_tables.length > 0;
 
-              <select
-                id="booking-studio"
-                value={studioId}
-                onChange={(event) => {
-                  setStudioId(event.target.value);
-                  setDate("");
-                  setSelectedSlots([]);
-                  setSelectionError("");
-                  setHoldError("");
-                  setHoldResult(null);
-                  setOfferAccepted(false);
-                  setCustomerComment("");
-                }}
-                className="h-12 w-full rounded-xl border border-white/15 bg-[#101326] px-3 text-sm text-white outline-none focus:border-[#8F5BFF]"
-              >
-                {studios.map((studio) => (
-                  <option key={studio.id} value={studio.id}>
-                    {studio.name}
-                  </option>
-                ))}
-              </select>
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={!available}
+                  onClick={() => toggleSlot(slot)}
+                  className={`rounded-xl border p-3 text-left transition ${
+                    selected
+                      ? "border-[#A77BFF]/70 bg-[#7540D8]/20"
+                      : available
+                        ? "border-white/10 bg-white/[0.025] hover:border-white/25 hover:bg-white/[0.05]"
+                        : "cursor-not-allowed border-white/5 bg-white/[0.015] opacity-35"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold tabular-nums text-white">
+                    {new Intl.DateTimeFormat("ru-RU", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZone: selectedStudio?.timezone || "Europe/Moscow",
+                    }).format(new Date(slot.start_at))}
+                  </span>
+                  <span className="mt-1 block text-xs text-white/45">
+                    {money(slot.price_rub)}
+                  </span>
+                  <span className="mt-2 block text-[10px] text-white/30">
+                    {available ? `${slot.available_tables.length} стол(а)` : "Занято"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-              {selectedStudio?.address && (
-                <p className="flex items-start gap-2 text-xs leading-5 text-white/45">
-                  <MapPin
-                    size={14}
-                    className="mt-0.5 shrink-0"
-                  />
-                  {selectedStudio.address}
-                </p>
-              )}
+        {selectionError && (
+          <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-3 text-xs text-amber-100">
+            {selectionError}
+          </p>
+        )}
+      </div>
+
+      {selectedSlots.length > 0 && (
+        <div className="rounded-2xl border border-[#A77BFF]/20 bg-[#7540D8]/[0.06] p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-white">Выбранные слоты</h3>
+              <p className="mt-1 text-xs text-white/45">
+                {selectedSlots.length} {selectedSlots.length === 1 ? "час" : "часа/часов"}
+              </p>
             </div>
-
-            <div className="min-w-0 space-y-2">
-              <label
-                htmlFor="booking-date"
-                className="block text-sm font-medium text-white/85"
-              >
-                Дата
-              </label>
-
-              <div className="relative">
-                <input
-                  id="booking-date"
-                  type="date"
-                  min={minDate}
-                  max={maxDate}
-                  value={date}
-                  onChange={(event) => {
-                    setDate(event.target.value);
-                    setSelectedSlots([]);
-                    setSelectionError("");
-                    setHoldError("");
-                    setHoldResult(null);
-                    setOfferAccepted(false);
-                    setCustomerComment("");
-                  }}
-                  className="h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#101326] px-3 pr-11 text-sm text-white outline-none focus:border-[#8F5BFF] [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-11 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
-                />
-
-                <CalendarDays
-                  size={18}
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white"
-                />
-              </div>
+            <div className="text-right">
+              <p className="text-xs text-white/40">К оплате</p>
+              <p className="text-xl font-semibold text-white">{money(totalAmountDue)}</p>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
-              <h4 className="flex items-center gap-2 text-base font-semibold text-white">
-                <Clock3
-                  size={18}
-                  className="text-[#A77BFF]"
-                />
-                Свободное время
-              </h4>
-
-              {date && (
-                <span className="text-right text-xs capitalize text-white/45">
-                  {formatDate(date)}
+          <div className="mt-4 space-y-2">
+            {bookingGroups.map((group) => (
+              <div key={group.start_at} className="flex items-center justify-between gap-3 rounded-lg bg-black/10 px-3 py-2 text-sm">
+                <span className="text-white/75">
+                  {new Intl.DateTimeFormat("ru-RU", {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: selectedStudio?.timezone || "Europe/Moscow",
+                  }).format(new Date(group.start_at))}
                 </span>
-              )}
+                <span className="font-medium tabular-nums text-white">
+                  {fundingMethod === "pass" ? "1 час абонемента" : money(group.price_rub)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 rounded-xl border border-white/10 bg-black/10 p-4">
+            <p className="text-sm font-semibold text-white">Способ оплаты слотов</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => { setFundingMethod("cash"); setHoldResult(null); setConfirmedMessage(""); }}
+                className={`rounded-xl border p-3 text-left transition ${fundingMethod === "cash" ? "border-violet-400/50 bg-violet-400/10" : "border-white/10 hover:bg-white/[0.04]"}`}
+              >
+                <span className="block text-sm font-semibold text-white">Оплата картой</span>
+                <span className="mt-1 block text-xs text-white/45">Через ЮKassa</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setFundingMethod("pass"); setHoldResult(null); setConfirmedMessage(""); }}
+                className={`rounded-xl border p-3 text-left transition ${fundingMethod === "pass" ? "border-violet-400/50 bg-violet-400/10" : "border-white/10 hover:bg-white/[0.04]"}`}
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-white"><WalletCards size={15} /> Абонемент</span>
+                <span className="mt-1 block text-xs text-white/45">Списание одного часа за каждый слот</span>
+              </button>
             </div>
 
-            {loadingSlots ? (
-              <div
-                role="status"
-                className="flex items-center gap-2 py-6 text-sm text-white/55"
-              >
-                <RefreshCw
-                  size={16}
-                  className="animate-spin"
-                />
-                Проверяем свободные столы и тарифы...
-              </div>
-            ) : slots.length === 0 ? (
-              <div className="rounded-xl border border-white/10 bg-black/10 p-5 text-sm leading-6 text-white/55">
-                На выбранную дату нет свободных часовых слотов.
-                Попробуйте выбрать другую дату.
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {slots.map((slot) => {
-                  const key = `${slot.start_at}|${slot.duration_minutes}`;
-
-                  const active = selectedSlots.some(
-                    (selection) => selection.key === key,
-                  );
-
-                  const disabled =
-                    Boolean(holdResult) ||
-                    (slot.available_tables.length === 0 && !active);
-
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => selectSlot(slot)}
-                      className={`min-w-0 rounded-xl border p-3 text-left transition ${
-                        active
-                          ? "border-[#A77BFF] bg-[#6B30CE]/25 ring-1 ring-[#A77BFF]/30"
-                          : disabled
-                            ? "cursor-not-allowed border-white/5 bg-white/[0.02] opacity-35"
-                            : "border-white/10 bg-white/[0.035] hover:border-white/25 hover:bg-white/[0.07]"
-                      }`}
-                    >
-                      <span className="block text-sm font-semibold text-white sm:text-base">
-                        {slot.starts_at}–{slot.ends_at}
-                      </span>
-
-                      <span className="mt-2 block text-sm font-medium text-[#C8B2FF]">
-                        {money(slot.price_rub)}
-                      </span>
-
-                      <span className="mt-1 block text-xs leading-4 text-white/45">
-                        60 минут ·{" "}
-                        {slot.available_tables.length
-                          ? "Свободно"
-                          : "Нет свободных мест"}
-                      </span>
-                    </button>
-                  );
-                })}
+            {fundingMethod === "pass" && (
+              <div className="mt-3">
+                {loadingPasses ? (
+                  <p className="flex items-center gap-2 text-xs text-white/45"><RefreshCw size={13} className="animate-spin" /> Загружаем абонементы…</p>
+                ) : cityPasses.length === 0 ? (
+                  <p className="text-xs leading-5 text-amber-100/80">
+                    Нет действующего абонемента для города «{selectedStudio?.name}». <Link href="/account?tab=passes" className="text-violet-200 underline">Купить абонемент</Link>
+                  </p>
+                ) : (
+                  <>
+                    <label className="block text-xs text-white/50">Выберите абонемент
+                      <select value={selectedPassId} onChange={(event) => { setSelectedPassId(event.target.value); setHoldResult(null); setConfirmedMessage(""); }} className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-[#11152A] px-3 text-sm text-white">
+                        <option value="">Выберите абонемент</option>
+                        {cityPasses.map((pass) => <option key={pass.id} value={pass.id}>{pass.plan_name_snapshot} — {pass.remaining_hours} ч. доступно · до {formatPassExpiry(pass.expires_at, pass.timezone_snapshot)}</option>)}
+                      </select>
+                    </label>
+                    {selectedPass && (
+                      <p className={`mt-2 text-xs ${selectedPass.remaining_hours < passHoursNeeded ? "text-red-200" : "text-emerald-200"}`}>
+                        Доступно {passAvailableHours} ч.; зарезервировано: {selectedPass.reserved_hours} ч.; для выбранных слотов требуется {passHoursNeeded} ч.
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>
 
-          {selectionError && (
-            <div
-              role="alert"
-              className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-5 text-amber-100"
-            >
-              {selectionError}
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/10 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-white">Дополнительные услуги</p>
+                <p className="mt-1 text-xs text-white/40">Настраиваются отдельно для каждого клуба.</p>
+              </div>
+              {loadingServices && <RefreshCw size={14} className="animate-spin text-white/40" />}
+            </div>
+
+            {!loadingServices && services.length === 0 ? (
+              <p className="mt-3 text-xs text-white/40">Для этого клуба дополнительные услуги пока не настроены.</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {services.map((service) => {
+                  const checked = selectedServiceIds.includes(service.id);
+                  const unavailable = bookingGroups.some((group) => !isServiceAvailableForSlot(service, group.start_at, selectedStudio?.timezone || "Europe/Moscow"));
+                  const servicePrice = service.charge_mode === "per_slot" ? service.price_rub * bookingGroups.length : service.price_rub;
+                  return (
+                    <div key={service.id} className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${checked ? "border-violet-400/35 bg-violet-400/[0.06]" : "border-white/10"}`}>
+                      <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5">
+                        <input type="checkbox" checked={checked} disabled={unavailable && !checked} onChange={(event) => {
+                          setHoldResult(null);
+                          setConfirmedMessage("");
+                          setSelectedServiceIds((current) => event.target.checked
+                            ? current.length < 2 ? [...current, service.id] : current
+                            : current.filter((id) => id !== service.id));
+                        }} className="mt-0.5 h-4 w-4 shrink-0 accent-violet-400" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-white">{service.title}</span>
+                          <span className="mt-1 block text-xs text-white/45">{money(servicePrice)} · {service.charge_mode === "per_slot" ? "за каждый слот" : "за всю группу"}</span>
+                          {unavailable && <span className="mt-1 block text-[11px] text-amber-200">Недоступна для одного из выбранных слотов</span>}
+                        </span>
+                      </label>
+                      <button type="button" onClick={() => setServiceInfo(service)} aria-label={`Информация: ${service.title}`} className="rounded-lg p-1.5 text-white/45 hover:bg-white/[0.06] hover:text-white"><Info size={15} /></button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {selectedServiceIds.length >= 2 && <p className="mt-2 text-[11px] text-white/35">Можно выбрать не более двух дополнительных услуг.</p>}
+            {unavailableService && <p className="mt-2 text-xs text-amber-100">Услуга «{unavailableService.title}» не подходит для выбранного времени.</p>}
+          </div>
+
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-white/55">
+            <div className="flex justify-between gap-3"><span>Игровые слоты</span><span>{fundingMethod === "pass" ? `${passHoursNeeded} ч. абонемента` : money(totalPrice)}</span></div>
+            {selectedServices.map((service) => (
+              <div key={service.id} className="mt-1 flex justify-between gap-3"><span>{service.title}</span><span>{money(service.charge_mode === "per_slot" ? service.price_rub * bookingGroups.length : service.price_rub)}</span></div>
+            ))}
+            <div className="mt-2 flex justify-between gap-3 border-t border-white/10 pt-2 text-sm font-semibold text-white">
+              <span>{fundingMethod === "pass" && totalAmountDue > 0 ? "К оплате за услуги" : "К оплате"}</span>
+              <span>{fundingMethod === "pass" && totalAmountDue === 0 ? "Без доплаты" : money(totalAmountDue)}</span>
+            </div>
+          </div>
+
+          <label className="mt-4 block">
+            <span className="mb-2 block text-xs font-medium text-white/55">
+              Комментарий для администратора (необязательно)
+            </span>
+            <textarea
+              value={customerComment}
+              onChange={(event) => setCustomerComment(event.target.value.slice(0, 500))}
+              maxLength={500}
+              rows={3}
+              placeholder="Например, пожелания по столу или дополнительная информация"
+              className="w-full rounded-xl border border-white/10 bg-[#11152A] p-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#A77BFF]/60"
+            />
+            <span className="mt-1 block text-right text-[10px] text-white/30">
+              {customerComment.length}/500
+            </span>
+          </label>
+
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/10 p-3">
+            <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-white/60">
+              <input
+                type="checkbox"
+                checked={offerAccepted}
+                onChange={(event) => setOfferAccepted(event.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#A77BFF]"
+              />
+              <span>
+                Я ознакомился(ась) и согласен(на) с условиями публичной оферты и правилами бронирования. {fundingMethod === "pass" && "При бронировании по абонементу час списывается после подтверждения брони."}
+                <Link href="/offer" target="_blank" className="ml-1 text-[#C5ACFF] underline">
+                  Читать оферту
+                </Link>
+              </span>
+            </label>
+          </div>
+
+          {holdError && (
+            <div className="mt-4 rounded-xl border border-red-400/20 bg-red-400/[0.06] p-3 text-xs text-red-100">
+              {holdError}
             </div>
           )}
 
-          {!loadingSlots && hasUnavailableSelectedSlots && !holdResult && (
-            <div
-              role="alert"
-              className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-5 text-amber-100"
-            >
-              Один из выбранных слотов больше недоступен. Вы можете снять его
-              выбор и выбрать другое время.
-            </div>
-          )}
-
-          {(resolvedSelectedSlots.length > 0 || holdResult !== null) && (
-            <div className="space-y-5 rounded-xl border border-[#8F5BFF]/25 bg-[#6B30CE]/10 p-4 sm:p-5">
-              <div className="flex items-start gap-3">
-                <CalendarDays
-                  size={20}
-                  className="mt-0.5 shrink-0 text-[#A77BFF]"
-                />
-                <div>
-                  <p className="text-sm font-semibold text-white">
-                    Выбранные слоты
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-white/50">
-                    Можно выбрать несколько часовых слотов. Каждый слот
-                    оформляется отдельной бронью на 60 минут. Стол автоматически
-                    назначит система.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {resolvedSelectedSlots.map(({ selection, slot }) => (
-                  <div
-                    key={selection.key}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-white/10 bg-black/10 p-3"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-white">
-                        {slot.starts_at}–{slot.ends_at}
-                      </p>
-                      <p className="mt-1 text-xs text-white/50">
-                        {durationLabel(slot.duration_minutes)} ·{" "}
-                        {money(slot.price_rub)}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => selectSlot(slot)}
-                      disabled={Boolean(holdResult)}
-                      className="h-10 rounded-lg border border-white/10 px-3 text-sm text-white/70 transition hover:border-red-300/40 hover:bg-red-400/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Убрать
-                    </button>
+          {holdResult ? (
+            <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-4">
+              {holdResult.next_step === "confirmed" ? (
+                <>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+                    <CheckCircle2 size={17} /> Бронирование подтверждено
                   </div>
-                ))}
-              </div>
-
-              <div className="space-y-3 border-t border-white/10 pt-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="text-sm font-semibold text-white">
-                    Итоговая разбивка бронирований
-                  </h4>
-                  <span className="text-xs text-white/50">
-                    Броней: {holdResult?.bookings.length ?? bookingGroups.length}
-                  </span>
-                </div>
-
-                {bookingGroups.map((group, index) => (
-                  <div
-                    key={group.start_at}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">
-                        Бронь {index + 1}: {group.starts_at}–{group.ends_at}
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-white/50">
-                        60 минут · Стол назначается автоматически · Для выбора
-                        конкретного стола оставьте комментарий · Также
-                        воспользуйтесь возможностью окна комментариев для
-                        пожеланий
-                      </p>
-                    </div>
-                    <p className="text-base font-semibold text-[#C8B2FF]">
-                      {money(group.price_rub)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
-                <div>
-                  <p className="text-sm text-white/60">Общая стоимость</p>
-                  <p className="mt-1 text-xs text-white/45">
-                    Сумма цен выбранных слотов
+                  <p className="mt-2 text-xs leading-5 text-white/60">
+                    {confirmedMessage || "Часы списаны с абонемента. Бронь уже отображается в личном кабинете."}
                   </p>
-                </div>
-                <span className="text-xl font-semibold text-white">
-                  {money(holdResult?.total_price_rub ?? totalPrice)}
-                </span>
-              </div>
-
-              <div className="space-y-2 border-t border-white/10 pt-4">
-                <label
-                  htmlFor="booking-customer-comment"
-                  className="block text-sm font-medium text-white/85"
-                >
-                  Комментарий к бронированию:
-                  <span className="ml-2 font-normal text-white/45">
-                    необязательно
-                  </span>
-                </label>
-
-                <textarea
-                  id="booking-customer-comment"
-                  value={customerComment}
-                  onChange={(event) =>
-                    setCustomerComment(event.target.value.slice(0, 500))
-                  }
-                  maxLength={500}
-                  rows={3}
-                  disabled={Boolean(holdResult) || creatingHold}
-                  placeholder="Ваш комментарий"
-                  className="w-full resize-y rounded-xl border border-white/15 bg-[#101326] px-3 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/35 focus:border-[#8F5BFF] disabled:opacity-60"
-                />
-
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs leading-5 text-white/45">
-                    Комментарий увидит администрация клуба
-                  </p>
-                  <span className="shrink-0 text-xs tabular-nums text-white/45">
-                    {customerComment.length}/500
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-4 border-t border-white/10 pt-4">
-                <label className="flex cursor-pointer items-start gap-3 text-sm leading-6 text-white/75">
-                  <input
-                    type="checkbox"
-                    checked={offerAccepted}
-                    onChange={(event) => {
-                      setOfferAccepted(event.target.checked);
-                      setHoldError("");
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHoldResult(null);
+                      setSelectedSlots([]);
+                      setSelectedServiceIds([]);
+                      setConfirmedMessage("");
+                      clearBookingDraft();
                     }}
-                    className="mt-1 h-4 w-4 shrink-0 accent-[#A77BFF]"
-                  />
-                  <span>
-                    Я ознакомился(-ась) с{" "}
-                    <Link
-                      href={`/oferta?returnTo=${encodeURIComponent(returnTo)}`}
-                      className="text-[#C8B2FF] underline underline-offset-4 hover:text-white"
-                    >
-                      договором-офертой
-                    </Link>{" "}
-                    и согласен(-на) с его условиями. Понимаю, что временный
-                    резерв сам по себе не заключает договор: согласно оферте,
-                    договор заключается после полной оплаты.
-                  </span>
-                </label>
-
-                {holdError && (
-                  <div
-                    role="alert"
-                    className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm leading-6 text-red-200"
+                    className="mt-4 h-10 w-full rounded-xl bg-emerald-500/90 text-sm font-semibold text-white hover:bg-emerald-500"
                   >
-                    {holdError}
+                    Понятно
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+                    <CheckCircle2 size={17} /> Временная бронь создана
                   </div>
-                )}
-
-                {holdResult ? (
-                  <div
-                    role="status"
-                    className="space-y-3 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4"
-                  >
-                    <p className="font-semibold text-emerald-100">
-                      Временная бронь создана
-                    </p>
-
-                    <p className="text-sm leading-6 text-white/75">
-                      Выбранное время удерживается до{" "}
-                      {new Intl.DateTimeFormat("ru-RU", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                        hourCycle: "h23",
-                        timeZone:
-                          selectedStudio?.timezone || "Europe/Moscow",
-                      }).format(new Date(holdResult.hold_expires_at))}.
-                    </p>
-
-                    <p className="text-sm leading-6 text-white/75">
-                      К оплате: {money(holdResult.total_price_rub)}.
-                    </p>
-
+                  <p className="mt-2 text-xs leading-5 text-white/55">
+                    Выбранное время удерживается до {holdResult.hold_expires_at ? new Intl.DateTimeFormat("ru-RU", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      day: "2-digit",
+                      month: "long",
+                      timeZone: selectedStudio?.timezone || "Europe/Moscow",
+                    }).format(new Date(holdResult.hold_expires_at)) : "окончания резерва"}. Завершите оплату в течение 5 минут.
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-white/40">К оплате</p>
+                      <p className="text-xl font-semibold text-white">{money(holdResult.total_price_rub)}</p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => void startPayment()}
                       disabled={creatingPayment}
-                      className="flex min-h-12 w-full items-center justify-center rounded-xl bg-[#8F5BFF] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#A77BFF] disabled:cursor-wait disabled:opacity-50"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#7540D8] px-5 text-sm font-semibold text-white transition hover:bg-[#8753E8] disabled:opacity-50"
                     >
-                      {creatingPayment
-                        ? "Подключаем оплату..."
-                        : "Перейти к оплате"}
+                      {creatingPayment ? <RefreshCw size={15} className="animate-spin" /> : <Clock3 size={15} />}
+                      Перейти к оплате
                     </button>
-
-                    <p className="text-xs leading-5 text-white/55">
-                      Оплата откроется на защищённой странице ЮKassa.
-                      Бронь станет подтверждённой только после проверки
-                      успешного платежа сервером.
-                    </p>
-
-                    <p className="text-xs leading-5 text-white/50">
-                      Номера временных броней:{" "}
-                      {holdResult.bookings
-                        .map((booking) => booking.id)
-                        .join(", ")}
-                    </p>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void createHold()}
-                    disabled={
-                      !offerAccepted ||
-                      creatingHold ||
-                      bookingGroups.length === 0 ||
-                      hasUnavailableSelectedSlots
-                    }
-                    className="flex min-h-12 w-full items-center justify-center rounded-xl bg-[#8F5BFF] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#A77BFF] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {creatingHold
-                      ? "Создаём временную бронь..."
-                      : "Зарезервировать на 5 минут"}
-                  </button>
-                )}
-
-                <p className="text-xs leading-5 text-white/45">
-                  До начала оплаты временный резерв удерживается 5 минут.
-                  После перехода к оплате система дождётся финального
-                  статуса платёжного сервиса.
-                </p>
-              </div>
+                </>
+              )}
             </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void createHold()}
+              disabled={creatingHold || creatingPayment || !offerAccepted || hasUnavailableSelectedSlots || (fundingMethod === "pass" && (passInsufficient || loadingPasses)) || Boolean(unavailableService)}
+              className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#7540D8] px-5 text-sm font-semibold text-white transition hover:bg-[#8753E8] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {creatingHold ? <RefreshCw size={16} className="animate-spin" /> : <CalendarDays size={16} />}
+              {creatingHold
+                ? "Создаём резерв..."
+                : fundingMethod === "pass" && selectedServiceIds.length === 0
+                  ? "Подтвердить бронирование за абонемент"
+                  : "Зарезервировать и перейти к оплате"}
+            </button>
           )}
-        </>
+
+          <p className="mt-3 text-center text-[10px] leading-4 text-white/30">
+            Продолжительность каждого выбранного слота — 60 минут. Стол назначается автоматически.
+          </p>
+        </div>
       )}
-    </section>
+
+      {serviceInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label={serviceInfo.title}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#14182E] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-lg font-semibold text-white">{serviceInfo.title}</h3>
+              <button type="button" onClick={() => setServiceInfo(null)} className="rounded-lg p-1.5 text-white/55 hover:bg-white/[0.06]"><X size={17} /></button>
+            </div>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{serviceInfo.description || "Описание услуги не добавлено."}</p>
+            <p className="mt-4 text-sm font-semibold text-white">{money(serviceInfo.charge_mode === "per_slot" ? serviceInfo.price_rub * bookingGroups.length : serviceInfo.price_rub)}</p>
+            <button type="button" onClick={() => setServiceInfo(null)} className="mt-5 h-10 w-full rounded-xl bg-violet-500 text-sm font-semibold text-white">Закрыть</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
