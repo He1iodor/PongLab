@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -12,9 +11,12 @@ import {
   RefreshCw,
   UserRound,
   Settings2,
+  WalletCards,
 } from "lucide-react";
 
 import AccountBookingsPanel from "@/components/AccountBookingsPanel";
+import AccountPassesPanel from "@/components/AccountPassesPanel";
+import AccountBookingExtrasPanel from "@/components/AccountBookingExtrasPanel";
 import BookingExtensionOffers from "@/components/BookingExtensionOffers";
 import AccountProfilePanel from "@/components/AccountProfilePanel";
 import AccountStatsPanel from "@/components/AccountStatsPanel";
@@ -35,6 +37,7 @@ declare global {
 
 type Tab =
   | "bookings"
+  | "passes"
   | "new"
   | "profile"
   | "stats"
@@ -54,6 +57,7 @@ const tabs: Array<{
   icon: typeof CalendarDays;
 }> = [
   { id: "bookings", label: "Занятия", icon: CalendarDays },
+  { id: "passes", label: "Абонементы", icon: WalletCards },
   { id: "new", label: "Запись", icon: CalendarPlus },
   { id: "profile", label: "Профиль", icon: UserRound },
   { id: "stats", label: "Статистика", icon: Activity },
@@ -186,7 +190,7 @@ export default function MaxAppClient() {
 
     const timer = window.setInterval(
       () => void loadUnreadCount(),
-      3000,
+      30000,
     );
 
     const refreshOnFocus = () => void loadUnreadCount();
@@ -369,7 +373,14 @@ export default function MaxAppClient() {
                       showTransferActions={true}
                       doorRequestChannel="web"
                     />
+                    <AccountBookingExtrasPanel />
                   </div>
+                </section>
+              )}
+
+              {tab === "passes" && (
+                <section className="rounded-2xl border border-white/10 bg-[#101326] p-4">
+                  <AccountPassesPanel />
                 </section>
               )}
 
@@ -435,7 +446,7 @@ export default function MaxAppClient() {
                 paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
               }}
             >
-              <div className="mx-auto grid max-w-xl grid-cols-6">
+              <div className="mx-auto grid max-w-xl grid-cols-7">
                 {tabs.map(({ id, label, icon: Icon }) => {
                   const active = tab === id;
 
