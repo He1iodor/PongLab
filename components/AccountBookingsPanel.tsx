@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,8 +25,10 @@ type Booking = {
   status: string;
   effective_status: string;
   payment_status: string;
+  funding_method: "cash" | "pass";
   payment_failure_reason: string | null;
   price_rub: number;
+  created_at: string;
   payment_init_started_at: string | null;
   payment_id: string | null;
   payment_group_id: string | null;
@@ -51,7 +52,7 @@ type Booking = {
   transfer_refund_status: string | null;
   transfer_refund_amount_rub: number | null;
   transfer_refund_failure_reason: string | null;
-  transfer_purchase_at: string;
+  transfer_purchase_at: string | null;
   transfer_deadline_at: string | null;
   late_payment_refund_operation_id: string | null;
   late_payment_refund_payment_group_id: string | null;
@@ -118,7 +119,9 @@ function statusLabel(booking: Booking, now: number) {
     booking.status === "confirmed" &&
     booking.payment_status === "succeeded"
   ) {
-    return "Оплачена и подтверждена";
+    return booking.funding_method === "pass"
+      ? "Подтверждена абонементом"
+      : "Оплачена и подтверждена";
   }
 
   if (booking.status === "pending_payment") {
@@ -158,7 +161,7 @@ function canCancelBooking(booking: Booking, now: number) {
     booking.status === "confirmed" &&
     booking.payment_status === "succeeded" &&
     Number.isFinite(start) &&
-    start > now + 24 * 60 * 60 * 1000
+    start >= now + 24 * 60 * 60 * 1000
   );
 }
 
@@ -523,6 +526,12 @@ export default function AccountBookingsPanel({
   }, [load]);
 
   useEffect(() => {
+    const refresh = () => void load(true);
+    window.addEventListener("ponglab:bookings-refresh", refresh);
+    return () => window.removeEventListener("ponglab:bookings-refresh", refresh);
+  }, [load]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 5000);
     return () => window.clearInterval(timer);
   }, []);
@@ -609,7 +618,7 @@ export default function AccountBookingsPanel({
     return () => window.clearInterval(timer);
   }, [activeConfirmed, load]);
 
-    const sorted = [...bookings].sort((a, b) => {
+  const sorted = [...bookings].sort((a, b) => {
     const aHold = isActiveUnpaidHold(a, now);
     const bHold = isActiveUnpaidHold(b, now);
 
@@ -618,8 +627,8 @@ export default function AccountBookingsPanel({
 
     // Остальные записи сортируются по времени оплаты,
     // а при отсутствии оплаты — по времени создания.
-    const aPurchaseAt = Date.parse(a.transfer_purchase_at || "");
-    const bPurchaseAt = Date.parse(b.transfer_purchase_at || "");
+    const aPurchaseAt = Date.parse(a.transfer_purchase_at || a.created_at || "");
+    const bPurchaseAt = Date.parse(b.transfer_purchase_at || b.created_at || "");
 
     const aTime = Number.isFinite(aPurchaseAt) ? aPurchaseAt : 0;
     const bTime = Number.isFinite(bPurchaseAt) ? bPurchaseAt : 0;
@@ -673,7 +682,12 @@ export default function AccountBookingsPanel({
           ...current,
           [bookingId]: {
             status: "completed",
-            message: "Возврат подтверждён. Бронирование отменено.",
+            message:
+              typeof result.message === "string"
+                ? result.message
+                : result.funding_method === "pass"
+                  ? "Бронирование отменено. Час восстановлен на абонементе."
+                  : "Возврат подтверждён. Бронирование отменено.",
           },
         }));
 
@@ -694,6 +708,7 @@ export default function AccountBookingsPanel({
         },
       }));
     } finally {
+      window.dispatchEvent(new Event("ponglab:bookings-refresh"));
       setCancelingId(null);
     }
   };
@@ -842,9 +857,11 @@ export default function AccountBookingsPanel({
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
-                  <span className="text-sm text-white/50">Стоимость</span>
+                  <span className="text-sm text-white/50">
+                    {booking.funding_method === "pass" ? "Оплата" : "Стоимость"}
+                  </span>
                   <span className="font-semibold text-white">
-                    {money(booking.price_rub)}
+                    {booking.funding_method === "pass" ? "1 час абонемента" : money(booking.price_rub)}
                   </span>
                 </div>
 
@@ -926,8 +943,9 @@ export default function AccountBookingsPanel({
                       Отменить бронирование
                     </button>
                     <p className="mt-2 text-xs leading-5 text-white/40">
-                      При отмене более чем за 24 часа до начала
-                      возвращается полная стоимость.
+                      {booking.funding_method === "pass"
+                        ? "При отмене не менее чем за 24 часа час будет восстановлен на абонементе."
+                        : "При отмене не менее чем за 24 часа до начала возвращается полная стоимость."}
                     </p>
                   </div>
                 )}
@@ -944,10 +962,9 @@ export default function AccountBookingsPanel({
                           Подтвердить отмену?
                         </p>
                         <p className="mt-1 text-xs leading-5 text-white/60">
-                          Будет запрошен полный возврат стоимости
-                          бронирования на исходный способ оплаты.
-                          Бронь отменится только после подтверждения
-                          возврата YooKassa.
+                          {booking.funding_method === "pass"
+                            ? "Час будет восстановлен на абонементе. Стоимость дополнительных услуг возвращается отдельно, если до начала брони осталось не менее 24 часов."
+                            : "Будет запрошен полный возврат стоимости бронирования на исходный способ оплаты. Бронь отменится только после подтверждения возврата YooKassa."}
                         </p>
                       </div>
                     </div>
@@ -1031,7 +1048,7 @@ export default function AccountBookingsPanel({
                   Date.parse(booking.start_at) > now &&
                   !cancellationState && (
                     <p className="mt-3 text-xs leading-5 text-white/40">
-                      Самостоятельная отмена доступна только более
+                      Самостоятельная отмена доступна только не менее
                       чем за 24 часа до начала. Для обращения по более
                       поздней отмене свяжитесь с администратором.
                     </p>
