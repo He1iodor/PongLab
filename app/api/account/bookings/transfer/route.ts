@@ -75,18 +75,16 @@ export async function POST(request: NextRequest) {
   }
 
   const sessionToken = getSessionTokenFromRequest(request);
-  if (!sessionToken) {
-    return errorResponse("Войдите в личный кабинет.", 401);
-  }
+  if (!sessionToken) return errorResponse("Войдите в личный кабинет.", 401);
 
   try {
     const userId = await resolveSessionUserId(sessionToken);
-    if (!userId) {
-      return errorResponse("Сессия истекла. Войдите повторно.", 401);
-    }
+    if (!userId) return errorResponse("Сессия истекла. Войдите повторно.", 401);
 
+    // Dispatch сохраняет прежний денежный сценарий для cash-брони и отдельно
+    // обрабатывает pass-funded перенос без доплаты и смены города.
     const result = await supabaseRpc<TransferPreparation>(
-      "prepare_customer_booking_transfer_auto",
+      "prepare_customer_booking_transfer_dispatch",
       {
         p_booking_id: bookingId,
         p_user_id: userId,
@@ -96,11 +94,7 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    if (
-      !result ||
-      typeof result.state !== "string" ||
-      !isUuid(result.operation_id)
-    ) {
+    if (!result || typeof result.state !== "string" || !isUuid(result.operation_id)) {
       return errorResponse("Не удалось подготовить перенос.", 409);
     }
 
@@ -121,7 +115,6 @@ export async function POST(request: NextRequest) {
       if (!isUuid(result.payment_group_id)) {
         return errorResponse("Перенос подготовлен, но платёжная группа не найдена.", 503);
       }
-
       return NextResponse.json(
         {
           success: true,
@@ -135,11 +128,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (
-      result.state === "processing" &&
-      typeof result.price_difference_rub === "number" &&
-      result.price_difference_rub < 0
-    ) {
+    if (result.state === "processing" && typeof result.price_difference_rub === "number" && result.price_difference_rub < 0) {
       return NextResponse.json(
         {
           success: true,
@@ -154,18 +143,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return errorResponse(
-      "Перенос находится в неподдерживаемом состоянии. Обновите бронирование.",
-      409,
-    );
+    return errorResponse("Перенос находится в неподдерживаемом состоянии. Обновите бронирование.", 409);
   } catch (error) {
     console.error("[booking-transfer] preparation failed", {
       errorName: error instanceof Error ? error.name : "UnknownError",
     });
-
-    return errorResponse(
-      "Не удалось подготовить перенос. Исходное бронирование не изменено.",
-      503,
-    );
+    return errorResponse("Не удалось подготовить перенос. Исходное бронирование не изменено.", 503);
   }
 }
