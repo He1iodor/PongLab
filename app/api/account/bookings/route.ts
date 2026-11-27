@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 
@@ -12,6 +11,7 @@ type BookingRow = {
   end_at: string;
   status: string;
   payment_status: string;
+  funding_method: "cash" | "pass" | null;
   price_rub: number;
   payment_init_started_at: string | null;
   payment_id: string | null;
@@ -226,7 +226,7 @@ export async function GET(request: NextRequest) {
       "bookings",
       {
         select:
-          "id,table_id,start_at,end_at,status,payment_status,price_rub,payment_init_started_at,payment_id,payment_group_id,hold_expires_at,created_at,updated_at",
+          "id,table_id,start_at,end_at,status,payment_status,funding_method,price_rub,payment_init_started_at,payment_id,payment_group_id,hold_expires_at,created_at,updated_at",
         user_id: `eq.${userId}`,
         booking_operation_id: "is.null",
         order: "start_at.desc",
@@ -593,7 +593,9 @@ export async function GET(request: NextRequest) {
       const purchaseAt =
         sourcePaymentGroup?.paid_at ?? booking.created_at;
 
-      const transferDeadlineAt = addThirtyDays(purchaseAt);
+      const transferDeadlineAt = booking.funding_method === "pass"
+        ? null
+        : addThirtyDays(purchaseAt);
 
       const adjustmentPaymentGroupId =
         latestOperation?.adjustment_payment_group_id ?? null;
@@ -609,6 +611,7 @@ export async function GET(request: NextRequest) {
         status: booking.status,
         effective_status: holdExpired ? "expired" : booking.status,
         payment_status: booking.payment_status,
+        funding_method: booking.funding_method ?? "cash",
         payment_failure_reason: booking.payment_group_id
           ? failureByGroup.get(booking.payment_group_id) ?? null
           : null,
@@ -649,7 +652,7 @@ export async function GET(request: NextRequest) {
         transfer_refund_amount_rub: latestRefund?.amount_rub ?? null,
         transfer_refund_failure_reason: latestRefund?.failure_reason ?? null,
 
-        transfer_purchase_at: purchaseAt,
+        transfer_purchase_at: booking.funding_method === "pass" ? null : purchaseAt,
         transfer_deadline_at: transferDeadlineAt,
 
         // Late-payment refund metadata. This is not transfer-refund metadata.
