@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -12,9 +11,12 @@ import {
   UserRound,
   Send,
   MessageCircle,
+  WalletCards,
 } from "lucide-react";
 
 import AccountBookingsPanel from "@/components/AccountBookingsPanel";
+import AccountPassesPanel from "@/components/AccountPassesPanel";
+import AccountBookingExtrasPanel from "@/components/AccountBookingExtrasPanel";
 import BookingExtensionOffers from "@/components/BookingExtensionOffers";
 import AccountNotificationsPanel from "@/components/AccountNotificationsPanel";
 import AccountProfilePanel from "@/components/AccountProfilePanel";
@@ -25,6 +27,7 @@ import BookingCalendar from "@/components/BookingCalendar";
 
 type Tab =
   | "bookings"
+  | "passes"
   | "profile"
   | "stats"
   | "notifications"
@@ -38,6 +41,7 @@ const tabs: Array<{
   icon: typeof CalendarDays;
 }> = [
   { id: "bookings", label: "Бронирования", icon: CalendarDays },
+  { id: "passes", label: "Абонементы", icon: WalletCards },
   { id: "profile", label: "Профиль", icon: UserRound },
   { id: "stats", label: "Статистика", icon: BarChart3 },
   { id: "notifications", label: "Уведомления", icon: Bell },
@@ -54,7 +58,9 @@ export default function AccountDashboard() {
       ? "telegram"
       : requestedTab === "max"
         ? "max"
-        : "bookings";
+        : requestedTab === "passes"
+          ? "passes"
+          : "bookings";
 
   const [tab, setTab] = useState<Tab>(initialTab);
   const [loading, setLoading] = useState(true);
@@ -223,9 +229,11 @@ export default function AccountDashboard() {
               <AccountBookingsPanel
                 onCreateBooking={() => setTab("new")}
               />
+              <AccountBookingExtrasPanel />
             </>
           )}
 
+          {tab === "passes" && <AccountPassesPanel />}
           {tab === "profile" && <AccountProfilePanel />}
           {tab === "stats" && <AccountStatsPanel />}
           {tab === "notifications" && <AccountNotificationsPanel />}
